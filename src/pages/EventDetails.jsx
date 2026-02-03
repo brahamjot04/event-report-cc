@@ -27,7 +27,8 @@ export default function EventDetails() {
   const [newItemName, setNewItemName] = useState("");
   
   const [eventProofUrl, setEventProofUrl] = useState(""); 
-  const [partForm, setPartForm] = useState({ name: "", crn: "", urn: "", branch: "", phone: "", position: "" });
+  // ADDED: "year" to state
+  const [partForm, setPartForm] = useState({ name: "", crn: "", urn: "", branch: "", phone: "", year: "", position: "" });
 
   const fetchData = async () => {
     const eventSnap = await getDoc(doc(db, "events", id));
@@ -102,10 +103,20 @@ export default function EventDetails() {
             finalY += 10;
             const tableRows = [];
             item.participants?.forEach((p, index) => {
-                tableRows.push([index + 1, p.name, p.urn, p.crn, p.branch, p.phone, p.position || "-"]);
+                // UPDATED: Added Year, Removed Phone
+                tableRows.push([
+                    index + 1, 
+                    p.name, 
+                    p.urn, 
+                    p.crn, 
+                    p.branch, 
+                    p.year || "-", // <--- Added Year here
+                    p.position || "-"
+                ]);
             });
             autoTable(doc, {
-                head: [["S.No", "Name", "URN", "CRN", "Branch", "Phone", "Position"]],
+                // UPDATED: Header reflects new columns
+                head: [["S.No", "Name", "URN", "CRN", "Branch", "Year", "Position"]],
                 body: tableRows, startY: finalY, theme: 'grid'
             });
             finalY = doc.lastAutoTable.finalY + 15;
@@ -136,7 +147,7 @@ export default function EventDetails() {
     await updateDoc(doc(db, "events", id, "items", activeItem.id), { participants: updated });
     setItems(items.map(i => i.id === activeItem.id ? { ...i, participants: updated } : i));
     setShowPartModal(false); setEditingIndex(null);
-    setPartForm({ name: "", crn: "", urn: "", branch: "", phone: "", position: "" });
+    setPartForm({ name: "", crn: "", urn: "", branch: "", phone: "", year: "", position: "" });
   };
 
   const handleFileUpload = (e) => {
@@ -145,11 +156,18 @@ export default function EventDetails() {
       if (rows.length < 2) return alert("Empty File");
       const headers = rows[0].map(h => String(h).toLowerCase().trim());
       const getIdx = (k) => headers.findIndex(h => k.some(x => h.includes(x)));
-      const idx = { name: getIdx(['name']), crn: getIdx(['crn']), urn: getIdx(['urn']), branch: getIdx(['branch']), phone: getIdx(['phone']), pos: getIdx(['position']) };
+      // ADDED: 'year' mapping
+      const idx = { 
+          name: getIdx(['name']), crn: getIdx(['crn']), urn: getIdx(['urn']), 
+          branch: getIdx(['branch']), phone: getIdx(['phone']), pos: getIdx(['position']),
+          year: getIdx(['year', 'yr', 'semester']) // <--- Check for 'Year' column
+      };
       const newPart = rows.slice(1).map(r => ({
         name: idx.name > -1 ? r[idx.name] : "", crn: idx.crn > -1 ? r[idx.crn] : "",
         urn: idx.urn > -1 ? r[idx.urn] : "", branch: idx.branch > -1 ? r[idx.branch] : "",
-        phone: idx.phone > -1 ? r[idx.phone] : "", position: idx.pos > -1 ? r[idx.pos] : ""
+        phone: idx.phone > -1 ? r[idx.phone] : "", 
+        year: idx.year > -1 ? r[idx.year] : "", // <--- Read Year data
+        position: idx.pos > -1 ? r[idx.pos] : ""
       })).filter(p => p.name || p.urn);
       const updated = [...(activeItem.participants || []), ...newPart];
       updateDoc(doc(db, "events", id, "items", activeItem.id), { participants: updated }).then(() => { fetchData(); alert("Imported!"); });
@@ -160,13 +178,8 @@ export default function EventDetails() {
 
   return (
     <Layout>
-      {/* MOBILE-OPTIMIZED HEADER 
-         1. Uses flex-column on mobile to stack Title and Buttons vertically.
-         2. Uses d-grid + gridTemplateColumns on mobile to make buttons 2x2.
-      */}
+      {/* MOBILE HEADER */}
       <div className="d-flex flex-column flex-md-row align-items-start align-items-md-center mb-4 gap-3">
-        
-        {/* Title Section (Full width on mobile) */}
         <div className="d-flex align-items-center w-100 w-md-auto">
             <Button variant="outline-secondary" className="me-3 rounded-circle" onClick={() => navigate(-1)}>
                 <i className="bi bi-arrow-left"></i>
@@ -179,17 +192,9 @@ export default function EventDetails() {
             </div>
         </div>
 
-        {/* Action Buttons 
-           - Mobile: d-grid with 2 columns (1fr 1fr) -> 2 buttons per row
-           - Desktop: d-md-flex (single row)
-        */}
-        <div 
-          className="d-grid gap-2 d-md-flex ms-md-auto w-100 w-md-auto" 
-          style={{ gridTemplateColumns: '1fr 1fr' }} // <--- Creates the 2x2 grid on mobile
-        >
+        <div className="d-grid gap-2 d-md-flex ms-md-auto w-100 w-md-auto" style={{ gridTemplateColumns: '1fr 1fr' }}>
             <Button variant="outline-success" onClick={() => setShowProofModal(true)} className="text-nowrap">
-                <i className={`bi ${eventProofUrl ? 'bi-check-circle-fill' : 'bi-link-45deg'} me-2`}></i>
-                {eventProofUrl ? "Linked" : "Link Proof"}
+                <i className={`bi ${eventProofUrl ? 'bi-check-circle-fill' : 'bi-link-45deg'} me-2`}></i>{eventProofUrl ? "Linked" : "Link Proof"}
             </Button>
             <Button variant="outline-primary" onClick={generatePDF}>
                 <i className="bi bi-file-earmark-pdf me-2"></i> Report
@@ -217,7 +222,7 @@ export default function EventDetails() {
             </Accordion.Header>
             <Accordion.Body className="p-0">
               <div className="p-3 bg-body-tertiary border-bottom d-flex gap-2">
-                <Button variant="outline-primary" size="sm" onClick={() => { setActiveItem(item); setEditingIndex(null); setPartForm({name:"",crn:"",urn:"",branch:"",phone:"",position:""}); setShowPartModal(true); }}>
+                <Button variant="outline-primary" size="sm" onClick={() => { setActiveItem(item); setEditingIndex(null); setPartForm({name:"",crn:"",urn:"",branch:"",phone:"",year:"",position:""}); setShowPartModal(true); }}>
                   <i className="bi bi-person-plus me-2"></i> Add Student
                 </Button>
                 <div className="d-inline-block">
@@ -226,11 +231,18 @@ export default function EventDetails() {
                 </div>
               </div>
               <Table hover responsive className="mb-0">
-                <thead><tr><th>S.No</th><th>CRN</th><th>URN</th><th>Name</th><th>Branch</th><th>Phone</th><th>Position</th><th>Action</th></tr></thead>
+                {/* UPDATED: Table Headers */}
+                <thead><tr><th>S.No</th><th>CRN</th><th>URN</th><th>Name</th><th>Branch</th><th>Year</th><th>Phone</th><th>Position</th><th>Action</th></tr></thead>
                 <tbody>
                   {item.participants?.map((p, idx) => (
                     <tr key={idx}>
-                      <td className="text-muted small">{idx + 1}</td><td>{p.crn}</td><td>{p.urn}</td><td className="fw-bold">{p.name}</td><td>{p.branch}</td><td>{p.phone}</td>
+                      <td className="text-muted small">{idx + 1}</td>
+                      <td>{p.crn}</td>
+                      <td>{p.urn}</td>
+                      <td className="fw-bold">{p.name}</td>
+                      <td>{p.branch}</td>
+                      <td>{p.year || '-'}</td> {/* Show Year */}
+                      <td>{p.phone}</td>
                       <td>{p.position ? <Badge bg="success">{p.position}</Badge> : '-'}</td>
                       <td>
                           <Button variant="link" size="sm" className="p-0 me-2" onClick={() => { setActiveItem(item); setEditingIndex(idx); setPartForm(p); setShowPartModal(true); }}><i className="bi bi-pencil-square text-primary"></i></Button>
@@ -238,7 +250,7 @@ export default function EventDetails() {
                       </td>
                     </tr>
                   ))}
-                  {(!item.participants || item.participants.length === 0) && <tr><td colSpan="8" className="text-center text-muted p-4">No participants added.</td></tr>}
+                  {(!item.participants || item.participants.length === 0) && <tr><td colSpan="9" className="text-center text-muted p-4">No participants added.</td></tr>}
                 </tbody>
               </Table>
             </Accordion.Body>
@@ -262,9 +274,20 @@ export default function EventDetails() {
         <Modal.Header closeButton><Modal.Title>{editingIndex !== null ? "Edit" : "Add"} Participant</Modal.Title></Modal.Header>
         <Modal.Body>
           <Form className="d-grid gap-3">
-            <Row><Col md={6}><Form.Control placeholder="Name" value={partForm.name} onChange={e => setPartForm({...partForm, name: e.target.value})} /></Col><Col md={6}><Form.Control placeholder="Phone" value={partForm.phone} onChange={e => setPartForm({...partForm, phone: e.target.value})} /></Col></Row>
-            <Row><Col md={4}><Form.Control placeholder="CRN" value={partForm.crn} onChange={e => setPartForm({...partForm, crn: e.target.value})} /></Col><Col md={4}><Form.Control placeholder="URN" value={partForm.urn} onChange={e => setPartForm({...partForm, urn: e.target.value})} /></Col><Col md={4}><Form.Control placeholder="Branch" value={partForm.branch} onChange={e => setPartForm({...partForm, branch: e.target.value})} /></Col></Row>
-            <Form.Control placeholder="Position (Optional)" value={partForm.position} onChange={e => setPartForm({...partForm, position: e.target.value})} />
+            <Row>
+                <Col md={6}><Form.Control placeholder="Name" value={partForm.name} onChange={e => setPartForm({...partForm, name: e.target.value})} /></Col>
+                <Col md={6}><Form.Control placeholder="Phone" value={partForm.phone} onChange={e => setPartForm({...partForm, phone: e.target.value})} /></Col>
+            </Row>
+            <Row>
+                <Col md={4}><Form.Control placeholder="CRN" value={partForm.crn} onChange={e => setPartForm({...partForm, crn: e.target.value})} /></Col>
+                <Col md={4}><Form.Control placeholder="URN" value={partForm.urn} onChange={e => setPartForm({...partForm, urn: e.target.value})} /></Col>
+                <Col md={4}><Form.Control placeholder="Branch" value={partForm.branch} onChange={e => setPartForm({...partForm, branch: e.target.value})} /></Col>
+            </Row>
+            <Row>
+                {/* UPDATED: Added Year Field */}
+                <Col md={6}><Form.Control placeholder="Year (e.g. D3)" value={partForm.year} onChange={e => setPartForm({...partForm, year: e.target.value})} /></Col>
+                <Col md={6}><Form.Control placeholder="Position (Optional)" value={partForm.position} onChange={e => setPartForm({...partForm, position: e.target.value})} /></Col>
+            </Row>
           </Form>
         </Modal.Body>
         <Modal.Footer><Button variant="secondary" onClick={() => setShowPartModal(false)}>Cancel</Button><Button variant="primary" onClick={handleSaveParticipant}>Save Record</Button></Modal.Footer>
