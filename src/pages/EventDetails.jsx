@@ -160,14 +160,46 @@ export default function EventDetails() {
 
   return (
     <Layout>
-      <div className="d-flex align-items-center mb-4">
-        <Button variant="outline-secondary" className="me-3 rounded-circle" onClick={() => navigate(-1)}><i className="bi bi-arrow-left"></i></Button>
-        <div><h3 className="fw-bold mb-0">{eventData.title}</h3><span className="text-muted small"><i className="bi bi-geo-alt"></i> {eventData.venue} &bull; {eventData.date}</span></div>
-        <div className="ms-auto d-flex gap-2">
-            <Button variant="outline-success" onClick={() => setShowProofModal(true)}><i className={`bi ${eventProofUrl ? 'bi-check-circle-fill' : 'bi-link-45deg'} me-2`}></i>{eventProofUrl ? "Proof Linked" : "Link Proof"}</Button>
-            <Button variant="outline-primary" onClick={generatePDF}><i className="bi bi-file-earmark-pdf me-2"></i> Report</Button>
-            <Button variant="primary" onClick={() => setShowItemModal(true)}><i className="bi bi-plus-circle me-2"></i> Add Sub-Event</Button>
-            <Button variant="danger" onClick={handleDeleteEvent} title="Delete Event"><i className="bi bi-trash"></i></Button>
+      {/* MOBILE-OPTIMIZED HEADER 
+         1. Uses flex-column on mobile to stack Title and Buttons vertically.
+         2. Uses d-grid + gridTemplateColumns on mobile to make buttons 2x2.
+      */}
+      <div className="d-flex flex-column flex-md-row align-items-start align-items-md-center mb-4 gap-3">
+        
+        {/* Title Section (Full width on mobile) */}
+        <div className="d-flex align-items-center w-100 w-md-auto">
+            <Button variant="outline-secondary" className="me-3 rounded-circle" onClick={() => navigate(-1)}>
+                <i className="bi bi-arrow-left"></i>
+            </Button>
+            <div>
+                <h3 className="fw-bold mb-0 text-break">{eventData.title}</h3>
+                <span className="text-muted small">
+                    <i className="bi bi-geo-alt"></i> {eventData.venue} &bull; {eventData.date}
+                </span>
+            </div>
+        </div>
+
+        {/* Action Buttons 
+           - Mobile: d-grid with 2 columns (1fr 1fr) -> 2 buttons per row
+           - Desktop: d-md-flex (single row)
+        */}
+        <div 
+          className="d-grid gap-2 d-md-flex ms-md-auto w-100 w-md-auto" 
+          style={{ gridTemplateColumns: '1fr 1fr' }} // <--- Creates the 2x2 grid on mobile
+        >
+            <Button variant="outline-success" onClick={() => setShowProofModal(true)} className="text-nowrap">
+                <i className={`bi ${eventProofUrl ? 'bi-check-circle-fill' : 'bi-link-45deg'} me-2`}></i>
+                {eventProofUrl ? "Linked" : "Link Proof"}
+            </Button>
+            <Button variant="outline-primary" onClick={generatePDF}>
+                <i className="bi bi-file-earmark-pdf me-2"></i> Report
+            </Button>
+            <Button variant="primary" onClick={() => setShowItemModal(true)} className="text-nowrap">
+                <i className="bi bi-plus-circle me-2"></i> Add Sub-Event
+            </Button>
+            <Button variant="danger" onClick={handleDeleteEvent} title="Delete Event">
+                <i className="bi bi-trash"></i>
+            </Button>
         </div>
       </div>
 
@@ -184,7 +216,7 @@ export default function EventDetails() {
               </div>
             </Accordion.Header>
             <Accordion.Body className="p-0">
-              <div className="p-3 bg-body-tertiary border-bottom d-flex gap-2"> {/* Dark Mode compatible toolbar */}
+              <div className="p-3 bg-body-tertiary border-bottom d-flex gap-2">
                 <Button variant="outline-primary" size="sm" onClick={() => { setActiveItem(item); setEditingIndex(null); setPartForm({name:"",crn:"",urn:"",branch:"",phone:"",position:""}); setShowPartModal(true); }}>
                   <i className="bi bi-person-plus me-2"></i> Add Student
                 </Button>
