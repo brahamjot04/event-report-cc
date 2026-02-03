@@ -11,7 +11,6 @@ export default function Users() {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // 1. Security Check (Layout handles Name, we just check Role)
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) { navigate("/login"); return; }
@@ -27,7 +26,6 @@ export default function Users() {
     return () => unsubscribe();
   }, [navigate]);
 
-  // 2. Fetch Users
   const fetchUsers = async () => {
     try {
       const snap = await getDocs(collection(db, "users"));
@@ -51,7 +49,7 @@ export default function Users() {
   return (
     <Layout>
       <div className="mb-4">
-         <h3 className="fw-bold text-dark mb-0">User Management</h3>
+         <h3 className="fw-bold mb-0">User Management</h3>
          <p className="text-muted small">Manage system access and roles</p>
       </div>
 
@@ -66,7 +64,7 @@ export default function Users() {
           </Card.Header>
           <Card.Body className="p-0">
              <Table responsive hover className="mb-0 align-middle">
-               <thead className="bg-light text-muted small text-uppercase">
+               <thead className="small text-uppercase">
                  <tr>
                    <th className="ps-4">Full Name</th><th>Email</th><th>Date</th><th className="text-end pe-4">Decision</th>
                  </tr>
@@ -91,10 +89,10 @@ export default function Users() {
 
       {/* ALL USERS */}
       <Card className="border-0 shadow-sm">
-        <Card.Header className="bg-white py-3"><h6 className="mb-0 fw-bold">All System Users</h6></Card.Header>
+        <Card.Header className="bg-body border-bottom py-3"><h6 className="mb-0 fw-bold">All System Users</h6></Card.Header>
         <Card.Body className="p-0">
           <Table responsive hover className="mb-0 align-middle">
-            <thead className="bg-light text-muted small text-uppercase">
+            <thead className="small text-uppercase">
               <tr><th className="ps-4 py-3">User</th><th>Role</th><th>Status</th><th className="text-end pe-4">Actions</th></tr>
             </thead>
             <tbody>
@@ -105,7 +103,7 @@ export default function Users() {
                         <div className="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center me-3 fw-bold" style={{width: 40, height: 40}}>
                             {user.name?.charAt(0).toUpperCase()}
                         </div>
-                        <div><div className="fw-bold text-dark">{user.name}</div><div className="small text-muted">{user.email}</div></div>
+                        <div><div className="fw-bold">{user.name}</div><div className="small text-muted">{user.email}</div></div>
                     </div>
                   </td>
                   <td>

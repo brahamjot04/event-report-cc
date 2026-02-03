@@ -9,7 +9,6 @@ import Layout from "../components/Layout";
 export default function Home() {
   const [events, setEvents] = useState([]);
   
-  // Local User State (Required for Logic, not Layout)
   const [userRole, setUserRole] = useState(null);
   const [userStatus, setUserStatus] = useState("pending");
   const [userName, setUserName] = useState("User");
@@ -21,7 +20,6 @@ export default function Home() {
   
   const navigate = useNavigate();
 
-  // 1. Check Permissions
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!currentUser) { navigate("/login"); return; }
@@ -39,7 +37,6 @@ export default function Home() {
     return () => unsubscribe();
   }, [navigate]);
 
-  // 2. Fetch Data
   useEffect(() => {
     if (userStatus === 'approved') {
       const fetchData = async () => {
@@ -64,10 +61,11 @@ export default function Home() {
     setShowModal(false); setStep(1); setFormData({ type: "", title: "", date: "", venue: "" });
   };
 
+  // --- ACCESS PENDING SCREEN (Dark Mode Compatible) ---
   if (userStatus === "pending") {
     return (
-      <div className="d-flex vh-100 align-items-center justify-content-center bg-light">
-        <div className="text-center p-5 bg-white shadow rounded">
+      <div className="d-flex vh-100 align-items-center justify-content-center bg-body-tertiary">
+        <div className="text-center p-5 card shadow rounded border-0">
           <h1 className="display-1 text-danger"><i className="bi bi-slash-circle"></i></h1>
           <h2>Access Pending</h2>
           <p className="text-muted">Your account awaits Admin approval.</p>
@@ -77,10 +75,8 @@ export default function Home() {
     );
   }
 
-  // UPDATED: No props passed to Layout
   return (
     <Layout>
-      
       {/* Stats Row */}
       <Row className="mb-4 g-3">
         <Col md={6} lg={3}>
@@ -119,7 +115,7 @@ export default function Home() {
 
       {/* Header */}
       <div className="d-flex justify-content-between align-items-center mb-3">
-        <h5 className="fw-bold text-dark mb-0">Recent Events</h5>
+        <h5 className="fw-bold mb-0">Recent Events</h5>
         {(userRole === 'admin' || userRole === 'super_admin') && (
           <Button variant="primary" onClick={() => setShowModal(true)}>
             <i className="bi bi-plus-lg me-2"></i>New Event
@@ -127,11 +123,11 @@ export default function Home() {
         )}
       </div>
 
-      {/* Grid */}
+      {/* Events Grid */}
       <Row className="g-4">
         {events.map(event => (
           <Col md={6} lg={4} key={event.id}>
-            <Card className="border-0 shadow-sm h-100 stats-card" onClick={() => navigate(`/event/${event.id}`)}>
+            <Card className="border-0 shadow-sm h-100 stats-card cursor-pointer" onClick={() => navigate(`/event/${event.id}`)}>
               <Card.Body>
                 <div className="d-flex justify-content-between mb-3">
                   <Badge bg={event.type === 'youth_festival' ? 'danger' : 'info'}>
@@ -142,7 +138,7 @@ export default function Home() {
                 <Card.Title className="fw-bold mb-1">{event.title}</Card.Title>
                 <div className="text-muted small mb-3"><i className="bi bi-geo-alt-fill me-1"></i> {event.venue}</div>
               </Card.Body>
-              <Card.Footer className="bg-white border-0 pt-0 text-end">
+              <Card.Footer className="bg-transparent border-top-0 text-end">
                  <small className="text-primary fw-bold">Manage <i className="bi bi-arrow-right ms-1"></i></small>
               </Card.Footer>
             </Card>
@@ -156,11 +152,11 @@ export default function Home() {
         <Modal.Body>
           {step === 1 ? (
              <div className="d-grid gap-3">
-                <Button variant="light" className="text-start p-3 border" onClick={() => { setFormData({...formData, type: 'college'}); setStep(2); }}>
+                <Button variant="outline-light" className="text-start p-3 border text-body" onClick={() => { setFormData({...formData, type: 'college'}); setStep(2); }}>
                     <h5 className="mb-0 text-primary fw-bold">College Level</h5>
                     <small className="text-muted">Internal events like Anand Utsav</small>
                 </Button>
-                <Button variant="light" className="text-start p-3 border" onClick={() => { setFormData({...formData, type: 'youth_festival'}); setStep(2); }}>
+                <Button variant="outline-light" className="text-start p-3 border text-body" onClick={() => { setFormData({...formData, type: 'youth_festival'}); setStep(2); }}>
                     <h5 className="mb-0 text-danger fw-bold">Youth Festival</h5>
                     <small className="text-muted">Zonal and Inter-Zonal</small>
                 </Button>

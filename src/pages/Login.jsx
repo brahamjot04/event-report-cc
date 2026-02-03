@@ -51,16 +51,15 @@ export default function Login() {
   };
 
   return (
-    <div className="bg-light min-vh-100 d-flex align-items-center justify-content-center">
+    <div className="bg-body-tertiary min-vh-100 d-flex align-items-center justify-content-center">
       <Container style={{ maxWidth: "420px" }}>
         
-        {/* BRANDING UPDATE HERE */}
         <div className="text-center mb-4">
-            <h2 className="fw-bold text-primary">Cultural <span className="text-dark">Committee</span></h2>
+            <h2 className="fw-bold text-primary">Cultural <span className="text-body">Committee</span></h2>
             <p className="text-muted">Event Management Portal</p>
         </div>
 
-        <Card className="border-0 shadow-sm p-4">
+        <Card className="border-0 shadow-sm p-4 card">
           <Card.Body>
             <h4 className="fw-bold mb-1">{isRegistering ? "Create Account" : "Welcome Back"}</h4>
             <p className="text-muted small mb-4">
@@ -75,11 +74,10 @@ export default function Login() {
                   <Form.Label className="small fw-bold text-muted text-uppercase">Full Name</Form.Label>
                   <Form.Control 
                     type="text" 
-                    placeholder="e.g. John Doe"
+                    placeholder="e.g. Brahamjot Singh"
                     required 
                     value={name} 
                     onChange={(e) => setName(e.target.value)} 
-                    style={{background: '#f8f9fa'}}
                   />
                 </Form.Group>
               )}
@@ -92,7 +90,6 @@ export default function Login() {
                   required 
                   value={email} 
                   onChange={(e) => setEmail(e.target.value)}
-                  style={{background: '#f8f9fa'}} 
                 />
               </Form.Group>
 
@@ -104,7 +101,6 @@ export default function Login() {
                   required 
                   value={password} 
                   onChange={(e) => setPassword(e.target.value)} 
-                  style={{background: '#f8f9fa'}}
                 />
               </Form.Group>
               
