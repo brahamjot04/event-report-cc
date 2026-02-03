@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { doc, getDoc, collection, getDocs, addDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, collection, getDocs, addDoc, updateDoc, deleteDoc } from "firebase/firestore"; // <--- Added deleteDoc
 import { db } from "../firebase";
 import { Accordion, Table, Badge, Modal, Form, Button, Row, Col } from "react-bootstrap";
 import Layout from "../components/Layout";
@@ -21,13 +21,12 @@ export default function EventDetails() {
   // Modals
   const [showItemModal, setShowItemModal] = useState(false);
   const [showPartModal, setShowPartModal] = useState(false);
-  const [showProofModal, setShowProofModal] = useState(false); // NEW MODAL
+  const [showProofModal, setShowProofModal] = useState(false);
   
   const [activeItem, setActiveItem] = useState(null);
   const [editingIndex, setEditingIndex] = useState(null);
   const [newItemName, setNewItemName] = useState("");
   
-  // Event Proof Link State
   const [eventProofUrl, setEventProofUrl] = useState(""); 
 
   const [partForm, setPartForm] = useState({ 
@@ -40,7 +39,10 @@ export default function EventDetails() {
     if (eventSnap.exists()) {
         const data = eventSnap.data();
         setEventData(data);
-        setEventProofUrl(data.proofUrl || ""); // Load existing proof
+        setEventProofUrl(data.proofUrl || "");
+    } else {
+        alert("Event not found!");
+        navigate("/");
     }
 
     const itemsSnap = await getDocs(collection(db, "events", id, "items"));
@@ -49,21 +51,65 @@ export default function EventDetails() {
 
   useEffect(() => { fetchData(); }, [id]);
 
-  // --- SAVE COMMON PROOF ---
+  // --- DELETE ACTIONS ---
+
+  // 1. DELETE ENTIRE EVENT
+  const handleDeleteEvent = async () => {
+    if (!window.confirm("CRITICAL WARNING:\n\nAre you sure you want to delete this ENTIRE EVENT?\nThis will remove all student data and cannot be undone.")) return;
+
+    try {
+        // Delete all sub-events first (Firestore doesn't auto-delete subcollections)
+        for (const item of items) {
+            await deleteDoc(doc(db, "events", id, "items", item.id));
+        }
+        // Delete main event document
+        await deleteDoc(doc(db, "events", id));
+        
+        alert("Event deleted successfully.");
+        navigate("/");
+    } catch (error) {
+        console.error("Error deleting event:", error);
+        alert("Failed to delete event.");
+    }
+  };
+
+  // 2. DELETE SUB-EVENT
+  const handleDeleteSubEvent = async (e, itemId) => {
+    e.stopPropagation(); // Prevent accordion from toggling
+    if (!window.confirm("Delete this sub-event and all its participants?")) return;
+    
+    await deleteDoc(doc(db, "events", id, "items", itemId));
+    fetchData(); // Refresh list
+  };
+
+  // 3. DELETE STUDENT
+  const handleDeleteParticipant = async (participantIndex, item) => {
+    if (!window.confirm("Remove this student?")) return;
+
+    const updatedParticipants = item.participants.filter((_, idx) => idx !== participantIndex);
+
+    await updateDoc(doc(db, "events", id, "items", item.id), {
+      participants: updatedParticipants
+    });
+
+    // Local UI update
+    const updatedItems = items.map(i => i.id === item.id ? { ...i, participants: updatedParticipants } : i);
+    setItems(updatedItems);
+  };
+
+  // --- OTHER ACTIONS (Existing) ---
   const handleSaveProof = async () => {
     await updateDoc(doc(db, "events", id), { proofUrl: eventProofUrl });
     setShowProofModal(false);
-    fetchData(); // Refresh
+    fetchData();
   };
 
-  // --- PDF GENERATOR ---
   const generatePDF = () => {
     try {
         const doc = new jsPDF({ orientation: 'landscape' });
         const pageWidth = doc.internal.pageSize.width;
         const pageHeight = doc.internal.pageSize.height;
 
-        // 1. HEADER
         doc.setFont("helvetica", "bold");
         doc.setFontSize(18);
         doc.text("Guru Nanak Dev Engineering College, Gill Park Ludhiana", pageWidth / 2, 15, { align: 'center' });
@@ -74,17 +120,15 @@ export default function EventDetails() {
         doc.setLineWidth(0.5);
         doc.line(10, 27, pageWidth - 10, 27);
 
-        // Event Info
         doc.setFont("helvetica", "normal");
         doc.setFontSize(12);
         doc.text(`Event Report: ${eventData.title}`, 14, 35);
         doc.text(`Date: ${eventData.date}   |   Venue: ${eventData.venue}`, 14, 42);
 
-        // --- COMMON PROOF LINK IN PDF ---
         if (eventProofUrl) {
             doc.setTextColor(0, 0, 255);
             doc.textWithLink("Click here to view Event Proof", 14, 49, { url: eventProofUrl });
-            doc.setTextColor(0, 0, 0); // Reset color
+            doc.setTextColor(0, 0, 0);
         } else {
             doc.setFontSize(10);
             doc.text("(No Proof Attached)", 14, 49);
@@ -92,7 +136,6 @@ export default function EventDetails() {
 
         let finalY = 58;
 
-        // 2. TABLES
         items.forEach((item) => {
             doc.setFont("helvetica", "bold");
             doc.setFontSize(12);
@@ -141,7 +184,6 @@ export default function EventDetails() {
             if (finalY > pageHeight - 50) { doc.addPage(); finalY = 20; }
         });
 
-        // 3. SIGNATURES
         if (finalY > pageHeight - 60) { doc.addPage(); finalY = 40; } else { finalY += 20; }
         
         const leftSigX = 30;
@@ -162,14 +204,12 @@ export default function EventDetails() {
         doc.text("Cultural Coordinator", rightSigX + (lineLen/2), finalY + 7, { align: 'center' });
 
         doc.save(`${eventData.title}_Report.pdf`);
-    
     } catch (error) {
         console.error("PDF Generation Error:", error);
         alert("Failed to generate PDF. Check console.");
     }
   };
 
-  // --- HELPER FUNCTIONS ---
   const handleAddItem = async () => {
     if (!newItemName) return;
     await addDoc(collection(db, "events", id, "items"), { name: newItemName, participants: [] });
@@ -201,7 +241,6 @@ export default function EventDetails() {
         name: getIdx(['name']), crn: getIdx(['crn']), urn: getIdx(['urn']), 
         branch: getIdx(['branch']), phone: getIdx(['phone']), pos: getIdx(['position'])
       };
-
       const newParticipants = rows.slice(1).map(row => ({
         name: idx.name > -1 ? row[idx.name] : "",
         crn: idx.crn > -1 ? row[idx.crn] : "",
@@ -234,17 +273,22 @@ export default function EventDetails() {
         </div>
         
         <div className="ms-auto d-flex gap-2">
-            {/* COMMON PROOF BUTTON */}
             <Button variant="outline-success" onClick={() => setShowProofModal(true)}>
                 <i className={`bi ${eventProofUrl ? 'bi-check-circle-fill' : 'bi-link-45deg'} me-2`}></i> 
                 {eventProofUrl ? "Proof Linked" : "Link Proof"}
             </Button>
 
-            <Button variant="outline-danger" onClick={generatePDF}>
+            <Button variant="outline-primary" onClick={generatePDF}>
                 <i className="bi bi-file-earmark-pdf me-2"></i> Report
             </Button>
+            
             <Button variant="primary" onClick={() => setShowItemModal(true)}>
                 <i className="bi bi-plus-circle me-2"></i> Add Sub-Event
+            </Button>
+
+            {/* DELETE EVENT BUTTON */}
+            <Button variant="danger" onClick={handleDeleteEvent} title="Delete Event">
+                <i className="bi bi-trash"></i>
             </Button>
         </div>
       </div>
@@ -255,7 +299,13 @@ export default function EventDetails() {
             <Accordion.Header>
               <div className="d-flex w-100 justify-content-between pe-4">
                 <span className="fw-bold">{item.name}</span>
-                <Badge bg="light" text="dark">{item.participants?.length || 0} Participants</Badge>
+                <div className="d-flex align-items-center gap-2">
+                    <Badge bg="light" text="dark">{item.participants?.length || 0} Participants</Badge>
+                    {/* DELETE SUB-EVENT BUTTON */}
+                    <Button variant="link" size="sm" className="text-danger p-0 ms-2" onClick={(e) => handleDeleteSubEvent(e, item.id)} title="Delete Sub-Event">
+                        <i className="bi bi-x-circle-fill"></i>
+                    </Button>
+                </div>
               </div>
             </Accordion.Header>
             <Accordion.Body className="p-0">
@@ -282,7 +332,15 @@ export default function EventDetails() {
                       <td className="text-muted small">{idx + 1}</td>
                       <td>{p.crn}</td><td>{p.urn}</td><td className="fw-bold">{p.name}</td><td>{p.branch}</td><td>{p.phone}</td>
                       <td>{p.position ? <Badge bg="success">{p.position}</Badge> : '-'}</td>
-                      <td><Button variant="link" size="sm" className="p-0" onClick={() => openEditModal(p, idx, item)}><i className="bi bi-pencil-square text-primary"></i></Button></td>
+                      <td>
+                          <Button variant="link" size="sm" className="p-0 me-2" onClick={() => openEditModal(p, idx, item)}>
+                              <i className="bi bi-pencil-square text-primary"></i>
+                          </Button>
+                          {/* DELETE STUDENT BUTTON */}
+                          <Button variant="link" size="sm" className="p-0 text-danger" onClick={() => handleDeleteParticipant(idx, item)}>
+                              <i className="bi bi-trash"></i>
+                          </Button>
+                      </td>
                     </tr>
                   ))}
                   {(!item.participants || item.participants.length === 0) && <tr><td colSpan="8" className="text-center text-muted p-4">No participants added.</td></tr>}
@@ -294,32 +352,21 @@ export default function EventDetails() {
       </Accordion>
 
       {/* --- MODALS --- */}
-      
-      {/* 1. Sub Event */}
       <Modal show={showItemModal} onHide={() => setShowItemModal(false)} centered>
         <Modal.Header closeButton><Modal.Title>New Sub-Event</Modal.Title></Modal.Header>
         <Modal.Body><Form.Control placeholder="e.g. Solo Song" value={newItemName} onChange={e => setNewItemName(e.target.value)} autoFocus /></Modal.Body>
         <Modal.Footer><Button variant="primary" onClick={handleAddItem}>Create</Button></Modal.Footer>
       </Modal>
 
-      {/* 2. Common Proof Link */}
       <Modal show={showProofModal} onHide={() => setShowProofModal(false)} centered>
         <Modal.Header closeButton><Modal.Title>Event Proof Link</Modal.Title></Modal.Header>
         <Modal.Body>
-            <p className="text-muted small">Paste a Google Drive or SharePoint link containing all proofs for this event.</p>
-            <Form.Control 
-                placeholder="https://drive.google.com/..." 
-                value={eventProofUrl} 
-                onChange={e => setEventProofUrl(e.target.value)} 
-                autoFocus 
-            />
+            <p className="text-muted small">Paste a link (Drive/SharePoint) containing proofs for this event.</p>
+            <Form.Control placeholder="https://..." value={eventProofUrl} onChange={e => setEventProofUrl(e.target.value)} autoFocus />
         </Modal.Body>
-        <Modal.Footer>
-            <Button variant="primary" onClick={handleSaveProof}>Save Link</Button>
-        </Modal.Footer>
+        <Modal.Footer><Button variant="primary" onClick={handleSaveProof}>Save Link</Button></Modal.Footer>
       </Modal>
 
-      {/* 3. Participant */}
       <Modal show={showPartModal} onHide={() => setShowPartModal(false)} centered size="lg">
         <Modal.Header closeButton><Modal.Title>{editingIndex !== null ? "Edit" : "Add"} Participant</Modal.Title></Modal.Header>
         <Modal.Body>
