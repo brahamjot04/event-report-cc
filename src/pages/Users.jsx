@@ -1,26 +1,43 @@
 import { useState, useEffect } from "react";
-import { collection, getDocs, doc, updateDoc, getDoc } from "firebase/firestore";
-import { auth, db } from "../firebase";
+import { collection, getDocs, doc, updateDoc, getDoc, setDoc } from "firebase/firestore";
+import { createUserWithEmailAndPassword, getAuth } from "firebase/auth"; 
+import { initializeApp, deleteApp } from "firebase/app"; // Needed for secondary app
+import { auth, db } from "../firebase"; // Main auth
 import { onAuthStateChanged } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
-import { Table, Button, Badge, Card, Spinner } from "react-bootstrap";
+import { Table, Button, Badge, Card, Spinner, Modal, Form, Row, Col, Alert } from "react-bootstrap";
 import Layout from "../components/Layout";
+
+// Need your config again to initialize secondary app
+const firebaseConfig = {
+    apiKey: "AIzaSyCF_-t-uGCwdX8ee_01T5qHv9nQX3HfxQw",
+  authDomain: "event-report-cc.firebaseapp.com",
+  projectId: "event-report-cc",
+  storageBucket: "event-report-cc.firebasestorage.app",
+  messagingSenderId: "1069208650480",
+  appId: "1:1069208650480:web:0e2765c0804db227b3f835"
+};
+// NOTE: Ideally import this config from firebase.js to avoid duplication
 
 export default function Users() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // Create User State
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [newUser, setNewUser] = useState({ name: "", email: "", role: "user" });
+  const [generatedPass, setGeneratedPass] = useState("");
+  const [creating, setCreating] = useState(false);
+
   const navigate = useNavigate();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) { navigate("/login"); return; }
-      
       const userDoc = await getDoc(doc(db, "users", user.uid));
-      if (userDoc.exists()) {
-        if (userDoc.data().role !== 'super_admin') {
-            alert("Access Denied: Super Admin only.");
-            navigate("/");
-        }
+      if (userDoc.exists() && userDoc.data().role !== 'super_admin') {
+         alert("Access Denied"); navigate("/");
       }
     });
     return () => unsubscribe();
@@ -41,6 +58,54 @@ export default function Users() {
     fetchUsers();
   };
 
+  // --- CREATE USER LOGIC ---
+  const handleCreateUser = async () => {
+    setCreating(true);
+    // 1. Generate Random Password
+    const tempPassword = Math.random().toString(36).slice(-8) + "1!";
+    setGeneratedPass(tempPassword);
+
+    try {
+        // 2. Initialize Secondary App (to avoid logging out Admin)
+        // Note: You must ensure firebaseConfig is correct at the top of this file
+        const secondaryApp = initializeApp(firebaseConfig, "Secondary");
+        const secondaryAuth = getAuth(secondaryApp);
+
+        // 3. Create User in Auth
+        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newUser.email, tempPassword);
+        const uid = userCredential.user.uid;
+
+        // 4. Save to Firestore (using MAIN db instance)
+        await setDoc(doc(db, "users", uid), {
+            name: newUser.name,
+            email: newUser.email,
+            role: newUser.role,
+            status: "approved",
+            createdAt: new Date()
+        });
+
+        // 5. Cleanup
+        await deleteApp(secondaryApp);
+        
+        // 6. UI Updates
+        setCreating(false);
+        setShowCreateModal(false);
+        setShowSuccessModal(true); // Show password to admin
+        fetchUsers();
+
+    } catch (error) {
+        console.error("Error creating user:", error);
+        alert("Failed to create user: " + error.message);
+        setCreating(false);
+    }
+  };
+
+  const sendEmail = () => {
+    const subject = "Welcome to Cultural Committee Portal";
+    const body = `Hello ${newUser.name},\n\nYour account has been created.\n\nLogin here: ${window.location.origin}\nEmail: ${newUser.email}\nPassword: ${generatedPass}\n\nPlease change your password after logging in.`;
+    window.location.href = `mailto:${newUser.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+
   if (loading) return <div className="p-5 text-center"><Spinner animation="border" variant="primary" /></div>;
 
   const pendingUsers = users.filter(u => u.status === 'pending');
@@ -48,9 +113,14 @@ export default function Users() {
 
   return (
     <Layout>
-      <div className="mb-4">
-         <h3 className="fw-bold mb-0">User Management</h3>
-         <p className="text-muted small">Manage system access and roles</p>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+         <div>
+            <h3 className="fw-bold mb-0">User Management</h3>
+            <p className="text-muted small">Manage system access and roles</p>
+         </div>
+         <Button variant="primary" onClick={() => setShowCreateModal(true)}>
+            <i className="bi bi-person-plus-fill me-2"></i> Add User
+         </Button>
       </div>
 
       {/* PENDING REQUESTS */}
@@ -65,9 +135,7 @@ export default function Users() {
           <Card.Body className="p-0">
              <Table responsive hover className="mb-0 align-middle">
                <thead className="small text-uppercase">
-                 <tr>
-                   <th className="ps-4">Full Name</th><th>Email</th><th>Date</th><th className="text-end pe-4">Decision</th>
-                 </tr>
+                 <tr><th className="ps-4">Full Name</th><th>Email</th><th>Date</th><th className="text-end pe-4">Decision</th></tr>
                </thead>
                <tbody>
                  {pendingUsers.map(user => (
@@ -123,6 +191,57 @@ export default function Users() {
           </Table>
         </Card.Body>
       </Card>
+
+      {/* CREATE USER MODAL */}
+      <Modal show={showCreateModal} onHide={() => setShowCreateModal(false)} centered>
+        <Modal.Header closeButton><Modal.Title>Create New User</Modal.Title></Modal.Header>
+        <Modal.Body>
+            <Form>
+                <Form.Group className="mb-3">
+                    <Form.Label>Full Name</Form.Label>
+                    <Form.Control type="text" placeholder="John Doe" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} />
+                </Form.Group>
+                <Form.Group className="mb-3">
+                    <Form.Label>Email Address</Form.Label>
+                    <Form.Control type="email" placeholder="john@example.com" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
+                </Form.Group>
+                <Form.Group className="mb-3">
+                    <Form.Label>Role</Form.Label>
+                    <Form.Select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})}>
+                        <option value="user">User (Viewer)</option>
+                        <option value="admin">Admin (Editor)</option>
+                    </Form.Select>
+                </Form.Group>
+            </Form>
+        </Modal.Body>
+        <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowCreateModal(false)}>Cancel</Button>
+            <Button variant="primary" onClick={handleCreateUser} disabled={creating}>
+                {creating ? <Spinner animation="border" size="sm"/> : "Create User"}
+            </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* SUCCESS MODAL (CREDENTIALS) */}
+      <Modal show={showSuccessModal} onHide={() => setShowSuccessModal(false)} centered backdrop="static">
+        <Modal.Header closeButton><Modal.Title className="text-success">User Created!</Modal.Title></Modal.Header>
+        <Modal.Body>
+            <Alert variant="success">
+                <h5 className="alert-heading">Credentials Generated</h5>
+                <p>The user has been created successfully. Please share these credentials with them.</p>
+                <hr />
+                <p className="mb-1"><strong>Email:</strong> {newUser.email}</p>
+                <p className="mb-0"><strong>Password:</strong> <code className="fs-5">{generatedPass}</code></p>
+            </Alert>
+        </Modal.Body>
+        <Modal.Footer>
+            <Button variant="outline-primary" onClick={sendEmail}>
+                <i className="bi bi-envelope-fill me-2"></i> Send via Email App
+            </Button>
+            <Button variant="success" onClick={() => setShowSuccessModal(false)}>Done</Button>
+        </Modal.Footer>
+      </Modal>
+
     </Layout>
   );
 }

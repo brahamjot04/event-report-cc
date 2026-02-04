@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { auth, db } from "../firebase";
-import { doc, setDoc } from "firebase/firestore";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signInWithPopup } from "firebase/auth";
+import { auth, db, googleProvider } from "../firebase"; // <--- Import googleProvider
+import { doc, setDoc, getDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { Container, Card, Form, Button, Alert, Spinner } from "react-bootstrap";
 
@@ -13,6 +13,34 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // --- GOOGLE LOGIN ---
+  const handleGoogleLogin = async () => {
+    try {
+        const result = await signInWithPopup(auth, googleProvider);
+        const user = result.user;
+        
+        // Check if user exists in DB
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        
+        if (!userDoc.exists()) {
+            // New Google User -> Create pending doc
+            const isSuperAdmin = user.email.toLowerCase() === "brahamjot.cultural@gmail.com";
+            await setDoc(doc(db, "users", user.uid), {
+                name: user.displayName,
+                email: user.email,
+                role: isSuperAdmin ? "super_admin" : "user",
+                status: isSuperAdmin ? "approved" : "pending",
+                createdAt: new Date()
+            });
+            if (!isSuperAdmin) alert("Account created! Waiting for Admin approval.");
+        }
+        navigate("/");
+    } catch (err) {
+        console.error(err);
+        setError("Google Sign-In Failed: " + err.message);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -63,45 +91,36 @@ export default function Login() {
           <Card.Body>
             <h4 className="fw-bold mb-1">{isRegistering ? "Create Account" : "Welcome Back"}</h4>
             <p className="text-muted small mb-4">
-                {isRegistering ? "Enter your details to request access" : "Please enter your details to sign in"}
+                {isRegistering ? "Enter details to request access" : "Please enter details to sign in"}
             </p>
 
             {error && <Alert variant="danger" className="small">{error}</Alert>}
             
+            {/* GOOGLE BUTTON */}
+            <Button variant="outline-dark" className="w-100 mb-3 d-flex align-items-center justify-content-center gap-2" onClick={handleGoogleLogin}>
+                <i className="bi bi-google"></i> Continue with Google
+            </Button>
+
+            <div className="d-flex align-items-center mb-3">
+                <hr className="flex-grow-1" /> <span className="mx-2 text-muted small">OR</span> <hr className="flex-grow-1" />
+            </div>
+
             <Form onSubmit={handleSubmit}>
               {isRegistering && (
                 <Form.Group className="mb-3">
                   <Form.Label className="small fw-bold text-muted text-uppercase">Full Name</Form.Label>
-                  <Form.Control 
-                    type="text" 
-                    placeholder="e.g. Brahamjot Singh"
-                    required 
-                    value={name} 
-                    onChange={(e) => setName(e.target.value)} 
-                  />
+                  <Form.Control type="text" placeholder="e.g. Brahamjot Singh" required value={name} onChange={(e) => setName(e.target.value)} />
                 </Form.Group>
               )}
               
               <Form.Group className="mb-3">
                 <Form.Label className="small fw-bold text-muted text-uppercase">Email Address</Form.Label>
-                <Form.Control 
-                  type="email" 
-                  placeholder="name@gndec.ac.in"
-                  required 
-                  value={email} 
-                  onChange={(e) => setEmail(e.target.value)}
-                />
+                <Form.Control type="email" placeholder="name@gndec.ac.in" required value={email} onChange={(e) => setEmail(e.target.value)} />
               </Form.Group>
 
               <Form.Group className="mb-4">
                 <Form.Label className="small fw-bold text-muted text-uppercase">Password</Form.Label>
-                <Form.Control 
-                  type="password" 
-                  placeholder="••••••••"
-                  required 
-                  value={password} 
-                  onChange={(e) => setPassword(e.target.value)} 
-                />
+                <Form.Control type="password" placeholder="••••••••" required value={password} onChange={(e) => setPassword(e.target.value)} />
               </Form.Group>
               
               <Button variant="primary" type="submit" className="w-100 py-2 fw-bold" disabled={loading}>
@@ -119,7 +138,6 @@ export default function Login() {
             </a>
           </small>
         </div>
-
       </Container>
     </div>
   );
