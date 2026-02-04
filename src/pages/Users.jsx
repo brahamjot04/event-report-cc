@@ -10,7 +10,7 @@ import Layout from "../components/Layout";
 import emailjs from '@emailjs/browser'; // <--- IMPORT EMAILJS
 
 // --- PASTE YOUR FIREBASE CONFIG HERE AGAIN ---
-const firebaseConfig = {
+const secondaryFirebaseConfig = {
     apiKey: "AIzaSyCF_-t-uGCwdX8ee_01T5qHv9nQX3HfxQw",
   authDomain: "event-report-cc.firebaseapp.com",
   projectId: "event-report-cc",
