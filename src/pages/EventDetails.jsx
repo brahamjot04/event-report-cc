@@ -39,7 +39,10 @@ export default function EventDetails() {
   const [partForm, setPartForm] = useState({ name: "", crn: "", urn: "", branch: "", phone: "", year: "", position: "" });
 
   // ATTENDANCE EDIT STATE
-  const [newSessionDate, setNewSessionDate] = useState("");
+  // UPDATED: Session Form includes Venue, Time, Agenda
+  const [sessionForm, setSessionForm] = useState({ date: "", time: "", venue: "", agenda: "" });
+  const [editingSessionId, setEditingSessionId] = useState(null);
+
   const [attStudentForm, setAttStudentForm] = useState({ name: "", urn: "", phone: "", team: "" });
   const [editingSessionStudentId, setEditingSessionStudentId] = useState(null); 
 
@@ -73,13 +76,58 @@ export default function EventDetails() {
 
   useEffect(() => { fetchData(); }, [id]);
 
-  // --- ATTENDANCE FUNCTIONS ---
-  const handleCreateSession = async () => {
-      if(!newSessionDate) return alert("Please select a date");
-      await addDoc(collection(db, "events", id, "attendance_sessions"), {
-          date: newSessionDate, createdAt: new Date()
+  // --- MEETING SESSION FUNCTIONS ---
+
+  // 1. OPEN CREATE MODAL
+  const openCreateSessionModal = () => {
+      setSessionForm({ date: "", time: "", venue: "", agenda: "" });
+      setEditingSessionId(null);
+      setShowSessionModal(true);
+  };
+
+  // 2. OPEN EDIT MODAL
+  const openEditSessionModal = (e, session) => {
+      e.stopPropagation(); // Stop opening the meeting details
+      setSessionForm({ 
+          date: session.date, 
+          time: session.time || "", 
+          venue: session.venue || "", 
+          agenda: session.agenda || "" 
       });
-      setShowSessionModal(false); setNewSessionDate(""); fetchSessions();
+      setEditingSessionId(session.id);
+      setShowSessionModal(true);
+  };
+
+  // 3. SAVE SESSION (CREATE OR UPDATE)
+  const handleSaveSession = async () => {
+      if(!sessionForm.date) return alert("Please select a date");
+      
+      try {
+          if (editingSessionId) {
+              // Update
+              await updateDoc(doc(db, "events", id, "attendance_sessions", editingSessionId), {
+                  ...sessionForm
+              });
+          } else {
+              // Create
+              await addDoc(collection(db, "events", id, "attendance_sessions"), {
+                  ...sessionForm,
+                  createdAt: new Date()
+              });
+          }
+          setShowSessionModal(false);
+          fetchSessions();
+      } catch(err) {
+          console.error(err);
+          alert("Error saving meeting.");
+      }
+  };
+
+  const handleDeleteSession = async (e, sessionId) => {
+      e.stopPropagation();
+      if(!window.confirm("Delete meeting record?")) return;
+      await deleteDoc(doc(db, "events", id, "attendance_sessions", sessionId));
+      fetchSessions();
   };
 
   const handleOpenSession = (session) => {
@@ -88,6 +136,7 @@ export default function EventDetails() {
       setCurrentView('attendance_details');
   };
 
+  // --- ATTENDANCE STUDENT FUNCTIONS ---
   const handleSaveStudentToSession = async () => {
       if(!activeSession) return;
       
@@ -115,14 +164,7 @@ export default function EventDetails() {
       fetchSessionStudents(activeSession.id);
   };
 
-  const handleDeleteSession = async (e, sessionId) => {
-      e.stopPropagation();
-      if(!window.confirm("Delete meeting record?")) return;
-      await deleteDoc(doc(db, "events", id, "attendance_sessions", sessionId));
-      fetchSessions();
-  };
-
-  // GENERATE PDF FOR ATTENDANCE (No Signature)
+  // GENERATE PDF (Updated with Venue/Time)
   const generateAttendancePDF = () => {
       if (!activeSession) return;
       try {
@@ -133,7 +175,9 @@ export default function EventDetails() {
         
         doc.setFont("helvetica", "normal"); doc.setFontSize(11);
         doc.text(`Event: ${eventData.title}`, 14, 25);
-        doc.text(`Meeting Date: ${activeSession.date}`, 14, 32);
+        doc.text(`Date: ${activeSession.date}  |  Time: ${activeSession.time || "-"}`, 14, 32);
+        doc.text(`Venue: ${activeSession.venue || "Not Specified"}`, 14, 39);
+        doc.text(`Agenda: ${activeSession.agenda || "-"}`, 14, 46);
         
         const tableRows = sessionStudents.map((s, i) => [
             i + 1, s.name, s.urn, s.phone, s.team || "-"
@@ -142,7 +186,7 @@ export default function EventDetails() {
         autoTable(doc, {
             head: [["S.No", "Name", "URN", "Contact", "Team/Category"]],
             body: tableRows,
-            startY: 40,
+            startY: 55,
             theme: 'grid',
             headStyles: { fillColor: [41, 128, 185] }
         });
@@ -356,9 +400,7 @@ export default function EventDetails() {
                         </Card.Body>
                     </Card>
                 </Col>
-                 <Col md={12} className="mt-5 text-center">
-                    <Button variant="link" className="text-danger text-decoration-none" onClick={handleDeleteEvent}><i className="bi bi-trash me-2"></i> Delete This Event</Button>
-                </Col>
+                 <Col md={12} className="mt-5 text-center"><Button variant="link" className="text-danger text-decoration-none" onClick={handleDeleteEvent}><i className="bi bi-trash me-2"></i> Delete This Event</Button></Col>
             </Row>
         </Layout>
       );
@@ -378,7 +420,6 @@ export default function EventDetails() {
                     <Button variant="primary" onClick={() => setShowItemModal(true)} className="text-nowrap"><i className="bi bi-plus-circle me-2"></i> Add Sub-Event</Button>
                 </div>
             </div>
-
             <Accordion defaultActiveKey="0">
                 {items.map((item, index) => (
                 <Accordion.Item eventKey={index.toString()} key={item.id} className="mb-3 border-0 shadow-sm rounded overflow-hidden">
@@ -397,9 +438,7 @@ export default function EventDetails() {
                             <input type="file" id={`file-${item.id}`} hidden accept=".xlsx, .xls" onClick={() => setActiveItem(item)} onChange={handleFileUpload} />
                             <label htmlFor={`file-${item.id}`} className="btn btn-outline-success btn-sm mb-0"><i className="bi bi-file-earmark-spreadsheet me-2"></i> Upload Excel</label>
                         </div>
-                        <Button variant="outline-danger" size="sm" className="ms-auto" onClick={() => handleDeleteSubEvent(item.id)} title="Delete Sub-Event">
-                            <i className="bi bi-trash"></i>
-                        </Button>
+                        <Button variant="outline-danger" size="sm" className="ms-auto" onClick={() => handleDeleteSubEvent(item.id)} title="Delete Sub-Event"><i className="bi bi-trash"></i></Button>
                     </div>
                     <Table hover responsive className="mb-0">
                         <thead className="bg-body-tertiary"><tr><th>S.No</th><th>CRN</th><th>URN</th><th>Name</th><th>Branch</th><th>Year</th><th>Phone</th><th>Position</th><th>Action</th></tr></thead>
@@ -433,15 +472,33 @@ export default function EventDetails() {
             <div className="d-flex align-items-center mb-4">
                 <Button variant="outline-secondary" className="me-3 rounded-circle" onClick={() => setCurrentView('dashboard')}><i className="bi bi-arrow-left"></i></Button>
                 <div><h3 className="fw-bold mb-0">Attendance Meetings</h3><span className="text-muted small">Select a meeting to view or edit</span></div>
-                <div className="ms-auto"><Button variant="primary" onClick={() => setShowSessionModal(true)}><i className="bi bi-plus-lg me-2"></i> Create Meeting</Button></div>
+                <div className="ms-auto"><Button variant="primary" onClick={openCreateSessionModal}><i className="bi bi-plus-lg me-2"></i> Create Meeting</Button></div>
             </div>
             <Row className="g-3">
                 {sessions.map((session, idx) => (
                     <Col md={6} lg={4} key={session.id}>
                         <Card className="border-0 shadow-sm cursor-pointer card-hover" onClick={() => handleOpenSession(session)}>
-                            <Card.Body className="d-flex justify-content-between align-items-center p-4">
-                                <div><h5 className="fw-bold mb-1">Meeting {sessions.length - idx}</h5><div className="text-primary"><i className="bi bi-calendar-event me-2"></i>{session.date}</div></div>
-                                <div className="d-flex align-items-center gap-3"><i className="bi bi-chevron-right text-muted"></i><Button variant="link" className="text-danger p-0" onClick={(e) => handleDeleteSession(e, session.id)}><i className="bi bi-trash"></i></Button></div>
+                            <Card.Body className="p-4 position-relative">
+                                {/* Action Buttons */}
+                                <div className="position-absolute top-0 end-0 p-3 d-flex gap-2">
+                                     <Button variant="link" size="sm" className="p-0 text-primary" onClick={(e) => openEditSessionModal(e, session)} title="Edit Details">
+                                        <i className="bi bi-pencil-square"></i>
+                                     </Button>
+                                     <Button variant="link" size="sm" className="p-0 text-danger" onClick={(e) => handleDeleteSession(e, session.id)} title="Delete Meeting">
+                                        <i className="bi bi-trash"></i>
+                                     </Button>
+                                </div>
+
+                                <div className="mb-3">
+                                    <h5 className="fw-bold mb-1">Meeting {sessions.length - idx}</h5>
+                                    <Badge bg="light" text="dark" className="border">{session.date}</Badge>
+                                </div>
+                                
+                                <div className="text-muted small d-grid gap-1">
+                                    <div><i className="bi bi-clock me-2"></i>{session.time ? `${session.time} Onwards` : "Time not set"}</div>
+                                    <div><i className="bi bi-geo-alt me-2"></i>{session.venue || "Venue not set"}</div>
+                                    {session.agenda && <div className="text-truncate" title={session.agenda}><i className="bi bi-list-task me-2"></i>{session.agenda}</div>}
+                                </div>
                             </Card.Body>
                         </Card>
                     </Col>
@@ -459,7 +516,10 @@ export default function EventDetails() {
              <div className="d-flex flex-column flex-md-row align-items-start align-items-md-center mb-4 gap-3">
                 <div className="d-flex align-items-center w-100 w-md-auto">
                     <Button variant="outline-secondary" className="me-3 rounded-circle" onClick={() => setCurrentView('attendance_sessions')}><i className="bi bi-arrow-left"></i></Button>
-                    <div><h3 className="fw-bold mb-0">Meeting: {activeSession?.date}</h3><span className="text-muted small">Attendance Sheet</span></div>
+                    <div>
+                        <h3 className="fw-bold mb-0">Meeting Details</h3>
+                        <span className="text-muted small">{activeSession?.date} &bull; {activeSession?.venue} &bull; {activeSession?.time}</span>
+                    </div>
                 </div>
                 <div className="d-grid gap-2 d-md-flex ms-md-auto w-100 w-md-auto">
                     <Button variant="outline-primary" onClick={generateAttendancePDF}><i className="bi bi-file-earmark-pdf me-2"></i> Download PDF</Button>
@@ -501,13 +561,11 @@ export default function EventDetails() {
                 <Modal.Body><Form.Control placeholder="e.g. Solo Song" value={newItemName} onChange={e => setNewItemName(e.target.value)} autoFocus /></Modal.Body>
                 <Modal.Footer><Button variant="primary" onClick={handleAddItem}>Create</Button></Modal.Footer>
             </Modal>
-
             <Modal show={showProofModal} onHide={() => setShowProofModal(false)} centered>
                 <Modal.Header closeButton><Modal.Title>Event Proof Link</Modal.Title></Modal.Header>
                 <Modal.Body><Form.Control placeholder="https://..." value={eventProofUrl} onChange={e => setEventProofUrl(e.target.value)} /></Modal.Body>
                 <Modal.Footer><Button variant="primary" onClick={handleSaveProof}>Save Link</Button></Modal.Footer>
             </Modal>
-
             <Modal show={showPartModal} onHide={() => setShowPartModal(false)} centered size="lg">
                 <Modal.Header closeButton><Modal.Title>{editingIndex !== null ? "Edit" : "Add"} Participant</Modal.Title></Modal.Header>
                 <Modal.Body>
@@ -519,13 +577,39 @@ export default function EventDetails() {
                 </Modal.Body>
                 <Modal.Footer><Button variant="secondary" onClick={() => setShowPartModal(false)}>Cancel</Button><Button variant="primary" onClick={handleSaveParticipant}>Save Record</Button></Modal.Footer>
             </Modal>
-
+            
+            {/* UPDATED SESSION MODAL */}
             <Modal show={showSessionModal} onHide={() => setShowSessionModal(false)} centered>
-                <Modal.Header closeButton><Modal.Title>Create New Meeting</Modal.Title></Modal.Header>
-                <Modal.Body><Form.Group><Form.Label>Select Date</Form.Label><Form.Control type="date" value={newSessionDate} onChange={e => setNewSessionDate(e.target.value)} /></Form.Group></Modal.Body>
-                <Modal.Footer><Button variant="primary" onClick={handleCreateSession}>Create</Button></Modal.Footer>
+                <Modal.Header closeButton><Modal.Title>{editingSessionId ? "Edit" : "Create"} Meeting</Modal.Title></Modal.Header>
+                <Modal.Body>
+                    <Form className="d-grid gap-3">
+                        <Form.Group>
+                            <Form.Label>Date</Form.Label>
+                            <Form.Control type="date" value={sessionForm.date} onChange={e => setSessionForm({...sessionForm, date: e.target.value})} />
+                        </Form.Group>
+                        <Row>
+                            <Col md={6}>
+                                <Form.Group>
+                                    <Form.Label>Start Time</Form.Label>
+                                    <Form.Control type="time" value={sessionForm.time} onChange={e => setSessionForm({...sessionForm, time: e.target.value})} />
+                                </Form.Group>
+                            </Col>
+                            <Col md={6}>
+                                <Form.Group>
+                                    <Form.Label>Venue</Form.Label>
+                                    <Form.Control type="text" placeholder="e.g. OAT" value={sessionForm.venue} onChange={e => setSessionForm({...sessionForm, venue: e.target.value})} />
+                                </Form.Group>
+                            </Col>
+                        </Row>
+                        <Form.Group>
+                            <Form.Label>Agenda</Form.Label>
+                            <Form.Control as="textarea" rows={2} placeholder="Brief description of the meeting..." value={sessionForm.agenda} onChange={e => setSessionForm({...sessionForm, agenda: e.target.value})} />
+                        </Form.Group>
+                    </Form>
+                </Modal.Body>
+                <Modal.Footer><Button variant="primary" onClick={handleSaveSession}>{editingSessionId ? "Update" : "Create"}</Button></Modal.Footer>
             </Modal>
-
+            
             <Modal show={showAttStudentModal} onHide={() => setShowAttStudentModal(false)} centered>
                 <Modal.Header closeButton><Modal.Title>{editingSessionStudentId ? "Edit" : "Add"} Student to Attendance</Modal.Title></Modal.Header>
                 <Modal.Body>

@@ -102,7 +102,13 @@ export default function Layout({ children }) {
                 </div>
               </Dropdown.Toggle>
               <Dropdown.Menu className="shadow border-0 mt-2">
-                <Dropdown.Item onClick={handleLogout} className="text-danger">Logout</Dropdown.Item>
+                <Dropdown.Item as={Link} to="/profile">
+                  <i className="bi bi-person-gear me-2"></i>Profile
+                </Dropdown.Item>
+                <Dropdown.Divider />
+                <Dropdown.Item onClick={handleLogout} className="text-danger">
+                  <i className="bi bi-box-arrow-right me-2"></i>Logout
+                </Dropdown.Item>
               </Dropdown.Menu>
             </Dropdown>
           </div>
