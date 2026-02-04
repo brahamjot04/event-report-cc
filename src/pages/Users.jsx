@@ -220,20 +220,30 @@ export default function Users() {
       </Modal>
 
       {/* SUCCESS MODAL */}
+      {/* SUCCESS MODAL */}
       <Modal show={showSuccessModal} onHide={() => setShowSuccessModal(false)} centered backdrop="static">
-        <Modal.Header closeButton><Modal.Title className={emailStatus === 'success' ? "text-success" : "text-warning"}>
-            {emailStatus === 'success' ? "User Created Successfully!" : "User Created, Email Failed"}
-        </Modal.Title></Modal.Header>
+        <Modal.Header closeButton>
+            <Modal.Title className={emailStatus === 'success' ? "text-success" : "text-warning"}>
+                {emailStatus === 'success' ? "User Created Successfully!" : "User Created, Email Failed"}
+            </Modal.Title>
+        </Modal.Header>
         <Modal.Body>
             {emailStatus === 'success' ? (
-                 <Alert variant="success"><i className="bi bi-check-circle-fill me-2"></i>An email with credentials has been sent to <strong>{newUser.email}</strong>.</Alert>
+                 <Alert variant="success">
+                    <i className="bi bi-check-circle-fill me-2"></i>
+                    An email with credentials has been sent to <strong>{newUser.email}</strong>.
+                 </Alert>
             ) : (
-                 <Alert variant="warning"><i className="bi bi-exclamation-triangle-fill me-2"></i>User created, but we couldn't send the email automatically. Please send these details manually.</Alert>
+                 <Alert variant="warning">
+                    <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                    User created, but we couldn't send the email automatically. Please share these details manually.
+                 </Alert>
             )}
             
-            <div className="bg-light p-3 rounded border">
+            {/* FIX: Added 'text-dark' to force black text on the light background */}
+            <div className="bg-light p-3 rounded border text-dark">
                 <p className="mb-1"><strong>Email:</strong> {newUser.email}</p>
-                <p className="mb-0"><strong>Password:</strong> <code className="fs-5">{generatedPass}</code></p>
+                <p className="mb-0"><strong>Password:</strong> <code className="fs-5 text-danger fw-bold">{generatedPass}</code></p>
             </div>
         </Modal.Body>
         <Modal.Footer>
