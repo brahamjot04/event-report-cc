@@ -1,37 +1,74 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { doc, getDoc, collection, getDocs, addDoc, updateDoc, deleteDoc, orderBy, query } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  collection,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  orderBy,
+  query,
+} from "firebase/firestore";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { db } from "../firebase";
-import { Accordion, Table, Badge, Modal, Form, Button, Row, Col, Card } from "react-bootstrap";
+import {
+  Accordion,
+  Table,
+  Badge,
+  Modal,
+  Form,
+  Button,
+  Row,
+  Col,
+  Card,
+  ListGroup,
+} from "react-bootstrap";
 import Layout from "../components/Layout";
-import readXlsxFile from 'read-excel-file';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import readXlsxFile from "read-excel-file";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import { logAction } from "../utils/logger"; // <--- Import
 
 export default function EventDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const auth = getAuth();
 
-  // --- VIEW STATE ---
+  // --- USER ROLE & VIEW STATE ---
+  const [userRole, setUserRole] = useState("user");
   const [currentView, setCurrentView] = useState("dashboard");
 
   // --- DATA STATE ---
   const [eventData, setEventData] = useState(null);
   const [items, setItems] = useState([]);
 
+  // Attendance & Sponsorship Data
   const [sessions, setSessions] = useState([]);
   const [activeSession, setActiveSession] = useState(null);
   const [sessionStudents, setSessionStudents] = useState([]);
+  const [sponsorshipList, setSponsorshipList] = useState([]);
+
+  // --- CATEGORY STATE ---
+  const [categories, setCategories] = useState([]);
+  const [newCategoryName, setNewCategoryName] = useState("");
 
   // --- MODALS ---
   const [showItemModal, setShowItemModal] = useState(false);
   const [showPartModal, setShowPartModal] = useState(false);
   const [showProofModal, setShowProofModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [showAttStudentModal, setShowAttStudentModal] = useState(false);
 
+  const [showSponModal, setShowSponModal] = useState(false);
+  const [showPdfOptions, setShowPdfOptions] = useState(false);
+
   // --- FORMS ---
   const [newItemName, setNewItemName] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
   const [eventProofUrl, setEventProofUrl] = useState("");
 
   const [activeItem, setActiveItem] = useState(null);
@@ -46,8 +83,6 @@ export default function EventDetails() {
     position: "",
   });
 
-  // ATTENDANCE EDIT STATE
-  // UPDATED: Session Form includes Venue, Time, Agenda
   const [sessionForm, setSessionForm] = useState({
     date: "",
     time: "",
@@ -64,24 +99,67 @@ export default function EventDetails() {
   });
   const [editingSessionStudentId, setEditingSessionStudentId] = useState(null);
 
-  // --- FETCHING ---
-  const fetchData = async () => {
-    try {
-      const eventSnap = await getDoc(doc(db, "events", id));
-      if (eventSnap.exists()) {
-        const data = eventSnap.data();
-        setEventData(data);
-        setEventProofUrl(data.proofUrl || "");
-      } else {
-        alert("Event not found!");
-        navigate("/");
-      }
-      const itemsSnap = await getDocs(collection(db, "events", id, "items"));
-      setItems(itemsSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    } catch (e) {
-      console.error("Error fetching data:", e);
-    }
+  const [sponForm, setSponForm] = useState({
+    name: "",
+    crn: "",
+    urn: "",
+    phone: "",
+    date: "",
+    venue: "",
+    startTime: "",
+    endTime: "",
+  });
+  const [editingSponId, setEditingSponId] = useState(null);
+
+  // PDF Options State
+  const [pdfFields, setPdfFields] = useState({
+    name: true,
+    crn: true,
+    urn: true,
+    date: false,
+    venue: true,
+    time: true,
+    phone: false,
+  });
+
+  // --- HELPER: DATE FORMATTER ---
+  const formatDate = (dateString) => {
+    if (!dateString) return "";
+    const parts = dateString.split("-");
+    if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    return dateString;
   };
+
+  // --- FETCHING ---
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+        if (userDoc.exists()) setUserRole(userDoc.data().role);
+      }
+    });
+
+    const fetchData = async () => {
+      try {
+        const eventSnap = await getDoc(doc(db, "events", id));
+        if (eventSnap.exists()) {
+          const data = eventSnap.data();
+          setEventData(data);
+          setEventProofUrl(data.proofUrl || "");
+          setCategories(data.categories || []);
+        } else {
+          alert("Event not found!");
+          navigate("/");
+        }
+        const itemsSnap = await getDocs(collection(db, "events", id, "items"));
+        setItems(itemsSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      } catch (e) {
+        console.error("Error fetching data:", e);
+      }
+    };
+    fetchData();
+    return () => unsubscribe();
+  }, [id, navigate, auth]);
 
   const fetchSessions = async () => {
     const q = query(
@@ -106,78 +184,312 @@ export default function EventDetails() {
     setSessionStudents(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [id]);
-
-  // --- MEETING SESSION FUNCTIONS ---
-
-  // 1. OPEN CREATE MODAL
-  const openCreateSessionModal = () => {
-    setSessionForm({ date: "", time: "", venue: "", agenda: "" });
-    setEditingSessionId(null);
-    setShowSessionModal(true);
+  const fetchSponsorships = async () => {
+    const q = query(
+      collection(db, "events", id, "sponsorship_records"),
+      orderBy("date", "asc"),
+      orderBy("startTime", "asc"),
+    );
+    const snap = await getDocs(q);
+    setSponsorshipList(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
   };
 
-  // 2. OPEN EDIT MODAL
-  const openEditSessionModal = (e, session) => {
-    e.stopPropagation(); // Stop opening the meeting details
-    setSessionForm({
-      date: session.date,
-      time: session.time || "",
-      venue: session.venue || "",
-      agenda: session.agenda || "",
-    });
-    setEditingSessionId(session.id);
-    setShowSessionModal(true);
-  };
-
-  // 3. SAVE SESSION (CREATE OR UPDATE)
-  const handleSaveSession = async () => {
-    if (!sessionForm.date) return alert("Please select a date");
-
+  // --- CATEGORY LOGIC ---
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) return;
+    if (categories.includes(newCategoryName.trim()))
+      return alert("Category already exists");
     try {
-      if (editingSessionId) {
-        // Update
-        await updateDoc(
-          doc(db, "events", id, "attendance_sessions", editingSessionId),
-          {
-            ...sessionForm,
-          },
-        );
-      } else {
-        // Create
-        await addDoc(collection(db, "events", id, "attendance_sessions"), {
-          ...sessionForm,
-          createdAt: new Date(),
-        });
-      }
-      setShowSessionModal(false);
-      fetchSessions();
-    } catch (err) {
-      console.error(err);
-      alert("Error saving meeting.");
+      const updated = [...categories, newCategoryName.trim()];
+      await updateDoc(doc(db, "events", id), { categories: updated });
+      setCategories(updated);
+      setNewCategoryName("");
+    } catch (e) {
+      alert("Error adding category");
     }
   };
 
-  const handleDeleteSession = async (e, sessionId) => {
-    e.stopPropagation();
-    if (!window.confirm("Delete meeting record?")) return;
-    await deleteDoc(doc(db, "events", id, "attendance_sessions", sessionId));
-    fetchSessions();
+  const handleDeleteCategory = async (catName) => {
+    if (!window.confirm(`Delete category "${catName}"?`)) return;
+    try {
+      const updated = categories.filter((c) => c !== catName);
+      await updateDoc(doc(db, "events", id), { categories: updated });
+      setCategories(updated);
+    } catch (e) {
+      alert("Error deleting category");
+    }
   };
 
-  const handleOpenSession = (session) => {
-    setActiveSession(session);
-    fetchSessionStudents(session.id);
+  // --- SUB-EVENT LOGIC ---
+  const handleAddItem = async () => {
+    if (!newItemName) return alert("Enter Name");
+    if (!selectedCategory) return alert("Select a Category");
+
+    await addDoc(collection(db, "events", id, "items"), {
+      name: newItemName,
+      category: selectedCategory,
+      participants: [],
+    });
+
+    const itemsSnap = await getDocs(collection(db, "events", id, "items"));
+    setItems(itemsSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    setShowItemModal(false);
+    setNewItemName("");
+    setSelectedCategory("");
+  };
+
+  const handleDeleteSubEvent = async (iid) => {
+    if (window.confirm("Delete?")) {
+      await deleteDoc(doc(db, "events", id, "items", iid));
+      const itemsSnap = await getDocs(collection(db, "events", id, "items"));
+      setItems(itemsSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    }
+  };
+
+  // --- SPONSORSHIP LOGIC ---
+  const handleSaveSponsorship = async () => {
+    if (!sponForm.name || !sponForm.date)
+      return alert("Name and Date are required");
+    try {
+      if (editingSponId)
+        await updateDoc(
+          doc(db, "events", id, "sponsorship_records", editingSponId),
+          sponForm,
+        );
+      else
+        await addDoc(
+          collection(db, "events", id, "sponsorship_records"),
+          sponForm,
+        );
+      setSponForm({
+        name: "",
+        crn: "",
+        urn: "",
+        phone: "",
+        date: "",
+        venue: "",
+        startTime: "",
+        endTime: "",
+      });
+      setEditingSponId(null);
+      setShowSponModal(false);
+      fetchSponsorships();
+      await logAction(
+        "ADD_SPONSORSHIP",
+        `Added sponsorship record: ${sponForm.name} for ${eventData.title}`,
+      );
+    } catch (e) {
+      alert("Error saving record");
+    }
+  };
+  const handleEditSponsorship = (r) => {
+    setSponForm(r);
+    setEditingSponId(r.id);
+    setShowSponModal(true);
+  };
+  const handleDeleteSponsorship = async (rid) => {
+    if (!window.confirm("Delete?")) return;
+    await deleteDoc(doc(db, "events", id, "sponsorship_records", rid));
+    fetchSponsorships();
+  };
+
+  const handleSponFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    readXlsxFile(file)
+      .then(async (rows) => {
+        if (rows.length < 2) return alert("File empty");
+        const headers = rows[0].map((h) => String(h).toLowerCase().trim());
+        const getIdx = (k) =>
+          headers.findIndex((h) => k.some((x) => h.includes(x)));
+        const idx = {
+          name: getIdx(["name"]),
+          crn: getIdx(["crn"]),
+          urn: getIdx(["urn"]),
+          phone: getIdx(["phone", "contact"]),
+          date: getIdx(["date"]),
+          venue: getIdx(["venue"]),
+          start: getIdx(["start"]),
+          end: getIdx(["end"]),
+        };
+        const newRecs = rows
+          .slice(1)
+          .map((r) => ({
+            name: idx.name > -1 ? r[idx.name] : "",
+            crn: idx.crn > -1 ? r[idx.crn] : "",
+            urn: idx.urn > -1 ? r[idx.urn] : "",
+            phone: idx.phone > -1 ? r[idx.phone] : "",
+            date: idx.date > -1 ? r[idx.date] : "",
+            venue: idx.venue > -1 ? r[idx.venue] : "",
+            startTime: idx.start > -1 ? r[idx.start] : "",
+            endTime: idx.end > -1 ? r[idx.end] : "",
+          }))
+          .filter((r) => r.name);
+        await Promise.all(
+          newRecs.map((r) =>
+            addDoc(collection(db, "events", id, "sponsorship_records"), r),
+          ),
+        );
+        alert(`Imported ${newRecs.length} records!`);
+        fetchSponsorships();
+        e.target.value = "";
+      })
+      .catch(() => {
+        alert("Error reading Excel");
+        e.target.value = "";
+      });
+  };
+
+  // --- UPDATED SPONSORSHIP PDF (GROUP BY DATE) ---
+  const generateSponsorshipPDF = () => {
+    try {
+      const doc = new jsPDF({ orientation: "landscape" });
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text("Sponsorship Attendance Report", 14, 15);
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Event: ${eventData.title}`, 14, 23);
+
+      // Group Data by Date
+      const grouped = sponsorshipList.reduce((acc, item) => {
+        const d = item.date;
+        if (!acc[d]) acc[d] = [];
+        acc[d].push(item);
+        return acc;
+      }, {});
+
+      const sortedDates = Object.keys(grouped).sort();
+      let finalY = 30; // Start Position
+
+      // Define Headers based on options
+      const headers = ["S.No"];
+      const keys = [];
+      if (pdfFields.name) {
+        headers.push("Name");
+        keys.push("name");
+      }
+      if (pdfFields.crn) {
+        headers.push("CRN");
+        keys.push("crn");
+      }
+      if (pdfFields.urn) {
+        headers.push("URN");
+        keys.push("urn");
+      }
+      if (pdfFields.venue) {
+        headers.push("Venue");
+        keys.push("venue");
+      }
+      if (pdfFields.time) {
+        headers.push("Time");
+        keys.push("time");
+      }
+      if (pdfFields.phone) {
+        headers.push("Contact");
+        keys.push("phone");
+      }
+      // Note: 'Date' is excluded from columns as it is the table header
+
+      sortedDates.forEach((dateKey) => {
+        // Check for page break
+        if (finalY > doc.internal.pageSize.height - 40) {
+          doc.addPage();
+          finalY = 20;
+        }
+
+        // Print Date Header
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.setTextColor(0);
+        doc.text(`Date: ${formatDate(dateKey)}`, 14, finalY);
+        finalY += 5;
+
+        const tableRows = grouped[dateKey].map((s, i) => {
+          const row = [i + 1];
+          keys.forEach((key) => {
+            if (key === "time")
+              row.push(`${s.startTime || ""} - ${s.endTime || ""}`);
+            else row.push(s[key] || "");
+          });
+          return row;
+        });
+
+        autoTable(doc, {
+          head: [headers],
+          body: tableRows,
+          startY: finalY,
+          theme: "grid",
+          headStyles: { fillColor: [40, 167, 69] }, // Green
+          margin: { bottom: 20 },
+        });
+
+        finalY = doc.lastAutoTable.finalY + 15; // Space between tables
+      });
+
+      // Signatures at the bottom of the last page
+      if (finalY > doc.internal.pageSize.height - 40) {
+        doc.addPage();
+        finalY = 40;
+      }
+      doc.line(30, finalY, 90, finalY);
+      doc.text("Chairman", 60, finalY + 5, { align: "center" });
+      doc.line(
+        doc.internal.pageSize.width - 90,
+        finalY,
+        doc.internal.pageSize.width - 30,
+        finalY,
+      );
+      doc.text(
+        "Cultural Coordinator",
+        doc.internal.pageSize.width - 60,
+        finalY + 5,
+        { align: "center" },
+      );
+
+      doc.save(`${eventData.title}_Sponsorship.pdf`);
+      setShowPdfOptions(false);
+    } catch (err) {
+      alert("PDF Error");
+      console.error(err);
+    }
+  };
+
+  // --- MEETING LOGIC ---
+  const handleCreateSession = async () => {
+    if (!sessionForm.date) return alert("Select date");
+    if (editingSessionId)
+      await updateDoc(
+        doc(db, "events", id, "attendance_sessions", editingSessionId),
+        sessionForm,
+      );
+    else
+      await addDoc(collection(db, "events", id, "attendance_sessions"), {
+        ...sessionForm,
+        createdAt: new Date(),
+      });
+    setShowSessionModal(false);
+    fetchSessions();
+    await logAction(
+      "CREATE_MEETING",
+      `Scheduled meeting for ${eventData.title} on ${sessionForm.date}`,
+    );
+  };
+  const handleOpenSession = (s) => {
+    setActiveSession(s);
+    fetchSessionStudents(s.id);
     setCurrentView("attendance_details");
   };
-
-  // --- ATTENDANCE STUDENT FUNCTIONS ---
+  const handleDeleteSession = async (e, sid) => {
+    e.stopPropagation();
+    if (window.confirm("Delete?")) {
+      await deleteDoc(doc(db, "events", id, "attendance_sessions", sid));
+      fetchSessions();
+    }
+  };
   const handleSaveStudentToSession = async () => {
     if (!activeSession) return;
-
-    if (editingSessionStudentId) {
+    if (editingSessionStudentId)
       await updateDoc(
         doc(
           db,
@@ -190,7 +502,7 @@ export default function EventDetails() {
         ),
         attStudentForm,
       );
-    } else {
+    else
       await addDoc(
         collection(
           db,
@@ -202,129 +514,100 @@ export default function EventDetails() {
         ),
         attStudentForm,
       );
-    }
-
     setAttStudentForm({ name: "", urn: "", phone: "", team: "" });
     setEditingSessionStudentId(null);
     setShowAttStudentModal(false);
     fetchSessionStudents(activeSession.id);
   };
-
-  const handleEditSessionStudent = (student) => {
+  const handleDeleteSessionStudent = async (sid) => {
+    if (window.confirm("Remove?")) {
+      await deleteDoc(
+        doc(
+          db,
+          "events",
+          id,
+          "attendance_sessions",
+          activeSession.id,
+          "students",
+          sid,
+        ),
+      );
+      fetchSessionStudents(activeSession.id);
+    }
+  };
+  const handleEditSessionStudent = (s) => {
     setAttStudentForm({
-      name: student.name,
-      urn: student.urn,
-      phone: student.phone,
-      team: student.team,
+      name: s.name,
+      urn: s.urn,
+      phone: s.phone,
+      team: s.team,
     });
-    setEditingSessionStudentId(student.id);
+    setEditingSessionStudentId(s.id);
     setShowAttStudentModal(true);
   };
 
-  const handleDeleteSessionStudent = async (studentId) => {
-    if (!window.confirm("Remove this student?")) return;
-    await deleteDoc(
-      doc(
-        db,
-        "events",
-        id,
-        "attendance_sessions",
-        activeSession.id,
-        "students",
-        studentId,
-      ),
-    );
-    fetchSessionStudents(activeSession.id);
-  };
-
-  // GENERATE PDF (Updated with Venue/Time)
-  // GENERATE PDF (Updated: Removed Contact Number)
+  // --- UPDATED ATTENDANCE PDF NAME ---
   const generateAttendancePDF = () => {
     if (!activeSession) return;
     try {
       const doc = new jsPDF();
-
       doc.setFont("helvetica", "bold");
       doc.setFontSize(16);
-      doc.text("Cultural Committee - Attendance Report", 14, 15);
-
-      doc.setFont("helvetica", "normal");
+      doc.text("Attendance Report", 14, 15);
       doc.setFontSize(11);
+      doc.setFont("helvetica", "normal");
       doc.text(`Event: ${eventData.title}`, 14, 25);
-      doc.text(
-        `Date: ${activeSession.date}  |  Time: ${activeSession.time || "-"}`,
-        14,
-        32,
-      );
-      doc.text(`Venue: ${activeSession.venue || "Not Specified"}`, 14, 39);
-      doc.text(`Agenda: ${activeSession.agenda || "-"}`, 14, 46);
+      doc.text(`Date: ${formatDate(activeSession.date)}`, 14, 32);
 
-      // FIX: Removed s.phone and "Contact" column
-      const tableRows = sessionStudents.map((s, i) => [
+      const rows = sessionStudents.map((s, i) => [
         i + 1,
         s.name,
         s.urn,
         s.team || "-",
       ]);
-
       autoTable(doc, {
-        head: [["S.No", "Name", "URN", "Team/Category"]], // Removed 'Contact'
-        body: tableRows,
-        startY: 55,
+        head: [["S.No", "Name", "URN", "Team"]],
+        body: rows,
+        startY: 40,
         theme: "grid",
         headStyles: { fillColor: [41, 128, 185] },
       });
 
-      doc.save(`${eventData.title}_Attendance_${activeSession.date}.pdf`);
-    } catch (err) {
-      console.error(err);
-      alert("Failed to generate PDF");
+      // Name format: Event_Date_Time.pdf
+      const timeStr = activeSession.time
+        ? activeSession.time.replace(/:/g, "-")
+        : "NoTime";
+      doc.save(
+        `${eventData.title}_${formatDate(activeSession.date)}_${timeStr}.pdf`,
+      );
+    } catch (e) {
+      alert("PDF Error");
     }
   };
 
-  // --- UPLOAD LOGIC ---
   const handleAttendanceFileUpload = (e) => {
     const file = e.target.files[0];
-    if (!file) return;
-    if (!activeSession) {
-      alert("Error: No active meeting session found. Please reload.");
-      return;
-    }
-
-    readXlsxFile(file)
-      .then(async (rows) => {
-        if (rows.length < 2) return alert("File empty or missing headers.");
-
-        const headers = rows[0].map((h) => String(h).toLowerCase().trim());
-        const getIdx = (keywords) =>
-          headers.findIndex((h) => keywords.some((k) => h.includes(k)));
-
-        const idx = {
-          name: getIdx(["name", "student"]),
-          urn: getIdx(["urn", "roll"]),
-          phone: getIdx(["phone", "contact", "mobile"]),
-          team: getIdx(["team", "category", "item"]),
-        };
-
-        if (idx.name === -1 && idx.urn === -1) {
-          alert("Error: Could not find 'Name' or 'URN' columns in Excel.");
-          return;
-        }
-
-        const newStudents = rows
-          .slice(1)
-          .map((row) => ({
-            name: idx.name > -1 ? row[idx.name] : "",
-            urn: idx.urn > -1 ? row[idx.urn] : "",
-            phone: idx.phone > -1 ? row[idx.phone] : "",
-            team: idx.team > -1 ? row[idx.team] : "",
-          }))
-          .filter((p) => p.name || p.urn);
-
-        if (newStudents.length === 0)
-          return alert("No valid student records found.");
-
-        const promises = newStudents.map((s) =>
+    if (!file || !activeSession) return;
+    readXlsxFile(file).then(async (rows) => {
+      const h = rows[0].map((x) => String(x).toLowerCase());
+      const g = (k) => h.findIndex((x) => k.some((y) => x.includes(y)));
+      const idx = {
+        n: g(["name"]),
+        u: g(["urn"]),
+        p: g(["phone"]),
+        t: g(["team"]),
+      };
+      const newS = rows
+        .slice(1)
+        .map((r) => ({
+          name: idx.n > -1 ? r[idx.n] : "",
+          urn: idx.u > -1 ? r[idx.u] : "",
+          phone: idx.p > -1 ? r[idx.p] : "",
+          team: idx.t > -1 ? r[idx.t] : "",
+        }))
+        .filter((x) => x.name);
+      await Promise.all(
+        newS.map((s) =>
           addDoc(
             collection(
               db,
@@ -336,226 +619,123 @@ export default function EventDetails() {
             ),
             s,
           ),
-        );
-
-        await Promise.all(promises);
-        alert(`Imported ${newStudents.length} students!`);
-        fetchSessionStudents(activeSession.id);
-        e.target.value = "";
-      })
-      .catch((err) => {
-        console.error(err);
-        alert("Error reading Excel file.");
-        e.target.value = "";
-      });
+        ),
+      );
+      alert("Imported!");
+      fetchSessionStudents(activeSession.id);
+      e.target.value = "";
+    });
   };
 
-  // --- PARTICIPANTS LOGIC ---
+  // --- GENERAL LOGIC ---
   const handleDeleteEvent = async () => {
-    if (!window.confirm("CRITICAL WARNING: Delete ENTIRE EVENT?")) return;
-    try {
-      for (const item of items)
-        await deleteDoc(doc(db, "events", id, "items", item.id));
+    if (userRole !== "admin" && userRole !== "super_admin") {
+      alert("Permission Denied");
+      return;
+    }
+    if (window.confirm("Delete EVENT?")) {
       await deleteDoc(doc(db, "events", id));
       navigate("/");
-    } catch (error) {
-      console.error(error);
+    }
+    await logAction("DELETE_EVENT", `Deleted event: ${eventData.title}`);
+  };
+  const handleDeleteParticipant = async (idx, item) => {
+    if (window.confirm("Remove?")) {
+      const p = item.participants.filter((_, i) => i !== idx);
+      await updateDoc(doc(db, "events", id, "items", item.id), {
+        participants: p,
+      });
+      setItems(
+        items.map((i) => (i.id === item.id ? { ...i, participants: p } : i)),
+      );
     }
   };
-
-  const handleDeleteSubEvent = async (itemId) => {
-    if (!window.confirm("Delete this sub-event?")) return;
-    await deleteDoc(doc(db, "events", id, "items", itemId));
-    fetchData();
-  };
-
-  const handleDeleteParticipant = async (participantIndex, item) => {
-    if (!window.confirm("Remove this student?")) return;
-    const updatedParticipants = item.participants.filter(
-      (_, idx) => idx !== participantIndex,
-    );
-    await updateDoc(doc(db, "events", id, "items", item.id), {
-      participants: updatedParticipants,
-    });
-    setItems(
-      items.map((i) =>
-        i.id === item.id ? { ...i, participants: updatedParticipants } : i,
-      ),
-    );
-  };
-
   const handleSaveProof = async () => {
     await updateDoc(doc(db, "events", id), { proofUrl: eventProofUrl });
     setShowProofModal(false);
-    fetchData();
+  };
+  const handleSaveParticipant = async () => {
+    if (!activeItem) return;
+    let u = [...(activeItem.participants || [])];
+    if (editingIndex !== null) u[editingIndex] = partForm;
+    else u.push(partForm);
+    await updateDoc(doc(db, "events", id, "items", activeItem.id), {
+      participants: u,
+    });
+    setItems(
+      items.map((i) =>
+        i.id === activeItem.id ? { ...i, participants: u } : i,
+      ),
+    );
+    setShowPartModal(false);
+  };
+  const handleFileUpload = (e) => {
+    const f = e.target.files[0];
+    if (!f || !activeItem) return;
+    readXlsxFile(f).then((r) => {
+      const n = r
+        .slice(1)
+        .map((row) => ({
+          name: row[0] || "",
+          crn: row[1] || "",
+          urn: row[2] || "",
+          branch: row[3] || "",
+          phone: row[4] || "",
+          year: row[5] || "",
+          position: row[6] || "",
+        }))
+        .filter((x) => x.name);
+      const u = [...(activeItem.participants || []), ...n];
+      updateDoc(doc(db, "events", id, "items", activeItem.id), {
+        participants: u,
+      }).then(() => {
+        fetchData();
+        alert("Imported!");
+      });
+    });
   };
 
-  // GENERATE MAIN EVENT REPORT (No Signature)
+  // --- UPDATED REPORT PDF NAME ---
   const generatePDF = () => {
     try {
       const doc = new jsPDF({ orientation: "landscape" });
-      const pageWidth = doc.internal.pageSize.width;
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(18);
-      doc.text(
-        "Guru Nanak Dev Engineering College, Gill Park Ludhiana",
-        pageWidth / 2,
-        15,
-        { align: "center" },
-      );
-      doc.setFontSize(14);
-      doc.text("Cultural Committee", pageWidth / 2, 23, { align: "center" });
-      doc.setLineWidth(0.5);
-      doc.line(10, 27, pageWidth - 10, 27);
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(12);
-      doc.text(`Event Report: ${eventData.title}`, 14, 35);
-      doc.text(
-        `Date: ${eventData.date}   |   Venue: ${eventData.venue}`,
-        14,
-        42,
-      );
-
-      if (eventProofUrl) {
-        doc.setTextColor(0, 0, 255);
-        doc.textWithLink("Click here to view Event Proof", 14, 49, {
-          url: eventProofUrl,
-        });
-        doc.setTextColor(0, 0, 0);
-      } else {
-        doc.text("(No Proof Attached)", 14, 49);
-      }
-
-      let finalY = 58;
+      doc.text("Event Report", 14, 15);
+      doc.text(`Event: ${eventData.title}`, 14, 25);
+      let finalY = 35;
       items.forEach((item) => {
         doc.setFont("helvetica", "bold");
-        doc.setFillColor(240, 240, 240);
-        doc.rect(14, finalY, pageWidth - 28, 8, "F");
-        doc.text(item.name.toUpperCase(), 16, finalY + 5.5);
-        finalY += 10;
-        const tableRows = [];
-        item.participants?.forEach((p, index) => {
-          tableRows.push([
-            index + 1,
-            p.name,
-            p.urn,
-            p.crn,
-            p.branch,
-            p.year || "-",
-            p.position || "-",
-          ]);
-        });
+        doc.text(item.name.toUpperCase(), 14, finalY);
+        finalY += 5;
+        const rows = item.participants?.map((p, i) => [
+          i + 1,
+          p.name,
+          p.urn,
+          p.crn,
+          p.branch,
+          p.year,
+          p.position,
+        ]);
         autoTable(doc, {
           head: [["S.No", "Name", "URN", "CRN", "Branch", "Year", "Position"]],
-          body: tableRows,
+          body: rows,
           startY: finalY,
           theme: "grid",
         });
         finalY = doc.lastAutoTable.finalY + 15;
-        if (finalY > doc.internal.pageSize.height - 50) {
+        if (finalY > 150) {
           doc.addPage();
           finalY = 20;
         }
       });
-
       doc.save(`${eventData.title}_Report.pdf`);
-    } catch (error) {
-      alert("PDF Error");
+    } catch (e) {
+      alert("Error generating PDF");
     }
-  };
-
-  const handleAddItem = async () => {
-    if (!newItemName) return;
-    await addDoc(collection(db, "events", id, "items"), {
-      name: newItemName,
-      participants: [],
-    });
-    fetchData();
-    setShowItemModal(false);
-    setNewItemName("");
-  };
-
-  const handleSaveParticipant = async () => {
-    if (!activeItem) return;
-    let updated = [...(activeItem.participants || [])];
-    if (editingIndex !== null) updated[editingIndex] = partForm;
-    else updated.push(partForm);
-    await updateDoc(doc(db, "events", id, "items", activeItem.id), {
-      participants: updated,
-    });
-    setItems(
-      items.map((i) =>
-        i.id === activeItem.id ? { ...i, participants: updated } : i,
-      ),
-    );
-    setShowPartModal(false);
-    setEditingIndex(null);
-    setPartForm({
-      name: "",
-      crn: "",
-      urn: "",
-      branch: "",
-      phone: "",
-      year: "",
-      position: "",
-    });
-  };
-
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file || !activeItem) return;
-
-    readXlsxFile(file).then((rows) => {
-      if (rows.length < 2) return alert("Empty File");
-      const headers = rows[0].map((h) => String(h).toLowerCase().trim());
-      const getIdx = (k) =>
-        headers.findIndex((h) => k.some((x) => h.includes(x)));
-      const idx = {
-        name: getIdx(["name"]),
-        crn: getIdx(["crn"]),
-        urn: getIdx(["urn"]),
-        branch: getIdx(["branch"]),
-        phone: getIdx(["phone"]),
-        pos: getIdx(["position"]),
-        year: getIdx(["year", "yr", "semester"]),
-      };
-
-      if (idx.name === -1 && idx.urn === -1) {
-        alert("Error: Could not find 'Name' or 'URN' columns.");
-        e.target.value = "";
-        return;
-      }
-
-      const newPart = rows
-        .slice(1)
-        .map((r) => ({
-          name: idx.name > -1 ? r[idx.name] : "",
-          crn: idx.crn > -1 ? r[idx.crn] : "",
-          urn: idx.urn > -1 ? r[idx.urn] : "",
-          branch: idx.branch > -1 ? r[idx.branch] : "",
-          phone: idx.phone > -1 ? r[idx.phone] : "",
-          year: idx.year > -1 ? r[idx.year] : "",
-          position: idx.pos > -1 ? r[idx.pos] : "",
-        }))
-        .filter((p) => p.name || p.urn);
-
-      const updated = [...(activeItem.participants || []), ...newPart];
-      updateDoc(doc(db, "events", id, "items", activeItem.id), {
-        participants: updated,
-      }).then(() => {
-        fetchData();
-        alert("Imported!");
-        e.target.value = "";
-      });
-    });
   };
 
   if (!eventData) return <div className="p-5 text-center">Loading...</div>;
 
-  // --- VIEWS ---
-
+  // --- 1. DASHBOARD VIEW ---
   if (currentView === "dashboard") {
     return (
       <Layout>
@@ -571,17 +751,17 @@ export default function EventDetails() {
             <h3 className="fw-bold mb-0">{eventData.title}</h3>
             <span className="text-muted small">
               <i className="bi bi-geo-alt"></i> {eventData.venue} &bull;{" "}
-              {eventData.date}
+              {formatDate(eventData.date)}
             </span>
           </div>
         </div>
         <Row className="g-4">
-          <Col md={6} lg={4}>
+          <Col md={4}>
             <Card
               className="h-100 border-0 shadow-sm cursor-pointer card-hover"
               onClick={() => setCurrentView("participants")}
             >
-              <Card.Body className="d-flex flex-column align-items-center justify-content-center p-5 text-center">
+              <Card.Body className="p-5 text-center">
                 <div className="mb-4 text-primary">
                   <i
                     className="bi bi-people-fill"
@@ -589,13 +769,10 @@ export default function EventDetails() {
                   ></i>
                 </div>
                 <h4 className="fw-bold text-body">Participant Details</h4>
-                <p className="text-muted small">
-                  Manage sub-events, add students, and generate reports.
-                </p>
               </Card.Body>
             </Card>
           </Col>
-          <Col md={6} lg={4}>
+          <Col md={4}>
             <Card
               className="h-100 border-0 shadow-sm cursor-pointer card-hover"
               onClick={() => {
@@ -603,34 +780,53 @@ export default function EventDetails() {
                 setCurrentView("attendance_sessions");
               }}
             >
-              <Card.Body className="d-flex flex-column align-items-center justify-content-center p-5 text-center">
+              <Card.Body className="p-5 text-center">
                 <div className="mb-4 text-success">
                   <i
                     className="bi bi-calendar-check-fill"
                     style={{ fontSize: "3.5rem" }}
                   ></i>
                 </div>
-                <h4 className="fw-bold text-body">Attendance Record</h4>
-                <p className="text-muted small">
-                  Manage pre-event meetings and track attendance.
-                </p>
+                <h4 className="fw-bold text-body">Meeting Attendance</h4>
               </Card.Body>
             </Card>
           </Col>
-          <Col md={12} className="mt-5 text-center">
-            <Button
-              variant="link"
-              className="text-danger text-decoration-none"
-              onClick={handleDeleteEvent}
+          <Col md={4}>
+            <Card
+              className="h-100 border-0 shadow-sm cursor-pointer card-hover"
+              onClick={() => {
+                fetchSponsorships();
+                setCurrentView("sponsorship");
+              }}
             >
-              <i className="bi bi-trash me-2"></i> Delete This Event
-            </Button>
+              <Card.Body className="p-5 text-center">
+                <div className="mb-4 text-warning">
+                  <i
+                    className="bi bi-briefcase-fill"
+                    style={{ fontSize: "3.5rem" }}
+                  ></i>
+                </div>
+                <h4 className="fw-bold text-body">Sponsorship</h4>
+              </Card.Body>
+            </Card>
           </Col>
+          {(userRole === "admin" || userRole === "super_admin") && (
+            <Col md={12} className="mt-5 text-center">
+              <Button
+                variant="link"
+                className="text-danger text-decoration-none"
+                onClick={handleDeleteEvent}
+              >
+                <i className="bi bi-trash me-2"></i> Delete This Event
+              </Button>
+            </Col>
+          )}
         </Row>
       </Layout>
     );
   }
 
+  // --- 2. PARTICIPANTS VIEW ---
   if (currentView === "participants") {
     return (
       <Layout>
@@ -648,29 +844,24 @@ export default function EventDetails() {
               <span className="text-muted small">{eventData.title}</span>
             </div>
           </div>
-          <div
-            className="d-grid gap-2 d-md-flex ms-md-auto w-100 w-md-auto"
-            style={{ gridTemplateColumns: "1fr 1fr" }}
-          >
+          <div className="d-grid gap-2 d-md-flex ms-md-auto w-100 w-md-auto">
+            <Button
+              variant="outline-info"
+              onClick={() => setShowCategoryModal(true)}
+            >
+              <i className="bi bi-tags me-2"></i> Categories
+            </Button>
             <Button
               variant="outline-success"
               onClick={() => setShowProofModal(true)}
-              className="text-nowrap"
             >
-              <i
-                className={`bi ${eventProofUrl ? "bi-check-circle-fill" : "bi-link-45deg"} me-2`}
-              ></i>
               {eventProofUrl ? "Linked" : "Link Proof"}
             </Button>
             <Button variant="outline-primary" onClick={generatePDF}>
-              <i className="bi bi-file-earmark-pdf me-2"></i> Report
+              Report
             </Button>
-            <Button
-              variant="primary"
-              onClick={() => setShowItemModal(true)}
-              className="text-nowrap"
-            >
-              <i className="bi bi-plus-circle me-2"></i> Add Sub-Event
+            <Button variant="primary" onClick={() => setShowItemModal(true)}>
+              Add Sub-Event
             </Button>
           </div>
         </div>
@@ -679,21 +870,22 @@ export default function EventDetails() {
             <Accordion.Item
               eventKey={index.toString()}
               key={item.id}
-              className="mb-3 border-0 shadow-sm rounded overflow-hidden"
+              className="mb-3 border-0 shadow-sm"
             >
               <Accordion.Header>
-                <div className="d-flex w-100 justify-content-between pe-4">
-                  <span className="fw-bold">{item.name}</span>
-                  <Badge bg="secondary">
-                    {item.participants?.length || 0} Participants
+                <span className="fw-bold me-2">{item.name}</span>
+                {item.category && (
+                  <Badge bg="info" className="me-3 text-dark bg-opacity-25">
+                    {item.category}
                   </Badge>
-                </div>
+                )}
+                <Badge bg="secondary">{item.participants?.length || 0}</Badge>
               </Accordion.Header>
               <Accordion.Body className="p-0">
-                <div className="p-3 bg-body-tertiary border-bottom d-flex gap-2 align-items-center">
+                <div className="p-3 bg-body-tertiary d-flex gap-2">
                   <Button
-                    variant="outline-primary"
                     size="sm"
+                    variant="outline-primary"
                     onClick={() => {
                       setActiveItem(item);
                       setEditingIndex(null);
@@ -709,71 +901,56 @@ export default function EventDetails() {
                       setShowPartModal(true);
                     }}
                   >
-                    <i className="bi bi-person-plus me-2"></i> Add Student
+                    Add Student
                   </Button>
                   <div className="d-inline-block">
                     <input
                       type="file"
                       id={`file-${item.id}`}
                       hidden
-                      accept=".xlsx, .xls"
+                      accept=".xlsx,.xls"
                       onClick={() => setActiveItem(item)}
                       onChange={handleFileUpload}
                     />
                     <label
                       htmlFor={`file-${item.id}`}
-                      className="btn btn-outline-success btn-sm mb-0"
+                      className="btn btn-outline-success btn-sm"
                     >
-                      <i className="bi bi-file-earmark-spreadsheet me-2"></i>{" "}
                       Upload Excel
                     </label>
                   </div>
                   <Button
-                    variant="outline-danger"
                     size="sm"
+                    variant="outline-danger"
                     className="ms-auto"
                     onClick={() => handleDeleteSubEvent(item.id)}
-                    title="Delete Sub-Event"
                   >
                     <i className="bi bi-trash"></i>
                   </Button>
                 </div>
                 <Table hover responsive className="mb-0">
-                  <thead className="bg-body-tertiary">
+                  <thead className="table-dark">
                     <tr>
                       <th>S.No</th>
-                      <th>CRN</th>
-                      <th>URN</th>
                       <th>Name</th>
+                      <th>URN</th>
                       <th>Branch</th>
-                      <th>Year</th>
                       <th>Phone</th>
-                      <th>Position</th>
                       <th>Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {item.participants?.map((p, idx) => (
                       <tr key={idx}>
-                        <td className="text-muted small">{idx + 1}</td>
-                        <td>{p.crn}</td>
-                        <td>{p.urn}</td>
+                        <td>{idx + 1}</td>
                         <td className="fw-bold">{p.name}</td>
+                        <td>{p.urn}</td>
                         <td>{p.branch}</td>
-                        <td>{p.year || "-"}</td>
                         <td>{p.phone}</td>
-                        <td>
-                          {p.position ? (
-                            <Badge bg="success">{p.position}</Badge>
-                          ) : (
-                            "-"
-                          )}
-                        </td>
                         <td>
                           <Button
                             variant="link"
                             size="sm"
-                            className="p-0 me-2"
                             onClick={() => {
                               setActiveItem(item);
                               setEditingIndex(idx);
@@ -781,26 +958,19 @@ export default function EventDetails() {
                               setShowPartModal(true);
                             }}
                           >
-                            <i className="bi bi-pencil-square text-primary"></i>
+                            Edit
                           </Button>
                           <Button
                             variant="link"
                             size="sm"
-                            className="p-0 text-danger"
+                            className="text-danger"
                             onClick={() => handleDeleteParticipant(idx, item)}
                           >
-                            <i className="bi bi-trash"></i>
+                            Del
                           </Button>
                         </td>
                       </tr>
                     ))}
-                    {(!item.participants || item.participants.length === 0) && (
-                      <tr>
-                        <td colSpan="9" className="text-center text-muted p-4">
-                          No participants added.
-                        </td>
-                      </tr>
-                    )}
                   </tbody>
                 </Table>
               </Accordion.Body>
@@ -812,6 +982,7 @@ export default function EventDetails() {
     );
   }
 
+  // --- 3. ATTENDANCE SESSIONS VIEW ---
   if (currentView === "attendance_sessions") {
     return (
       <Layout>
@@ -830,67 +1001,57 @@ export default function EventDetails() {
             </span>
           </div>
           <div className="ms-auto">
-            <Button variant="primary" onClick={openCreateSessionModal}>
-              <i className="bi bi-plus-lg me-2"></i> Create Meeting
+            <Button
+              variant="primary"
+              onClick={() => {
+                setEditingSessionId(null);
+                setSessionForm({ date: "", time: "", venue: "", agenda: "" });
+                setShowSessionModal(true);
+              }}
+            >
+              Create Meeting
             </Button>
           </div>
         </div>
         <Row className="g-3">
           {sessions.map((session, idx) => (
-            <Col md={6} lg={4} key={session.id}>
+            <Col md={4} key={session.id}>
               <Card
                 className="border-0 shadow-sm cursor-pointer card-hover"
                 onClick={() => handleOpenSession(session)}
               >
                 <Card.Body className="p-4 position-relative">
-                  {/* Action Buttons */}
-                  <div className="position-absolute top-0 end-0 p-3 d-flex gap-2">
+                  <div className="position-absolute top-0 end-0 p-3">
                     <Button
                       variant="link"
                       size="sm"
-                      className="p-0 text-primary"
-                      onClick={(e) => openEditSessionModal(e, session)}
-                      title="Edit Details"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingSessionId(session.id);
+                        setSessionForm(session);
+                        setShowSessionModal(true);
+                      }}
                     >
-                      <i className="bi bi-pencil-square"></i>
+                      <i className="bi bi-pencil"></i>
                     </Button>
                     <Button
                       variant="link"
                       size="sm"
-                      className="p-0 text-danger"
+                      className="text-danger"
                       onClick={(e) => handleDeleteSession(e, session.id)}
-                      title="Delete Meeting"
                     >
                       <i className="bi bi-trash"></i>
                     </Button>
                   </div>
-
-                  <div className="mb-3">
-                    <h5 className="fw-bold mb-1">
-                      Meeting {sessions.length - idx}
-                    </h5>
-                    <Badge bg="light" text="dark" className="border">
-                      {session.date}
-                    </Badge>
-                  </div>
-
-                  <div className="text-muted small d-grid gap-1">
-                    <div>
-                      <i className="bi bi-clock me-2"></i>
-                      {session.time
-                        ? `${session.time} Onwards`
-                        : "Time not set"}
-                    </div>
-                    <div>
-                      <i className="bi bi-geo-alt me-2"></i>
-                      {session.venue || "Venue not set"}
-                    </div>
-                    {session.agenda && (
-                      <div className="text-truncate" title={session.agenda}>
-                        <i className="bi bi-list-task me-2"></i>
-                        {session.agenda}
-                      </div>
-                    )}
+                  <h5 className="fw-bold mb-1">
+                    Meeting {sessions.length - idx}
+                  </h5>
+                  <Badge bg="light" text="dark" className="border mb-2">
+                    {formatDate(session.date)}
+                  </Badge>
+                  <div className="small text-muted">
+                    {session.time ? `${session.time}` : ""} &bull;{" "}
+                    {session.venue}
                   </div>
                 </Card.Body>
               </Card>
@@ -898,7 +1059,7 @@ export default function EventDetails() {
           ))}
           {sessions.length === 0 && (
             <Col md={12} className="text-center p-5 text-muted">
-              No meetings created yet. Click "Create Meeting" to start.
+              No meetings yet.
             </Col>
           )}
         </Row>
@@ -907,29 +1068,27 @@ export default function EventDetails() {
     );
   }
 
+  // --- 4. ATTENDANCE DETAILS VIEW ---
   if (currentView === "attendance_details") {
     return (
       <Layout>
-        <div className="d-flex flex-column flex-md-row align-items-start align-items-md-center mb-4 gap-3">
-          <div className="d-flex align-items-center w-100 w-md-auto">
-            <Button
-              variant="outline-secondary"
-              className="me-3 rounded-circle"
-              onClick={() => setCurrentView("attendance_sessions")}
-            >
-              <i className="bi bi-arrow-left"></i>
-            </Button>
-            <div>
-              <h3 className="fw-bold mb-0">Meeting Details</h3>
-              <span className="text-muted small">
-                {activeSession?.date} &bull; {activeSession?.venue} &bull;{" "}
-                {activeSession?.time}
-              </span>
-            </div>
+        <div className="d-flex align-items-center mb-4 gap-3">
+          <Button
+            variant="outline-secondary"
+            className="me-3 rounded-circle"
+            onClick={() => setCurrentView("attendance_sessions")}
+          >
+            <i className="bi bi-arrow-left"></i>
+          </Button>
+          <div>
+            <h3 className="fw-bold mb-0">Meeting Details</h3>
+            <span className="text-muted small">
+              {formatDate(activeSession?.date)} &bull; {activeSession?.venue}
+            </span>
           </div>
-          <div className="d-grid gap-2 d-md-flex ms-md-auto w-100 w-md-auto">
+          <div className="ms-auto d-flex gap-2">
             <Button variant="outline-primary" onClick={generateAttendancePDF}>
-              <i className="bi bi-file-earmark-pdf me-2"></i> Download PDF
+              Download PDF
             </Button>
             <Button
               variant="primary"
@@ -939,18 +1098,129 @@ export default function EventDetails() {
                 setShowAttStudentModal(true);
               }}
             >
-              <i className="bi bi-person-plus me-2"></i> Add Student
+              Add Student
             </Button>
             <div className="d-inline-block">
               <input
                 type="file"
                 id="att-file"
                 hidden
-                accept=".xlsx, .xls"
+                accept=".xlsx,.xls"
                 onChange={handleAttendanceFileUpload}
               />
               <label
                 htmlFor="att-file"
+                className="btn btn-success text-white mb-0"
+              >
+                Upload Excel
+              </label>
+            </div>
+          </div>
+        </div>
+        <Card className="border-0 shadow-sm">
+          <Table hover responsive className="mb-0">
+            <thead className="table-dark">
+              <tr>
+                <th>S.No</th>
+                <th>Name</th>
+                <th>URN</th>
+                <th>Contact</th>
+                <th>Team</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sessionStudents.map((s, idx) => (
+                <tr key={s.id}>
+                  <td>{idx + 1}</td>
+                  <td className="fw-bold">{s.name}</td>
+                  <td>{s.urn}</td>
+                  <td>{s.phone}</td>
+                  <td>{s.team}</td>
+                  <td>
+                    <Button
+                      variant="link"
+                      onClick={() => handleEditSessionStudent(s)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="link"
+                      className="text-danger"
+                      onClick={() => handleDeleteSessionStudent(s.id)}
+                    >
+                      Del
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </Card>
+        {renderModals()}
+      </Layout>
+    );
+  }
+
+  // --- 5. SPONSORSHIP VIEW ---
+  if (currentView === "sponsorship") {
+    return (
+      <Layout>
+        <div className="d-flex flex-column flex-md-row align-items-start align-items-md-center mb-4 gap-3">
+          <div className="d-flex align-items-center w-100 w-md-auto">
+            <Button
+              variant="outline-secondary"
+              className="me-3 rounded-circle"
+              onClick={() => setCurrentView("dashboard")}
+            >
+              <i className="bi bi-arrow-left"></i>
+            </Button>
+            <div>
+              <h3 className="fw-bold mb-0">Sponsorship Attendance</h3>
+              <span className="text-muted small">
+                Tracking sponsorship duties
+              </span>
+            </div>
+          </div>
+          <div className="d-grid gap-2 d-md-flex ms-md-auto w-100 w-md-auto">
+            <Button
+              variant="outline-primary"
+              onClick={() => setShowPdfOptions(true)}
+            >
+              <i className="bi bi-gear-fill me-2"></i> PDF Options
+            </Button>
+            <Button variant="outline-primary" onClick={generateSponsorshipPDF}>
+              <i className="bi bi-file-earmark-pdf me-2"></i> Download Report
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setEditingSponId(null);
+                setSponForm({
+                  name: "",
+                  crn: "",
+                  urn: "",
+                  phone: "",
+                  date: "",
+                  venue: "",
+                  startTime: "",
+                  endTime: "",
+                });
+                setShowSponModal(true);
+              }}
+            >
+              <i className="bi bi-plus-lg me-2"></i> Add Record
+            </Button>
+            <div className="d-inline-block">
+              <input
+                type="file"
+                id="spon-file"
+                hidden
+                accept=".xlsx, .xls"
+                onChange={handleSponFileUpload}
+              />
+              <label
+                htmlFor="spon-file"
                 className="btn btn-success text-white w-100 mb-0"
               >
                 <i className="bi bi-file-earmark-spreadsheet me-2"></i> Upload
@@ -961,57 +1231,50 @@ export default function EventDetails() {
         </div>
         <Card className="border-0 shadow-sm">
           <Table hover responsive className="mb-0">
-            <thead className="bg-body-tertiary">
+            <thead className="table-dark">
               <tr>
                 <th>S.No</th>
+                <th>Date</th>
+                <th>Time</th>
                 <th>Name</th>
+                <th>CRN</th>
                 <th>URN</th>
-                <th>Contact Number</th>
-                <th>Team Name (Category)</th>
+                <th>Venue</th>
+                <th>Contact</th>
                 <th>Action</th>
               </tr>
             </thead>
             <tbody>
-              {sessionStudents.map((student, idx) => (
-                <tr key={student.id}>
+              {sponsorshipList.map((s, idx) => (
+                <tr key={s.id}>
                   <td>{idx + 1}</td>
-                  <td className="fw-bold">{student.name}</td>
-                  <td>{student.urn}</td>
-                  <td>{student.phone}</td>
+                  <td>{formatDate(s.date)}</td>
                   <td>
-                    {student.team ? (
-                      <Badge bg="info" className="text-dark bg-opacity-25">
-                        {student.team}
-                      </Badge>
-                    ) : (
-                      "-"
-                    )}
+                    {s.startTime} - {s.endTime}
                   </td>
+                  <td className="fw-bold">{s.name}</td>
+                  <td>{s.crn}</td>
+                  <td>{s.urn}</td>
+                  <td>{s.venue}</td>
+                  <td>{s.phone}</td>
                   <td>
                     <Button
                       variant="link"
-                      className="p-0 me-3"
-                      onClick={() => handleEditSessionStudent(student)}
+                      className="p-0 me-2"
+                      onClick={() => handleEditSponsorship(s)}
                     >
                       <i className="bi bi-pencil-square text-primary"></i>
                     </Button>
                     <Button
                       variant="link"
-                      className="text-danger p-0"
-                      onClick={() => handleDeleteSessionStudent(student.id)}
+                      className="p-0 text-danger"
+                      onClick={() => handleDeleteSponsorship(s.id)}
                     >
                       <i className="bi bi-trash"></i>
                     </Button>
                   </td>
                 </tr>
               ))}
-              {sessionStudents.length === 0 && (
-                <tr>
-                  <td colSpan="6" className="text-center p-5 text-muted">
-                    No attendance data for this meeting.
-                  </td>
-                </tr>
-              )}
             </tbody>
           </Table>
         </Card>
@@ -1023,6 +1286,47 @@ export default function EventDetails() {
   function renderModals() {
     return (
       <>
+        {/* CATEGORY MODAL */}
+        <Modal
+          show={showCategoryModal}
+          onHide={() => setShowCategoryModal(false)}
+          centered
+        >
+          <Modal.Header closeButton>
+            <Modal.Title>Manage Categories</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <div className="d-flex gap-2 mb-3">
+              <Form.Control
+                placeholder="New Category (e.g. Music)"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+              />
+              <Button variant="success" onClick={handleAddCategory}>
+                Add
+              </Button>
+            </div>
+            <ListGroup variant="flush">
+              {categories.map((cat, idx) => (
+                <ListGroup.Item
+                  key={idx}
+                  className="d-flex justify-content-between align-items-center"
+                >
+                  {cat}
+                  <Button
+                    variant="outline-danger"
+                    size="sm"
+                    onClick={() => handleDeleteCategory(cat)}
+                  >
+                    <i className="bi bi-trash"></i>
+                  </Button>
+                </ListGroup.Item>
+              ))}
+            </ListGroup>
+          </Modal.Body>
+        </Modal>
+
+        {/* SUB-EVENT MODAL */}
         <Modal
           show={showItemModal}
           onHide={() => setShowItemModal(false)}
@@ -1032,135 +1336,185 @@ export default function EventDetails() {
             <Modal.Title>New Sub-Event</Modal.Title>
           </Modal.Header>
           <Modal.Body>
-            <Form.Control
-              placeholder="e.g. Solo Song"
-              value={newItemName}
-              onChange={(e) => setNewItemName(e.target.value)}
-              autoFocus
-            />
+            <Form.Group className="mb-3">
+              <Form.Label>Sub-Event Name</Form.Label>
+              <Form.Control
+                placeholder="e.g. Solo Song"
+                value={newItemName}
+                onChange={(e) => setNewItemName(e.target.value)}
+              />
+            </Form.Group>
+            <Form.Group>
+              <Form.Label>Category</Form.Label>
+              <Form.Select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+              >
+                <option value="">-- Select Category --</option>
+                {categories.map((cat, idx) => (
+                  <option key={idx} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </Form.Select>
+            </Form.Group>
           </Modal.Body>
           <Modal.Footer>
-            <Button variant="primary" onClick={handleAddItem}>
+            <Button
+              variant="primary"
+              onClick={handleAddItem}
+              disabled={!selectedCategory || !newItemName}
+            >
               Create
             </Button>
           </Modal.Footer>
         </Modal>
+
+        {/* PDF OPTIONS MODAL */}
         <Modal
-          show={showProofModal}
-          onHide={() => setShowProofModal(false)}
+          show={showPdfOptions}
+          onHide={() => setShowPdfOptions(false)}
           centered
         >
           <Modal.Header closeButton>
-            <Modal.Title>Event Proof Link</Modal.Title>
+            <Modal.Title>Select PDF Columns</Modal.Title>
           </Modal.Header>
           <Modal.Body>
-            <Form.Control
-              placeholder="https://..."
-              value={eventProofUrl}
-              onChange={(e) => setEventProofUrl(e.target.value)}
-            />
+            <Form>
+              <div className="d-grid gap-2">
+                {Object.keys(pdfFields).map((key) => (
+                  <Form.Check
+                    key={key}
+                    type="switch"
+                    id={`check-${key}`}
+                    label={key.charAt(0).toUpperCase() + key.slice(1)}
+                    checked={pdfFields[key]}
+                    onChange={() =>
+                      setPdfFields({ ...pdfFields, [key]: !pdfFields[key] })
+                    }
+                  />
+                ))}
+              </div>
+            </Form>
           </Modal.Body>
           <Modal.Footer>
-            <Button variant="primary" onClick={handleSaveProof}>
-              Save Link
+            <Button
+              variant="secondary"
+              onClick={() => setShowPdfOptions(false)}
+            >
+              Close
+            </Button>
+            <Button variant="primary" onClick={generateSponsorshipPDF}>
+              Generate PDF
             </Button>
           </Modal.Footer>
         </Modal>
+
+        {/* SPONSORSHIP MODAL */}
         <Modal
-          show={showPartModal}
-          onHide={() => setShowPartModal(false)}
+          show={showSponModal}
+          onHide={() => setShowSponModal(false)}
           centered
           size="lg"
         >
           <Modal.Header closeButton>
             <Modal.Title>
-              {editingIndex !== null ? "Edit" : "Add"} Participant
+              {editingSponId ? "Edit" : "Add"} Sponsorship Record
             </Modal.Title>
           </Modal.Header>
           <Modal.Body>
             <Form className="d-grid gap-3">
               <Row>
                 <Col md={6}>
+                  <Form.Label>Name</Form.Label>
                   <Form.Control
-                    placeholder="Name"
-                    value={partForm.name}
+                    value={sponForm.name}
                     onChange={(e) =>
-                      setPartForm({ ...partForm, name: e.target.value })
+                      setSponForm({ ...sponForm, name: e.target.value })
                     }
                   />
                 </Col>
                 <Col md={6}>
+                  <Form.Label>Phone</Form.Label>
                   <Form.Control
-                    placeholder="Phone"
-                    value={partForm.phone}
+                    value={sponForm.phone}
                     onChange={(e) =>
-                      setPartForm({ ...partForm, phone: e.target.value })
-                    }
-                  />
-                </Col>
-              </Row>
-              <Row>
-                <Col md={4}>
-                  <Form.Control
-                    placeholder="CRN"
-                    value={partForm.crn}
-                    onChange={(e) =>
-                      setPartForm({ ...partForm, crn: e.target.value })
-                    }
-                  />
-                </Col>
-                <Col md={4}>
-                  <Form.Control
-                    placeholder="URN"
-                    value={partForm.urn}
-                    onChange={(e) =>
-                      setPartForm({ ...partForm, urn: e.target.value })
-                    }
-                  />
-                </Col>
-                <Col md={4}>
-                  <Form.Control
-                    placeholder="Branch"
-                    value={partForm.branch}
-                    onChange={(e) =>
-                      setPartForm({ ...partForm, branch: e.target.value })
+                      setSponForm({ ...sponForm, phone: e.target.value })
                     }
                   />
                 </Col>
               </Row>
               <Row>
                 <Col md={6}>
+                  <Form.Label>CRN</Form.Label>
                   <Form.Control
-                    placeholder="Year (e.g. D3)"
-                    value={partForm.year}
+                    value={sponForm.crn}
                     onChange={(e) =>
-                      setPartForm({ ...partForm, year: e.target.value })
+                      setSponForm({ ...sponForm, crn: e.target.value })
                     }
                   />
                 </Col>
                 <Col md={6}>
+                  <Form.Label>URN</Form.Label>
                   <Form.Control
-                    placeholder="Position"
-                    value={partForm.position}
+                    value={sponForm.urn}
                     onChange={(e) =>
-                      setPartForm({ ...partForm, position: e.target.value })
+                      setSponForm({ ...sponForm, urn: e.target.value })
                     }
                   />
                 </Col>
               </Row>
+              <hr />
+              <Row>
+                <Col md={4}>
+                  <Form.Label>Date</Form.Label>
+                  <Form.Control
+                    type="date"
+                    value={sponForm.date}
+                    onChange={(e) =>
+                      setSponForm({ ...sponForm, date: e.target.value })
+                    }
+                  />
+                </Col>
+                <Col md={4}>
+                  <Form.Label>Start Time</Form.Label>
+                  <Form.Control
+                    type="time"
+                    value={sponForm.startTime}
+                    onChange={(e) =>
+                      setSponForm({ ...sponForm, startTime: e.target.value })
+                    }
+                  />
+                </Col>
+                <Col md={4}>
+                  <Form.Label>End Time</Form.Label>
+                  <Form.Control
+                    type="time"
+                    value={sponForm.endTime}
+                    onChange={(e) =>
+                      setSponForm({ ...sponForm, endTime: e.target.value })
+                    }
+                  />
+                </Col>
+              </Row>
+              <Form.Label>Venue</Form.Label>
+              <Form.Control
+                value={sponForm.venue}
+                placeholder="e.g. Principals Office"
+                onChange={(e) =>
+                  setSponForm({ ...sponForm, venue: e.target.value })
+                }
+              />
             </Form>
           </Modal.Body>
           <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowPartModal(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleSaveParticipant}>
+            <Button variant="primary" onClick={handleSaveSponsorship}>
               Save Record
             </Button>
           </Modal.Footer>
         </Modal>
 
-        {/* UPDATED SESSION MODAL */}
+        {/* OTHER MODALS */}
         <Modal
           show={showSessionModal}
           onHide={() => setShowSessionModal(false)}
@@ -1173,116 +1527,169 @@ export default function EventDetails() {
           </Modal.Header>
           <Modal.Body>
             <Form className="d-grid gap-3">
-              <Form.Group>
-                <Form.Label>Date</Form.Label>
-                <Form.Control
-                  type="date"
-                  value={sessionForm.date}
-                  onChange={(e) =>
-                    setSessionForm({ ...sessionForm, date: e.target.value })
-                  }
-                />
-              </Form.Group>
+              <Form.Label>Date</Form.Label>
+              <Form.Control
+                type="date"
+                value={sessionForm.date}
+                onChange={(e) =>
+                  setSessionForm({ ...sessionForm, date: e.target.value })
+                }
+              />
               <Row>
-                <Col md={6}>
-                  <Form.Group>
-                    <Form.Label>Start Time</Form.Label>
-                    <Form.Control
-                      type="time"
-                      value={sessionForm.time}
-                      onChange={(e) =>
-                        setSessionForm({ ...sessionForm, time: e.target.value })
-                      }
-                    />
-                  </Form.Group>
+                <Col>
+                  <Form.Label>Time</Form.Label>
+                  <Form.Control
+                    type="time"
+                    value={sessionForm.time}
+                    onChange={(e) =>
+                      setSessionForm({ ...sessionForm, time: e.target.value })
+                    }
+                  />
                 </Col>
-                <Col md={6}>
-                  <Form.Group>
-                    <Form.Label>Venue</Form.Label>
-                    <Form.Control
-                      type="text"
-                      placeholder="e.g. OAT"
-                      value={sessionForm.venue}
-                      onChange={(e) =>
-                        setSessionForm({
-                          ...sessionForm,
-                          venue: e.target.value,
-                        })
-                      }
-                    />
-                  </Form.Group>
+                <Col>
+                  <Form.Label>Venue</Form.Label>
+                  <Form.Control
+                    value={sessionForm.venue}
+                    onChange={(e) =>
+                      setSessionForm({ ...sessionForm, venue: e.target.value })
+                    }
+                  />
                 </Col>
               </Row>
-              <Form.Group>
-                <Form.Label>Agenda</Form.Label>
-                <Form.Control
-                  as="textarea"
-                  rows={2}
-                  placeholder="Brief description of the meeting..."
-                  value={sessionForm.agenda}
-                  onChange={(e) =>
-                    setSessionForm({ ...sessionForm, agenda: e.target.value })
-                  }
-                />
-              </Form.Group>
+              <Form.Label>Agenda</Form.Label>
+              <Form.Control
+                as="textarea"
+                value={sessionForm.agenda}
+                onChange={(e) =>
+                  setSessionForm({ ...sessionForm, agenda: e.target.value })
+                }
+              />
             </Form>
           </Modal.Body>
           <Modal.Footer>
-            <Button variant="primary" onClick={handleSaveSession}>
-              {editingSessionId ? "Update" : "Create"}
+            <Button variant="primary" onClick={handleCreateSession}>
+              Save
             </Button>
           </Modal.Footer>
         </Modal>
-
         <Modal
           show={showAttStudentModal}
           onHide={() => setShowAttStudentModal(false)}
           centered
         >
-          <Modal.Header closeButton>
-            <Modal.Title>
-              {editingSessionStudentId ? "Edit" : "Add"} Student to Attendance
-            </Modal.Title>
-          </Modal.Header>
+          <Modal.Body className="d-grid gap-3">
+            <Form.Control
+              placeholder="Name"
+              value={attStudentForm.name}
+              onChange={(e) =>
+                setAttStudentForm({ ...attStudentForm, name: e.target.value })
+              }
+            />
+            <Form.Control
+              placeholder="URN"
+              value={attStudentForm.urn}
+              onChange={(e) =>
+                setAttStudentForm({ ...attStudentForm, urn: e.target.value })
+              }
+            />
+            <Form.Control
+              placeholder="Phone"
+              value={attStudentForm.phone}
+              onChange={(e) =>
+                setAttStudentForm({ ...attStudentForm, phone: e.target.value })
+              }
+            />
+            <Form.Control
+              placeholder="Team"
+              value={attStudentForm.team}
+              onChange={(e) =>
+                setAttStudentForm({ ...attStudentForm, team: e.target.value })
+              }
+            />
+          </Modal.Body>
+          <Modal.Footer>
+            <Button onClick={handleSaveStudentToSession}>Save</Button>
+          </Modal.Footer>
+        </Modal>
+        <Modal
+          show={showProofModal}
+          onHide={() => setShowProofModal(false)}
+          centered
+        >
+          <Modal.Body>
+            <Form.Control
+              placeholder="URL"
+              value={eventProofUrl}
+              onChange={(e) => setEventProofUrl(e.target.value)}
+            />
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="primary" onClick={handleSaveProof}>
+              Save
+            </Button>
+          </Modal.Footer>
+        </Modal>
+        <Modal
+          show={showPartModal}
+          onHide={() => setShowPartModal(false)}
+          centered
+          size="lg"
+        >
           <Modal.Body>
             <Form className="d-grid gap-3">
-              <Form.Control
-                placeholder="Full Name"
-                value={attStudentForm.name}
-                onChange={(e) =>
-                  setAttStudentForm({ ...attStudentForm, name: e.target.value })
-                }
-              />
-              <Form.Control
-                placeholder="URN"
-                value={attStudentForm.urn}
-                onChange={(e) =>
-                  setAttStudentForm({ ...attStudentForm, urn: e.target.value })
-                }
-              />
-              <Form.Control
-                placeholder="Contact Number"
-                value={attStudentForm.phone}
-                onChange={(e) =>
-                  setAttStudentForm({
-                    ...attStudentForm,
-                    phone: e.target.value,
-                  })
-                }
-              />
-              <Form.Control
-                placeholder="Team Name / Category"
-                value={attStudentForm.team}
-                onChange={(e) =>
-                  setAttStudentForm({ ...attStudentForm, team: e.target.value })
-                }
-              />
+              <Row>
+                <Col>
+                  <Form.Control
+                    placeholder="Name"
+                    value={partForm.name}
+                    onChange={(e) =>
+                      setPartForm({ ...partForm, name: e.target.value })
+                    }
+                  />
+                </Col>
+                <Col>
+                  <Form.Control
+                    placeholder="Phone"
+                    value={partForm.phone}
+                    onChange={(e) =>
+                      setPartForm({ ...partForm, phone: e.target.value })
+                    }
+                  />
+                </Col>
+              </Row>
+              <Row>
+                <Col>
+                  <Form.Control
+                    placeholder="CRN"
+                    value={partForm.crn}
+                    onChange={(e) =>
+                      setPartForm({ ...partForm, crn: e.target.value })
+                    }
+                  />
+                </Col>
+                <Col>
+                  <Form.Control
+                    placeholder="URN"
+                    value={partForm.urn}
+                    onChange={(e) =>
+                      setPartForm({ ...partForm, urn: e.target.value })
+                    }
+                  />
+                </Col>
+                <Col>
+                  <Form.Control
+                    placeholder="Branch"
+                    value={partForm.branch}
+                    onChange={(e) =>
+                      setPartForm({ ...partForm, branch: e.target.value })
+                    }
+                  />
+                </Col>
+              </Row>
             </Form>
           </Modal.Body>
           <Modal.Footer>
-            <Button variant="primary" onClick={handleSaveStudentToSession}>
-              {editingSessionStudentId ? "Update" : "Add"} Student
-            </Button>
+            <Button onClick={handleSaveParticipant}>Save</Button>
           </Modal.Footer>
         </Modal>
       </>

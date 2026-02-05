@@ -110,6 +110,13 @@ export default function Layout({ children }) {
         >
           <i className="bi bi-calendar-event me-2"></i> Calendar
         </Link>
+
+        <Link
+          to="/logs"
+          className={`nav-link px-3 mb-1 ${location.pathname === "/logs" ? "active bg-primary text-white shadow-sm rounded" : "text-body"}`}
+        >
+          <i className="bi bi-clock-history me-2"></i> Activity Logs
+        </Link>
       </Nav>
     </div>
   );

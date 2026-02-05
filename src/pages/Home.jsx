@@ -22,6 +22,7 @@ import {
   ToggleButton,
 } from "react-bootstrap";
 import Layout from "../components/Layout";
+import { logAction } from "../utils/logger";
 
 export default function Home() {
   const [events, setEvents] = useState([]);
@@ -148,6 +149,7 @@ export default function Home() {
           createdBy: userName,
           createdAt: new Date(),
         });
+        await logAction("CREATE_EVENT", `Created event: ${formData.title}`);
         setEvents([...events, { id: docRef.id, ...eventData }]);
       }
 
