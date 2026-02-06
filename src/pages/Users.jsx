@@ -28,7 +28,7 @@ import { logAction } from "../utils/logger";
 
 // --- PASTE YOUR FIREBASE CONFIG HERE ---
 const secondaryFirebaseConfig = {
-  aapiKey: "AIzaSyCF_-t-uGCwdX8ee_01T5qHv9nQX3HfxQw",
+  apiKey: "AIzaSyCF_-t-uGCwdX8ee_01T5qHv9nQX3HfxQw",
   authDomain: "event-report-cc.firebaseapp.com",
   projectId: "event-report-cc",
   storageBucket: "event-report-cc.firebasestorage.app",
@@ -51,9 +51,9 @@ export default function Users() {
   const navigate = useNavigate();
 
   // --- EMAILJS KEYS ---
-  const EMAILJS_SERVICE_ID = "YOUR_SERVICE_ID";
-  const EMAILJS_TEMPLATE_ID = "YOUR_TEMPLATE_ID";
-  const EMAILJS_PUBLIC_KEY = "YOUR_PUBLIC_KEY";
+  const EMAILJS_SERVICE_ID = "service_og3ze6m";
+  const EMAILJS_TEMPLATE_ID = "template_xbboh6j";
+  const EMAILJS_PUBLIC_KEY = "PzNJuoItwBZtKTwOG";
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
