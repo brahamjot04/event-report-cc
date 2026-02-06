@@ -28,7 +28,7 @@ import { logAction } from "../utils/logger";
 
 // --- PASTE YOUR FIREBASE CONFIG HERE ---
 const secondaryFirebaseConfig = {
-  aapiKey: "AIzaSyCF_-t-uGCwdX8ee_01T5qHv9nQX3HfxQw",
+  apiKey: "AIzaSyCF_-t-uGCwdX8ee_01T5qHv9nQX3HfxQw",
   authDomain: "event-report-cc.firebaseapp.com",
   projectId: "event-report-cc",
   storageBucket: "event-report-cc.firebasestorage.app",
