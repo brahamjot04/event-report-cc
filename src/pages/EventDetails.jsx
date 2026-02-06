@@ -10,6 +10,8 @@ import {
   deleteDoc,
   orderBy,
   query,
+  arrayUnion,
+  arrayRemove,
 } from "firebase/firestore";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { db } from "../firebase";
@@ -23,56 +25,29 @@ import {
   Row,
   Col,
   Card,
-  ListGroup,
+  InputGroup,
 } from "react-bootstrap";
 import Layout from "../components/Layout";
 import readXlsxFile from "read-excel-file";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { logAction } from "../utils/logger"; // <--- Import
+import { logAction } from "../utils/logger"; // Assuming you have this set up
 
 export default function EventDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
   const auth = getAuth();
 
-  // --- USER ROLE & VIEW STATE ---
+  // --- USER & VIEW STATE ---
   const [userRole, setUserRole] = useState("user");
   const [currentView, setCurrentView] = useState("dashboard");
-
-  // --- DATA STATE ---
   const [eventData, setEventData] = useState(null);
-  const [items, setItems] = useState([]);
-
-  // Attendance & Sponsorship Data
-  const [sessions, setSessions] = useState([]);
-  const [activeSession, setActiveSession] = useState(null);
-  const [sessionStudents, setSessionStudents] = useState([]);
-  const [sponsorshipList, setSponsorshipList] = useState([]);
-
-  // --- CATEGORY STATE ---
-  const [categories, setCategories] = useState([]);
-  const [newCategoryName, setNewCategoryName] = useState("");
-
-  // --- MODALS ---
-  const [showItemModal, setShowItemModal] = useState(false);
-  const [showPartModal, setShowPartModal] = useState(false);
-  const [showProofModal, setShowProofModal] = useState(false);
-  const [showCategoryModal, setShowCategoryModal] = useState(false);
-
-  const [showSessionModal, setShowSessionModal] = useState(false);
-  const [showAttStudentModal, setShowAttStudentModal] = useState(false);
-
-  const [showSponModal, setShowSponModal] = useState(false);
-  const [showPdfOptions, setShowPdfOptions] = useState(false);
-
-  // --- FORMS ---
-  const [newItemName, setNewItemName] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
   const [eventProofUrl, setEventProofUrl] = useState("");
 
+  // --- MODULE 1: INTERNAL PARTICIPANTS ---
+  const [items, setItems] = useState([]);
+  const [newItemName, setNewItemName] = useState("");
   const [activeItem, setActiveItem] = useState(null);
-  const [editingIndex, setEditingIndex] = useState(null);
   const [partForm, setPartForm] = useState({
     name: "",
     crn: "",
@@ -82,7 +57,18 @@ export default function EventDetails() {
     year: "",
     position: "",
   });
+  const [editingIndex, setEditingIndex] = useState(null);
 
+  // --- MODULE 2: REGISTRATION FORM BUILDER (PUBLIC) ---
+  const [regSchema, setRegSchema] = useState([]);
+  const [newRegCat, setNewRegCat] = useState("");
+  const [newRegOption, setNewRegOption] = useState("");
+  const [activeRegCat, setActiveRegCat] = useState(null);
+
+  // --- MODULE 3: MEETINGS (ATTENDANCE) ---
+  const [sessions, setSessions] = useState([]);
+  const [activeSession, setActiveSession] = useState(null);
+  const [sessionStudents, setSessionStudents] = useState([]);
   const [sessionForm, setSessionForm] = useState({
     date: "",
     time: "",
@@ -90,7 +76,6 @@ export default function EventDetails() {
     agenda: "",
   });
   const [editingSessionId, setEditingSessionId] = useState(null);
-
   const [attStudentForm, setAttStudentForm] = useState({
     name: "",
     urn: "",
@@ -99,6 +84,8 @@ export default function EventDetails() {
   });
   const [editingSessionStudentId, setEditingSessionStudentId] = useState(null);
 
+  // --- MODULE 4: SPONSORSHIP ---
+  const [sponsorshipList, setSponsorshipList] = useState([]);
   const [sponForm, setSponForm] = useState({
     name: "",
     crn: "",
@@ -110,8 +97,6 @@ export default function EventDetails() {
     endTime: "",
   });
   const [editingSponId, setEditingSponId] = useState(null);
-
-  // PDF Options State
   const [pdfFields, setPdfFields] = useState({
     name: true,
     crn: true,
@@ -122,6 +107,15 @@ export default function EventDetails() {
     phone: false,
   });
 
+  // --- MODAL STATES ---
+  const [showItemModal, setShowItemModal] = useState(false);
+  const [showPartModal, setShowPartModal] = useState(false);
+  const [showProofModal, setShowProofModal] = useState(false);
+  const [showSessionModal, setShowSessionModal] = useState(false);
+  const [showAttStudentModal, setShowAttStudentModal] = useState(false);
+  const [showSponModal, setShowSponModal] = useState(false);
+  const [showPdfOptions, setShowPdfOptions] = useState(false);
+
   // --- HELPER: DATE FORMATTER ---
   const formatDate = (dateString) => {
     if (!dateString) return "";
@@ -130,7 +124,7 @@ export default function EventDetails() {
     return dateString;
   };
 
-  // --- FETCHING ---
+  // --- INITIAL DATA FETCHING ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
@@ -143,47 +137,193 @@ export default function EventDetails() {
       try {
         const eventSnap = await getDoc(doc(db, "events", id));
         if (eventSnap.exists()) {
-          const data = eventSnap.data();
-          setEventData(data);
-          setEventProofUrl(data.proofUrl || "");
-          setCategories(data.categories || []);
+          setEventData(eventSnap.data());
+          setEventProofUrl(eventSnap.data().proofUrl || "");
         } else {
-          alert("Event not found!");
           navigate("/");
         }
+
+        // Fetch Internal Items
         const itemsSnap = await getDocs(collection(db, "events", id, "items"));
         setItems(itemsSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+
+        // Fetch Registration Schema
+        fetchRegSchema();
       } catch (e) {
-        console.error("Error fetching data:", e);
+        console.error(e);
       }
     };
     fetchData();
     return () => unsubscribe();
   }, [id, navigate, auth]);
 
-  const fetchSessions = async () => {
+  // ==========================================
+  //      MODULE: REGISTRATION FORM BUILDER
+  // ==========================================
+  const fetchRegSchema = async () => {
     const q = query(
-      collection(db, "events", id, "attendance_sessions"),
-      orderBy("date", "desc"),
+      collection(db, "events", id, "registration_schema"),
+      orderBy("createdAt", "asc"),
     );
     const snap = await getDocs(q);
-    setSessions(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    setRegSchema(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
   };
 
-  const fetchSessionStudents = async (sessionId) => {
-    const snap = await getDocs(
-      collection(
-        db,
-        "events",
-        id,
-        "attendance_sessions",
-        sessionId,
-        "students",
+  const handleAddRegCategory = async () => {
+    if (!newRegCat) return;
+    await addDoc(collection(db, "events", id, "registration_schema"), {
+      name: newRegCat,
+      options: [],
+      createdAt: new Date(),
+    });
+    setNewRegCat("");
+    fetchRegSchema();
+  };
+
+  const handleDeleteRegCategory = async (catId) => {
+    if (!window.confirm("Delete this category?")) return;
+    await deleteDoc(doc(db, "events", id, "registration_schema", catId));
+    fetchRegSchema();
+  };
+
+  const handleAddRegOption = async (catId) => {
+    if (!newRegOption) return;
+    await updateDoc(doc(db, "events", id, "registration_schema", catId), {
+      options: arrayUnion(newRegOption),
+    });
+    setNewRegOption("");
+    fetchRegSchema();
+  };
+
+  const handleDeleteRegOption = async (catId, optionName) => {
+    await updateDoc(doc(db, "events", id, "registration_schema", catId), {
+      options: arrayRemove(optionName),
+    });
+    fetchRegSchema();
+  };
+
+  // ==========================================
+  //      MODULE: INTERNAL PARTICIPANTS
+  // ==========================================
+  const handleAddItem = async () => {
+    if (!newItemName) return;
+    await addDoc(collection(db, "events", id, "items"), {
+      name: newItemName,
+      participants: [],
+    });
+    const snap = await getDocs(collection(db, "events", id, "items"));
+    setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    setShowItemModal(false);
+    setNewItemName("");
+  };
+
+  const handleDeleteSubEvent = async (iid) => {
+    if (window.confirm("Delete?")) {
+      await deleteDoc(doc(db, "events", id, "items", iid));
+      const snap = await getDocs(collection(db, "events", id, "items"));
+      setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    }
+  };
+
+  const handleDeleteParticipant = async (idx, item) => {
+    if (window.confirm("Remove?")) {
+      const p = item.participants.filter((_, i) => i !== idx);
+      await updateDoc(doc(db, "events", id, "items", item.id), {
+        participants: p,
+      });
+      setItems(
+        items.map((i) => (i.id === item.id ? { ...i, participants: p } : i)),
+      );
+    }
+  };
+
+  const handleSaveParticipant = async () => {
+    if (!activeItem) return;
+    let u = [...(activeItem.participants || [])];
+    if (editingIndex !== null) u[editingIndex] = partForm;
+    else u.push(partForm);
+    await updateDoc(doc(db, "events", id, "items", activeItem.id), {
+      participants: u,
+    });
+    setItems(
+      items.map((i) =>
+        i.id === activeItem.id ? { ...i, participants: u } : i,
       ),
     );
-    setSessionStudents(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    setShowPartModal(false);
   };
 
+  const handleFileUpload = (e) => {
+    const f = e.target.files[0];
+    if (!f || !activeItem) return;
+    readXlsxFile(f).then((r) => {
+      const n = r
+        .slice(1)
+        .map((row) => ({
+          name: row[0] || "",
+          crn: row[1] || "",
+          urn: row[2] || "",
+          branch: row[3] || "",
+          phone: row[4] || "",
+          year: row[5] || "",
+          position: row[6] || "",
+        }))
+        .filter((x) => x.name);
+      const u = [...(activeItem.participants || []), ...n];
+      updateDoc(doc(db, "events", id, "items", activeItem.id), {
+        participants: u,
+      }).then(() => {
+        // Refresh local state to show new data immediately
+        setItems(
+          items.map((i) =>
+            i.id === activeItem.id ? { ...i, participants: u } : i,
+          ),
+        );
+        alert("Imported!");
+      });
+    });
+  };
+
+  const generatePDF = () => {
+    try {
+      const doc = new jsPDF({ orientation: "landscape" });
+      doc.text("Event Report", 14, 15);
+      doc.text(`Event: ${eventData.title}`, 14, 25);
+      let finalY = 35;
+      items.forEach((item) => {
+        doc.setFont("helvetica", "bold");
+        doc.text(item.name.toUpperCase(), 14, finalY);
+        finalY += 5;
+        const rows = item.participants?.map((p, i) => [
+          i + 1,
+          p.name,
+          p.urn,
+          p.crn,
+          p.branch,
+          p.year,
+          p.position,
+        ]);
+        autoTable(doc, {
+          head: [["S.No", "Name", "URN", "CRN", "Branch", "Year", "Position"]],
+          body: rows,
+          startY: finalY,
+          theme: "grid",
+        });
+        finalY = doc.lastAutoTable.finalY + 15;
+        if (finalY > 150) {
+          doc.addPage();
+          finalY = 20;
+        }
+      });
+      doc.save(`${eventData.title}_Report.pdf`);
+    } catch (e) {
+      alert("Error generating PDF");
+    }
+  };
+
+  // ==========================================
+  //      MODULE: SPONSORSHIP
+  // ==========================================
   const fetchSponsorships = async () => {
     const q = query(
       collection(db, "events", id, "sponsorship_records"),
@@ -194,153 +334,86 @@ export default function EventDetails() {
     setSponsorshipList(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
   };
 
-  // --- CATEGORY LOGIC ---
-  const handleAddCategory = async () => {
-    if (!newCategoryName.trim()) return;
-    if (categories.includes(newCategoryName.trim()))
-      return alert("Category already exists");
-    try {
-      const updated = [...categories, newCategoryName.trim()];
-      await updateDoc(doc(db, "events", id), { categories: updated });
-      setCategories(updated);
-      setNewCategoryName("");
-    } catch (e) {
-      alert("Error adding category");
-    }
-  };
-
-  const handleDeleteCategory = async (catName) => {
-    if (!window.confirm(`Delete category "${catName}"?`)) return;
-    try {
-      const updated = categories.filter((c) => c !== catName);
-      await updateDoc(doc(db, "events", id), { categories: updated });
-      setCategories(updated);
-    } catch (e) {
-      alert("Error deleting category");
-    }
-  };
-
-  // --- SUB-EVENT LOGIC ---
-  const handleAddItem = async () => {
-    if (!newItemName) return alert("Enter Name");
-    if (!selectedCategory) return alert("Select a Category");
-
-    await addDoc(collection(db, "events", id, "items"), {
-      name: newItemName,
-      category: selectedCategory,
-      participants: [],
-    });
-
-    const itemsSnap = await getDocs(collection(db, "events", id, "items"));
-    setItems(itemsSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    setShowItemModal(false);
-    setNewItemName("");
-    setSelectedCategory("");
-  };
-
-  const handleDeleteSubEvent = async (iid) => {
-    if (window.confirm("Delete?")) {
-      await deleteDoc(doc(db, "events", id, "items", iid));
-      const itemsSnap = await getDocs(collection(db, "events", id, "items"));
-      setItems(itemsSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    }
-  };
-
-  // --- SPONSORSHIP LOGIC ---
   const handleSaveSponsorship = async () => {
-    if (!sponForm.name || !sponForm.date)
-      return alert("Name and Date are required");
-    try {
-      if (editingSponId)
-        await updateDoc(
-          doc(db, "events", id, "sponsorship_records", editingSponId),
-          sponForm,
-        );
-      else
-        await addDoc(
-          collection(db, "events", id, "sponsorship_records"),
-          sponForm,
-        );
-      setSponForm({
-        name: "",
-        crn: "",
-        urn: "",
-        phone: "",
-        date: "",
-        venue: "",
-        startTime: "",
-        endTime: "",
-      });
-      setEditingSponId(null);
-      setShowSponModal(false);
-      fetchSponsorships();
-      await logAction(
-        "ADD_SPONSORSHIP",
-        `Added sponsorship record: ${sponForm.name} for ${eventData.title}`,
+    if (!sponForm.name) return;
+    if (editingSponId)
+      await updateDoc(
+        doc(db, "events", id, "sponsorship_records", editingSponId),
+        sponForm,
       );
-    } catch (e) {
-      alert("Error saving record");
-    }
+    else
+      await addDoc(
+        collection(db, "events", id, "sponsorship_records"),
+        sponForm,
+      );
+    setSponForm({
+      name: "",
+      crn: "",
+      urn: "",
+      phone: "",
+      date: "",
+      venue: "",
+      startTime: "",
+      endTime: "",
+    });
+    setEditingSponId(null);
+    setShowSponModal(false);
+    fetchSponsorships();
   };
+
   const handleEditSponsorship = (r) => {
     setSponForm(r);
     setEditingSponId(r.id);
     setShowSponModal(true);
   };
   const handleDeleteSponsorship = async (rid) => {
-    if (!window.confirm("Delete?")) return;
-    await deleteDoc(doc(db, "events", id, "sponsorship_records", rid));
+    if (window.confirm("Delete?"))
+      await deleteDoc(doc(db, "events", id, "sponsorship_records", rid));
     fetchSponsorships();
   };
 
   const handleSponFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    readXlsxFile(file)
-      .then(async (rows) => {
-        if (rows.length < 2) return alert("File empty");
-        const headers = rows[0].map((h) => String(h).toLowerCase().trim());
-        const getIdx = (k) =>
-          headers.findIndex((h) => k.some((x) => h.includes(x)));
-        const idx = {
-          name: getIdx(["name"]),
-          crn: getIdx(["crn"]),
-          urn: getIdx(["urn"]),
-          phone: getIdx(["phone", "contact"]),
-          date: getIdx(["date"]),
-          venue: getIdx(["venue"]),
-          start: getIdx(["start"]),
-          end: getIdx(["end"]),
-        };
-        const newRecs = rows
-          .slice(1)
-          .map((r) => ({
-            name: idx.name > -1 ? r[idx.name] : "",
-            crn: idx.crn > -1 ? r[idx.crn] : "",
-            urn: idx.urn > -1 ? r[idx.urn] : "",
-            phone: idx.phone > -1 ? r[idx.phone] : "",
-            date: idx.date > -1 ? r[idx.date] : "",
-            venue: idx.venue > -1 ? r[idx.venue] : "",
-            startTime: idx.start > -1 ? r[idx.start] : "",
-            endTime: idx.end > -1 ? r[idx.end] : "",
-          }))
-          .filter((r) => r.name);
-        await Promise.all(
-          newRecs.map((r) =>
-            addDoc(collection(db, "events", id, "sponsorship_records"), r),
-          ),
-        );
-        alert(`Imported ${newRecs.length} records!`);
-        fetchSponsorships();
-        e.target.value = "";
-      })
-      .catch(() => {
-        alert("Error reading Excel");
-        e.target.value = "";
-      });
+    readXlsxFile(file).then(async (rows) => {
+      if (rows.length < 2) return alert("File empty");
+      const headers = rows[0].map((h) => String(h).toLowerCase().trim());
+      const getIdx = (k) =>
+        headers.findIndex((h) => k.some((x) => h.includes(x)));
+      const idx = {
+        name: getIdx(["name"]),
+        crn: getIdx(["crn"]),
+        urn: getIdx(["urn"]),
+        phone: getIdx(["phone", "contact"]),
+        date: getIdx(["date"]),
+        venue: getIdx(["venue"]),
+        start: getIdx(["start"]),
+        end: getIdx(["end"]),
+      };
+      const newRecs = rows
+        .slice(1)
+        .map((r) => ({
+          name: idx.name > -1 ? r[idx.name] : "",
+          crn: idx.crn > -1 ? r[idx.crn] : "",
+          urn: idx.urn > -1 ? r[idx.urn] : "",
+          phone: idx.phone > -1 ? r[idx.phone] : "",
+          date: idx.date > -1 ? r[idx.date] : "",
+          venue: idx.venue > -1 ? r[idx.venue] : "",
+          startTime: idx.start > -1 ? r[idx.start] : "",
+          endTime: idx.end > -1 ? r[idx.end] : "",
+        }))
+        .filter((r) => r.name);
+      await Promise.all(
+        newRecs.map((r) =>
+          addDoc(collection(db, "events", id, "sponsorship_records"), r),
+        ),
+      );
+      alert(`Imported ${newRecs.length} records!`);
+      fetchSponsorships();
+      e.target.value = "";
+    });
   };
 
-  // --- UPDATED SPONSORSHIP PDF (GROUP BY DATE) ---
   const generateSponsorshipPDF = () => {
     try {
       const doc = new jsPDF({ orientation: "landscape" });
@@ -351,18 +424,16 @@ export default function EventDetails() {
       doc.setFont("helvetica", "normal");
       doc.text(`Event: ${eventData.title}`, 14, 23);
 
-      // Group Data by Date
+      // Group by Date
       const grouped = sponsorshipList.reduce((acc, item) => {
         const d = item.date;
         if (!acc[d]) acc[d] = [];
         acc[d].push(item);
         return acc;
       }, {});
-
       const sortedDates = Object.keys(grouped).sort();
-      let finalY = 30; // Start Position
+      let finalY = 30;
 
-      // Define Headers based on options
       const headers = ["S.No"];
       const keys = [];
       if (pdfFields.name) {
@@ -389,22 +460,17 @@ export default function EventDetails() {
         headers.push("Contact");
         keys.push("phone");
       }
-      // Note: 'Date' is excluded from columns as it is the table header
 
       sortedDates.forEach((dateKey) => {
-        // Check for page break
         if (finalY > doc.internal.pageSize.height - 40) {
           doc.addPage();
           finalY = 20;
         }
-
-        // Print Date Header
         doc.setFont("helvetica", "bold");
         doc.setFontSize(12);
         doc.setTextColor(0);
         doc.text(`Date: ${formatDate(dateKey)}`, 14, finalY);
         finalY += 5;
-
         const tableRows = grouped[dateKey].map((s, i) => {
           const row = [i + 1];
           keys.forEach((key) => {
@@ -414,20 +480,17 @@ export default function EventDetails() {
           });
           return row;
         });
-
         autoTable(doc, {
           head: [headers],
           body: tableRows,
           startY: finalY,
           theme: "grid",
-          headStyles: { fillColor: [40, 167, 69] }, // Green
+          headStyles: { fillColor: [40, 167, 69] },
           margin: { bottom: 20 },
         });
-
-        finalY = doc.lastAutoTable.finalY + 15; // Space between tables
+        finalY = doc.lastAutoTable.finalY + 15;
       });
 
-      // Signatures at the bottom of the last page
       if (finalY > doc.internal.pageSize.height - 40) {
         doc.addPage();
         finalY = 40;
@@ -446,18 +509,33 @@ export default function EventDetails() {
         finalY + 5,
         { align: "center" },
       );
-
       doc.save(`${eventData.title}_Sponsorship.pdf`);
       setShowPdfOptions(false);
     } catch (err) {
       alert("PDF Error");
-      console.error(err);
     }
   };
 
-  // --- MEETING LOGIC ---
+  // ==========================================
+  //      MODULE: MEETINGS (ATTENDANCE)
+  // ==========================================
+  const fetchSessions = async () => {
+    const q = query(
+      collection(db, "events", id, "attendance_sessions"),
+      orderBy("date", "desc"),
+    );
+    const snap = await getDocs(q);
+    setSessions(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  };
+  const fetchSessionStudents = async (sid) => {
+    const snap = await getDocs(
+      collection(db, "events", id, "attendance_sessions", sid, "students"),
+    );
+    setSessionStudents(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  };
+
   const handleCreateSession = async () => {
-    if (!sessionForm.date) return alert("Select date");
+    if (!sessionForm.date) return;
     if (editingSessionId)
       await updateDoc(
         doc(db, "events", id, "attendance_sessions", editingSessionId),
@@ -470,10 +548,6 @@ export default function EventDetails() {
       });
     setShowSessionModal(false);
     fetchSessions();
-    await logAction(
-      "CREATE_MEETING",
-      `Scheduled meeting for ${eventData.title} on ${sessionForm.date}`,
-    );
   };
   const handleOpenSession = (s) => {
     setActiveSession(s);
@@ -482,10 +556,9 @@ export default function EventDetails() {
   };
   const handleDeleteSession = async (e, sid) => {
     e.stopPropagation();
-    if (window.confirm("Delete?")) {
+    if (window.confirm("Delete?"))
       await deleteDoc(doc(db, "events", id, "attendance_sessions", sid));
-      fetchSessions();
-    }
+    fetchSessions();
   };
   const handleSaveStudentToSession = async () => {
     if (!activeSession) return;
@@ -520,7 +593,7 @@ export default function EventDetails() {
     fetchSessionStudents(activeSession.id);
   };
   const handleDeleteSessionStudent = async (sid) => {
-    if (window.confirm("Remove?")) {
+    if (window.confirm("Remove?"))
       await deleteDoc(
         doc(
           db,
@@ -532,8 +605,7 @@ export default function EventDetails() {
           sid,
         ),
       );
-      fetchSessionStudents(activeSession.id);
-    }
+    fetchSessionStudents(activeSession.id);
   };
   const handleEditSessionStudent = (s) => {
     setAttStudentForm({
@@ -546,43 +618,35 @@ export default function EventDetails() {
     setShowAttStudentModal(true);
   };
 
-  // --- UPDATED ATTENDANCE PDF NAME ---
   const generateAttendancePDF = () => {
     if (!activeSession) return;
-    try {
-      const doc = new jsPDF();
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(16);
-      doc.text("Attendance Report", 14, 15);
-      doc.setFontSize(11);
-      doc.setFont("helvetica", "normal");
-      doc.text(`Event: ${eventData.title}`, 14, 25);
-      doc.text(`Date: ${formatDate(activeSession.date)}`, 14, 32);
-
-      const rows = sessionStudents.map((s, i) => [
-        i + 1,
-        s.name,
-        s.urn,
-        s.team || "-",
-      ]);
-      autoTable(doc, {
-        head: [["S.No", "Name", "URN", "Team"]],
-        body: rows,
-        startY: 40,
-        theme: "grid",
-        headStyles: { fillColor: [41, 128, 185] },
-      });
-
-      // Name format: Event_Date_Time.pdf
-      const timeStr = activeSession.time
-        ? activeSession.time.replace(/:/g, "-")
-        : "NoTime";
-      doc.save(
-        `${eventData.title}_${formatDate(activeSession.date)}_${timeStr}.pdf`,
-      );
-    } catch (e) {
-      alert("PDF Error");
-    }
+    const doc = new jsPDF();
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("Attendance Report", 14, 15);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Event: ${eventData.title}`, 14, 25);
+    doc.text(`Date: ${formatDate(activeSession.date)}`, 14, 32);
+    const rows = sessionStudents.map((s, i) => [
+      i + 1,
+      s.name,
+      s.urn,
+      s.team || "-",
+    ]);
+    autoTable(doc, {
+      head: [["S.No", "Name", "URN", "Team"]],
+      body: rows,
+      startY: 40,
+      theme: "grid",
+      headStyles: { fillColor: [41, 128, 185] },
+    });
+    const timeStr = activeSession.time
+      ? activeSession.time.replace(/:/g, "-")
+      : "NoTime";
+    doc.save(
+      `${eventData.title}_${formatDate(activeSession.date)}_${timeStr}.pdf`,
+    );
   };
 
   const handleAttendanceFileUpload = (e) => {
@@ -627,115 +691,23 @@ export default function EventDetails() {
     });
   };
 
-  // --- GENERAL LOGIC ---
+  // --- GENERAL EVENT ACTIONS ---
   const handleDeleteEvent = async () => {
-    if (userRole !== "admin" && userRole !== "super_admin") {
-      alert("Permission Denied");
-      return;
-    }
     if (window.confirm("Delete EVENT?")) {
       await deleteDoc(doc(db, "events", id));
       navigate("/");
-    }
-    await logAction("DELETE_EVENT", `Deleted event: ${eventData.title}`);
-  };
-  const handleDeleteParticipant = async (idx, item) => {
-    if (window.confirm("Remove?")) {
-      const p = item.participants.filter((_, i) => i !== idx);
-      await updateDoc(doc(db, "events", id, "items", item.id), {
-        participants: p,
-      });
-      setItems(
-        items.map((i) => (i.id === item.id ? { ...i, participants: p } : i)),
-      );
     }
   };
   const handleSaveProof = async () => {
     await updateDoc(doc(db, "events", id), { proofUrl: eventProofUrl });
     setShowProofModal(false);
   };
-  const handleSaveParticipant = async () => {
-    if (!activeItem) return;
-    let u = [...(activeItem.participants || [])];
-    if (editingIndex !== null) u[editingIndex] = partForm;
-    else u.push(partForm);
-    await updateDoc(doc(db, "events", id, "items", activeItem.id), {
-      participants: u,
-    });
-    setItems(
-      items.map((i) =>
-        i.id === activeItem.id ? { ...i, participants: u } : i,
-      ),
-    );
-    setShowPartModal(false);
-  };
-  const handleFileUpload = (e) => {
-    const f = e.target.files[0];
-    if (!f || !activeItem) return;
-    readXlsxFile(f).then((r) => {
-      const n = r
-        .slice(1)
-        .map((row) => ({
-          name: row[0] || "",
-          crn: row[1] || "",
-          urn: row[2] || "",
-          branch: row[3] || "",
-          phone: row[4] || "",
-          year: row[5] || "",
-          position: row[6] || "",
-        }))
-        .filter((x) => x.name);
-      const u = [...(activeItem.participants || []), ...n];
-      updateDoc(doc(db, "events", id, "items", activeItem.id), {
-        participants: u,
-      }).then(() => {
-        fetchData();
-        alert("Imported!");
-      });
-    });
-  };
-
-  // --- UPDATED REPORT PDF NAME ---
-  const generatePDF = () => {
-    try {
-      const doc = new jsPDF({ orientation: "landscape" });
-      doc.text("Event Report", 14, 15);
-      doc.text(`Event: ${eventData.title}`, 14, 25);
-      let finalY = 35;
-      items.forEach((item) => {
-        doc.setFont("helvetica", "bold");
-        doc.text(item.name.toUpperCase(), 14, finalY);
-        finalY += 5;
-        const rows = item.participants?.map((p, i) => [
-          i + 1,
-          p.name,
-          p.urn,
-          p.crn,
-          p.branch,
-          p.year,
-          p.position,
-        ]);
-        autoTable(doc, {
-          head: [["S.No", "Name", "URN", "CRN", "Branch", "Year", "Position"]],
-          body: rows,
-          startY: finalY,
-          theme: "grid",
-        });
-        finalY = doc.lastAutoTable.finalY + 15;
-        if (finalY > 150) {
-          doc.addPage();
-          finalY = 20;
-        }
-      });
-      doc.save(`${eventData.title}_Report.pdf`);
-    } catch (e) {
-      alert("Error generating PDF");
-    }
-  };
 
   if (!eventData) return <div className="p-5 text-center">Loading...</div>;
 
-  // --- 1. DASHBOARD VIEW ---
+  // ==========================================
+  //          VIEW: DASHBOARD
+  // ==========================================
   if (currentView === "dashboard") {
     return (
       <Layout>
@@ -756,23 +728,43 @@ export default function EventDetails() {
           </div>
         </div>
         <Row className="g-4">
-          <Col md={4}>
+          {/* NEW MODULE: FORM BUILDER */}
+          <Col md={3}>
+            <Card
+              className="h-100 border-0 shadow-sm cursor-pointer card-hover"
+              onClick={() => setCurrentView("form_builder")}
+            >
+              <Card.Body className="p-4 text-center">
+                <div className="mb-3 text-info">
+                  <i
+                    className="bi bi-ui-checks-grid"
+                    style={{ fontSize: "3rem" }}
+                  ></i>
+                </div>
+                <h5 className="fw-bold text-body">Registration Form</h5>
+                <small className="text-muted">Configure student options</small>
+              </Card.Body>
+            </Card>
+          </Col>
+
+          <Col md={3}>
             <Card
               className="h-100 border-0 shadow-sm cursor-pointer card-hover"
               onClick={() => setCurrentView("participants")}
             >
-              <Card.Body className="p-5 text-center">
-                <div className="mb-4 text-primary">
+              <Card.Body className="p-4 text-center">
+                <div className="mb-3 text-primary">
                   <i
                     className="bi bi-people-fill"
-                    style={{ fontSize: "3.5rem" }}
+                    style={{ fontSize: "3rem" }}
                   ></i>
                 </div>
-                <h4 className="fw-bold text-body">Participant Details</h4>
+                <h5 className="fw-bold text-body">Participants</h5>
+                <small className="text-muted">Internal Management</small>
               </Card.Body>
             </Card>
           </Col>
-          <Col md={4}>
+          <Col md={3}>
             <Card
               className="h-100 border-0 shadow-sm cursor-pointer card-hover"
               onClick={() => {
@@ -780,18 +772,19 @@ export default function EventDetails() {
                 setCurrentView("attendance_sessions");
               }}
             >
-              <Card.Body className="p-5 text-center">
-                <div className="mb-4 text-success">
+              <Card.Body className="p-4 text-center">
+                <div className="mb-3 text-success">
                   <i
                     className="bi bi-calendar-check-fill"
-                    style={{ fontSize: "3.5rem" }}
+                    style={{ fontSize: "3rem" }}
                   ></i>
                 </div>
-                <h4 className="fw-bold text-body">Meeting Attendance</h4>
+                <h5 className="fw-bold text-body">Meetings</h5>
+                <small className="text-muted">Committee Attendance</small>
               </Card.Body>
             </Card>
           </Col>
-          <Col md={4}>
+          <Col md={3}>
             <Card
               className="h-100 border-0 shadow-sm cursor-pointer card-hover"
               onClick={() => {
@@ -799,14 +792,15 @@ export default function EventDetails() {
                 setCurrentView("sponsorship");
               }}
             >
-              <Card.Body className="p-5 text-center">
-                <div className="mb-4 text-warning">
+              <Card.Body className="p-4 text-center">
+                <div className="mb-3 text-warning">
                   <i
                     className="bi bi-briefcase-fill"
-                    style={{ fontSize: "3.5rem" }}
+                    style={{ fontSize: "3rem" }}
                   ></i>
                 </div>
-                <h4 className="fw-bold text-body">Sponsorship</h4>
+                <h5 className="fw-bold text-body">Sponsorship</h5>
+                <small className="text-muted">Sponsor Tracking</small>
               </Card.Body>
             </Card>
           </Col>
@@ -826,7 +820,125 @@ export default function EventDetails() {
     );
   }
 
-  // --- 2. PARTICIPANTS VIEW ---
+  // ==========================================
+  //          VIEW: FORM BUILDER (NEW)
+  // ==========================================
+  if (currentView === "form_builder") {
+    return (
+      <Layout>
+        <div className="d-flex align-items-center mb-4">
+          <Button
+            variant="outline-secondary"
+            className="me-3 rounded-circle"
+            onClick={() => setCurrentView("dashboard")}
+          >
+            <i className="bi bi-arrow-left"></i>
+          </Button>
+          <div>
+            <h3 className="fw-bold mb-0">Registration Form Builder</h3>
+            <span className="text-muted small">
+              Define categories & options for the student portal
+            </span>
+          </div>
+        </div>
+
+        <Row className="g-4">
+          {/* LEFT: ADD CATEGORY */}
+          <Col md={4}>
+            <Card className="border-0 shadow-sm mb-4">
+              <Card.Header className="bg-white fw-bold">
+                Add Category
+              </Card.Header>
+              <Card.Body>
+                <InputGroup className="mb-3">
+                  <Form.Control
+                    placeholder="Category (e.g. Dance)"
+                    value={newRegCat}
+                    onChange={(e) => setNewRegCat(e.target.value)}
+                  />
+                  <Button variant="primary" onClick={handleAddRegCategory}>
+                    Add
+                  </Button>
+                </InputGroup>
+                <small className="text-muted">
+                  Create headings like Dance, Music, Theatre.
+                </small>
+              </Card.Body>
+            </Card>
+          </Col>
+
+          {/* RIGHT: BUILDER CANVAS */}
+          <Col md={8}>
+            {regSchema.length === 0 ? (
+              <div className="text-center p-5 text-muted border rounded bg-light">
+                No categories yet. Add one to start.
+              </div>
+            ) : (
+              regSchema.map((cat) => (
+                <Card key={cat.id} className="border-0 shadow-sm mb-3">
+                  <Card.Header className="bg-white d-flex justify-content-between align-items-center">
+                    <span className="fw-bold text-uppercase text-primary">
+                      {cat.name}
+                    </span>
+                    <Button
+                      variant="outline-danger"
+                      size="sm"
+                      onClick={() => handleDeleteRegCategory(cat.id)}
+                    >
+                      <i className="bi bi-trash"></i>
+                    </Button>
+                  </Card.Header>
+                  <Card.Body>
+                    <div className="d-flex flex-wrap gap-2 mb-3">
+                      {cat.options?.map((opt, idx) => (
+                        <Badge
+                          key={idx}
+                          bg="light"
+                          text="dark"
+                          className="border px-3 py-2 d-flex align-items-center gap-2"
+                        >
+                          {opt}
+                          <i
+                            className="bi bi-x cursor-pointer text-danger"
+                            onClick={() => handleDeleteRegOption(cat.id, opt)}
+                          ></i>
+                        </Badge>
+                      ))}
+                      {(!cat.options || cat.options.length === 0) && (
+                        <span className="text-muted small fst-italic">
+                          No options yet.
+                        </span>
+                      )}
+                    </div>
+                    <InputGroup size="sm">
+                      <Form.Control
+                        placeholder={`Add option to ${cat.name} (e.g. Solo ${cat.name})`}
+                        value={activeRegCat === cat.id ? newRegOption : ""}
+                        onChange={(e) => {
+                          setActiveRegCat(cat.id);
+                          setNewRegOption(e.target.value);
+                        }}
+                      />
+                      <Button
+                        variant="outline-primary"
+                        onClick={() => handleAddRegOption(cat.id)}
+                      >
+                        Add Option
+                      </Button>
+                    </InputGroup>
+                  </Card.Body>
+                </Card>
+              ))
+            )}
+          </Col>
+        </Row>
+      </Layout>
+    );
+  }
+
+  // ==========================================
+  //          VIEW: PARTICIPANTS
+  // ==========================================
   if (currentView === "participants") {
     return (
       <Layout>
@@ -845,12 +957,6 @@ export default function EventDetails() {
             </div>
           </div>
           <div className="d-grid gap-2 d-md-flex ms-md-auto w-100 w-md-auto">
-            <Button
-              variant="outline-info"
-              onClick={() => setShowCategoryModal(true)}
-            >
-              <i className="bi bi-tags me-2"></i> Categories
-            </Button>
             <Button
               variant="outline-success"
               onClick={() => setShowProofModal(true)}
@@ -874,11 +980,6 @@ export default function EventDetails() {
             >
               <Accordion.Header>
                 <span className="fw-bold me-2">{item.name}</span>
-                {item.category && (
-                  <Badge bg="info" className="me-3 text-dark bg-opacity-25">
-                    {item.category}
-                  </Badge>
-                )}
                 <Badge bg="secondary">{item.participants?.length || 0}</Badge>
               </Accordion.Header>
               <Accordion.Body className="p-0">
@@ -982,7 +1083,128 @@ export default function EventDetails() {
     );
   }
 
-  // --- 3. ATTENDANCE SESSIONS VIEW ---
+  // ==========================================
+  //          VIEW: SPONSORSHIP
+  // ==========================================
+  if (currentView === "sponsorship") {
+    return (
+      <Layout>
+        <div className="d-flex flex-column flex-md-row align-items-start align-items-md-center mb-4 gap-3">
+          <div className="d-flex align-items-center w-100 w-md-auto">
+            <Button
+              variant="outline-secondary"
+              className="me-3 rounded-circle"
+              onClick={() => setCurrentView("dashboard")}
+            >
+              <i className="bi bi-arrow-left"></i>
+            </Button>
+            <div>
+              <h3 className="fw-bold mb-0">Sponsorship Attendance</h3>
+            </div>
+          </div>
+          <div className="d-grid gap-2 d-md-flex ms-md-auto w-100 w-md-auto">
+            <Button
+              variant="outline-primary"
+              onClick={() => setShowPdfOptions(true)}
+            >
+              PDF Options
+            </Button>
+            <Button variant="outline-primary" onClick={generateSponsorshipPDF}>
+              Download Report
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setEditingSponId(null);
+                setSponForm({
+                  name: "",
+                  crn: "",
+                  urn: "",
+                  phone: "",
+                  date: "",
+                  venue: "",
+                  startTime: "",
+                  endTime: "",
+                });
+                setShowSponModal(true);
+              }}
+            >
+              Add Record
+            </Button>
+            <div className="d-inline-block">
+              <input
+                type="file"
+                id="spon-file"
+                hidden
+                accept=".xlsx, .xls"
+                onChange={handleSponFileUpload}
+              />
+              <label
+                htmlFor="spon-file"
+                className="btn btn-success text-white w-100 mb-0"
+              >
+                Upload Excel
+              </label>
+            </div>
+          </div>
+        </div>
+        <Card className="border-0 shadow-sm">
+          <Table hover responsive className="mb-0">
+            <thead className="table-dark">
+              <tr>
+                <th>S.No</th>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Name</th>
+                <th>CRN</th>
+                <th>URN</th>
+                <th>Venue</th>
+                <th>Contact</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sponsorshipList.map((s, idx) => (
+                <tr key={s.id}>
+                  <td>{idx + 1}</td>
+                  <td>{formatDate(s.date)}</td>
+                  <td>
+                    {s.startTime} - {s.endTime}
+                  </td>
+                  <td className="fw-bold">{s.name}</td>
+                  <td>{s.crn}</td>
+                  <td>{s.urn}</td>
+                  <td>{s.venue}</td>
+                  <td>{s.phone}</td>
+                  <td>
+                    <Button
+                      variant="link"
+                      className="p-0 me-2"
+                      onClick={() => handleEditSponsorship(s)}
+                    >
+                      <i className="bi bi-pencil-square text-primary"></i>
+                    </Button>
+                    <Button
+                      variant="link"
+                      className="p-0 text-danger"
+                      onClick={() => handleDeleteSponsorship(s.id)}
+                    >
+                      <i className="bi bi-trash"></i>
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </Card>
+        {renderModals()}
+      </Layout>
+    );
+  }
+
+  // ==========================================
+  //          VIEW: MEETINGS (ATTENDANCE)
+  // ==========================================
   if (currentView === "attendance_sessions") {
     return (
       <Layout>
@@ -1057,18 +1279,12 @@ export default function EventDetails() {
               </Card>
             </Col>
           ))}
-          {sessions.length === 0 && (
-            <Col md={12} className="text-center p-5 text-muted">
-              No meetings yet.
-            </Col>
-          )}
         </Row>
         {renderModals()}
       </Layout>
     );
   }
 
-  // --- 4. ATTENDANCE DETAILS VIEW ---
   if (currentView === "attendance_details") {
     return (
       <Layout>
@@ -1162,251 +1378,97 @@ export default function EventDetails() {
     );
   }
 
-  // --- 5. SPONSORSHIP VIEW ---
-  if (currentView === "sponsorship") {
-    return (
-      <Layout>
-        <div className="d-flex flex-column flex-md-row align-items-start align-items-md-center mb-4 gap-3">
-          <div className="d-flex align-items-center w-100 w-md-auto">
-            <Button
-              variant="outline-secondary"
-              className="me-3 rounded-circle"
-              onClick={() => setCurrentView("dashboard")}
-            >
-              <i className="bi bi-arrow-left"></i>
-            </Button>
-            <div>
-              <h3 className="fw-bold mb-0">Sponsorship Attendance</h3>
-              <span className="text-muted small">
-                Tracking sponsorship duties
-              </span>
-            </div>
-          </div>
-          <div className="d-grid gap-2 d-md-flex ms-md-auto w-100 w-md-auto">
-            <Button
-              variant="outline-primary"
-              onClick={() => setShowPdfOptions(true)}
-            >
-              <i className="bi bi-gear-fill me-2"></i> PDF Options
-            </Button>
-            <Button variant="outline-primary" onClick={generateSponsorshipPDF}>
-              <i className="bi bi-file-earmark-pdf me-2"></i> Download Report
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => {
-                setEditingSponId(null);
-                setSponForm({
-                  name: "",
-                  crn: "",
-                  urn: "",
-                  phone: "",
-                  date: "",
-                  venue: "",
-                  startTime: "",
-                  endTime: "",
-                });
-                setShowSponModal(true);
-              }}
-            >
-              <i className="bi bi-plus-lg me-2"></i> Add Record
-            </Button>
-            <div className="d-inline-block">
-              <input
-                type="file"
-                id="spon-file"
-                hidden
-                accept=".xlsx, .xls"
-                onChange={handleSponFileUpload}
-              />
-              <label
-                htmlFor="spon-file"
-                className="btn btn-success text-white w-100 mb-0"
-              >
-                <i className="bi bi-file-earmark-spreadsheet me-2"></i> Upload
-                Excel
-              </label>
-            </div>
-          </div>
-        </div>
-        <Card className="border-0 shadow-sm">
-          <Table hover responsive className="mb-0">
-            <thead className="table-dark">
-              <tr>
-                <th>S.No</th>
-                <th>Date</th>
-                <th>Time</th>
-                <th>Name</th>
-                <th>CRN</th>
-                <th>URN</th>
-                <th>Venue</th>
-                <th>Contact</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sponsorshipList.map((s, idx) => (
-                <tr key={s.id}>
-                  <td>{idx + 1}</td>
-                  <td>{formatDate(s.date)}</td>
-                  <td>
-                    {s.startTime} - {s.endTime}
-                  </td>
-                  <td className="fw-bold">{s.name}</td>
-                  <td>{s.crn}</td>
-                  <td>{s.urn}</td>
-                  <td>{s.venue}</td>
-                  <td>{s.phone}</td>
-                  <td>
-                    <Button
-                      variant="link"
-                      className="p-0 me-2"
-                      onClick={() => handleEditSponsorship(s)}
-                    >
-                      <i className="bi bi-pencil-square text-primary"></i>
-                    </Button>
-                    <Button
-                      variant="link"
-                      className="p-0 text-danger"
-                      onClick={() => handleDeleteSponsorship(s.id)}
-                    >
-                      <i className="bi bi-trash"></i>
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </Card>
-        {renderModals()}
-      </Layout>
-    );
-  }
-
+  // ==========================================
+  //            MODAL RENDERER
+  // ==========================================
   function renderModals() {
     return (
       <>
-        {/* CATEGORY MODAL */}
-        <Modal
-          show={showCategoryModal}
-          onHide={() => setShowCategoryModal(false)}
-          centered
-        >
-          <Modal.Header closeButton>
-            <Modal.Title>Manage Categories</Modal.Title>
-          </Modal.Header>
-          <Modal.Body>
-            <div className="d-flex gap-2 mb-3">
-              <Form.Control
-                placeholder="New Category (e.g. Music)"
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-              />
-              <Button variant="success" onClick={handleAddCategory}>
-                Add
-              </Button>
-            </div>
-            <ListGroup variant="flush">
-              {categories.map((cat, idx) => (
-                <ListGroup.Item
-                  key={idx}
-                  className="d-flex justify-content-between align-items-center"
-                >
-                  {cat}
-                  <Button
-                    variant="outline-danger"
-                    size="sm"
-                    onClick={() => handleDeleteCategory(cat)}
-                  >
-                    <i className="bi bi-trash"></i>
-                  </Button>
-                </ListGroup.Item>
-              ))}
-            </ListGroup>
-          </Modal.Body>
-        </Modal>
-
-        {/* SUB-EVENT MODAL */}
+        {/* SUB-EVENT MODAL (INTERNAL) */}
         <Modal
           show={showItemModal}
           onHide={() => setShowItemModal(false)}
           centered
         >
           <Modal.Header closeButton>
-            <Modal.Title>New Sub-Event</Modal.Title>
+            <Modal.Title>New Internal Item</Modal.Title>
           </Modal.Header>
           <Modal.Body>
-            <Form.Group className="mb-3">
-              <Form.Label>Sub-Event Name</Form.Label>
-              <Form.Control
-                placeholder="e.g. Solo Song"
-                value={newItemName}
-                onChange={(e) => setNewItemName(e.target.value)}
-              />
-            </Form.Group>
-            <Form.Group>
-              <Form.Label>Category</Form.Label>
-              <Form.Select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-              >
-                <option value="">-- Select Category --</option>
-                {categories.map((cat, idx) => (
-                  <option key={idx} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </Form.Select>
-            </Form.Group>
+            <Form.Control
+              placeholder="Item Name (e.g. Solo Song)"
+              value={newItemName}
+              onChange={(e) => setNewItemName(e.target.value)}
+            />
           </Modal.Body>
           <Modal.Footer>
-            <Button
-              variant="primary"
-              onClick={handleAddItem}
-              disabled={!selectedCategory || !newItemName}
-            >
+            <Button variant="primary" onClick={handleAddItem}>
               Create
             </Button>
           </Modal.Footer>
         </Modal>
 
-        {/* PDF OPTIONS MODAL */}
+        {/* PARTICIPANT MODAL */}
         <Modal
-          show={showPdfOptions}
-          onHide={() => setShowPdfOptions(false)}
+          show={showPartModal}
+          onHide={() => setShowPartModal(false)}
           centered
+          size="lg"
         >
-          <Modal.Header closeButton>
-            <Modal.Title>Select PDF Columns</Modal.Title>
-          </Modal.Header>
           <Modal.Body>
-            <Form>
-              <div className="d-grid gap-2">
-                {Object.keys(pdfFields).map((key) => (
-                  <Form.Check
-                    key={key}
-                    type="switch"
-                    id={`check-${key}`}
-                    label={key.charAt(0).toUpperCase() + key.slice(1)}
-                    checked={pdfFields[key]}
-                    onChange={() =>
-                      setPdfFields({ ...pdfFields, [key]: !pdfFields[key] })
+            <Form className="d-grid gap-3">
+              <Row>
+                <Col>
+                  <Form.Control
+                    placeholder="Name"
+                    value={partForm.name}
+                    onChange={(e) =>
+                      setPartForm({ ...partForm, name: e.target.value })
                     }
                   />
-                ))}
-              </div>
+                </Col>
+                <Col>
+                  <Form.Control
+                    placeholder="Phone"
+                    value={partForm.phone}
+                    onChange={(e) =>
+                      setPartForm({ ...partForm, phone: e.target.value })
+                    }
+                  />
+                </Col>
+              </Row>
+              <Row>
+                <Col>
+                  <Form.Control
+                    placeholder="CRN"
+                    value={partForm.crn}
+                    onChange={(e) =>
+                      setPartForm({ ...partForm, crn: e.target.value })
+                    }
+                  />
+                </Col>
+                <Col>
+                  <Form.Control
+                    placeholder="URN"
+                    value={partForm.urn}
+                    onChange={(e) =>
+                      setPartForm({ ...partForm, urn: e.target.value })
+                    }
+                  />
+                </Col>
+                <Col>
+                  <Form.Control
+                    placeholder="Branch"
+                    value={partForm.branch}
+                    onChange={(e) =>
+                      setPartForm({ ...partForm, branch: e.target.value })
+                    }
+                  />
+                </Col>
+              </Row>
             </Form>
           </Modal.Body>
           <Modal.Footer>
-            <Button
-              variant="secondary"
-              onClick={() => setShowPdfOptions(false)}
-            >
-              Close
-            </Button>
-            <Button variant="primary" onClick={generateSponsorshipPDF}>
-              Generate PDF
-            </Button>
+            <Button onClick={handleSaveParticipant}>Save</Button>
           </Modal.Footer>
         </Modal>
 
@@ -1419,7 +1481,7 @@ export default function EventDetails() {
         >
           <Modal.Header closeButton>
             <Modal.Title>
-              {editingSponId ? "Edit" : "Add"} Sponsorship Record
+              {editingSponId ? "Edit" : "Add"} Sponsorship
             </Modal.Title>
           </Modal.Header>
           <Modal.Body>
@@ -1514,7 +1576,67 @@ export default function EventDetails() {
           </Modal.Footer>
         </Modal>
 
-        {/* OTHER MODALS */}
+        {/* PROOF MODAL */}
+        <Modal
+          show={showProofModal}
+          onHide={() => setShowProofModal(false)}
+          centered
+        >
+          <Modal.Body>
+            <Form.Control
+              placeholder="URL"
+              value={eventProofUrl}
+              onChange={(e) => setEventProofUrl(e.target.value)}
+            />
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="primary" onClick={handleSaveProof}>
+              Save
+            </Button>
+          </Modal.Footer>
+        </Modal>
+
+        {/* PDF OPTIONS */}
+        <Modal
+          show={showPdfOptions}
+          onHide={() => setShowPdfOptions(false)}
+          centered
+        >
+          <Modal.Header closeButton>
+            <Modal.Title>Select PDF Columns</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Form>
+              <div className="d-grid gap-2">
+                {Object.keys(pdfFields).map((key) => (
+                  <Form.Check
+                    key={key}
+                    type="switch"
+                    id={`check-${key}`}
+                    label={key.charAt(0).toUpperCase() + key.slice(1)}
+                    checked={pdfFields[key]}
+                    onChange={() =>
+                      setPdfFields({ ...pdfFields, [key]: !pdfFields[key] })
+                    }
+                  />
+                ))}
+              </div>
+            </Form>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button
+              variant="secondary"
+              onClick={() => setShowPdfOptions(false)}
+            >
+              Close
+            </Button>
+            <Button variant="primary" onClick={generateSponsorshipPDF}>
+              Generate PDF
+            </Button>
+          </Modal.Footer>
+        </Modal>
+
+        {/* SESSION MODAL */}
         <Modal
           show={showSessionModal}
           onHide={() => setShowSessionModal(false)}
@@ -1572,6 +1694,8 @@ export default function EventDetails() {
             </Button>
           </Modal.Footer>
         </Modal>
+
+        {/* SESSION STUDENT MODAL */}
         <Modal
           show={showAttStudentModal}
           onHide={() => setShowAttStudentModal(false)}
@@ -1609,87 +1733,6 @@ export default function EventDetails() {
           </Modal.Body>
           <Modal.Footer>
             <Button onClick={handleSaveStudentToSession}>Save</Button>
-          </Modal.Footer>
-        </Modal>
-        <Modal
-          show={showProofModal}
-          onHide={() => setShowProofModal(false)}
-          centered
-        >
-          <Modal.Body>
-            <Form.Control
-              placeholder="URL"
-              value={eventProofUrl}
-              onChange={(e) => setEventProofUrl(e.target.value)}
-            />
-          </Modal.Body>
-          <Modal.Footer>
-            <Button variant="primary" onClick={handleSaveProof}>
-              Save
-            </Button>
-          </Modal.Footer>
-        </Modal>
-        <Modal
-          show={showPartModal}
-          onHide={() => setShowPartModal(false)}
-          centered
-          size="lg"
-        >
-          <Modal.Body>
-            <Form className="d-grid gap-3">
-              <Row>
-                <Col>
-                  <Form.Control
-                    placeholder="Name"
-                    value={partForm.name}
-                    onChange={(e) =>
-                      setPartForm({ ...partForm, name: e.target.value })
-                    }
-                  />
-                </Col>
-                <Col>
-                  <Form.Control
-                    placeholder="Phone"
-                    value={partForm.phone}
-                    onChange={(e) =>
-                      setPartForm({ ...partForm, phone: e.target.value })
-                    }
-                  />
-                </Col>
-              </Row>
-              <Row>
-                <Col>
-                  <Form.Control
-                    placeholder="CRN"
-                    value={partForm.crn}
-                    onChange={(e) =>
-                      setPartForm({ ...partForm, crn: e.target.value })
-                    }
-                  />
-                </Col>
-                <Col>
-                  <Form.Control
-                    placeholder="URN"
-                    value={partForm.urn}
-                    onChange={(e) =>
-                      setPartForm({ ...partForm, urn: e.target.value })
-                    }
-                  />
-                </Col>
-                <Col>
-                  <Form.Control
-                    placeholder="Branch"
-                    value={partForm.branch}
-                    onChange={(e) =>
-                      setPartForm({ ...partForm, branch: e.target.value })
-                    }
-                  />
-                </Col>
-              </Row>
-            </Form>
-          </Modal.Body>
-          <Modal.Footer>
-            <Button onClick={handleSaveParticipant}>Save</Button>
           </Modal.Footer>
         </Modal>
       </>
