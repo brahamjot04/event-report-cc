@@ -20,16 +20,20 @@ import {
   Form,
   ButtonGroup,
   ToggleButton,
+  Spinner,
 } from "react-bootstrap";
 import Layout from "../components/Layout";
-import { logAction } from "../utils/logger";
+import { logAction } from "../utils/logger"; // Import logger
 
 export default function Home() {
   const [events, setEvents] = useState([]);
 
   const [userRole, setUserRole] = useState(null);
-  const [userStatus, setUserStatus] = useState("pending");
+  const [userStatus, setUserStatus] = useState(null); // Changed default to null
   const [userName, setUserName] = useState("User");
+
+  // NEW: Loading State to prevent flash
+  const [loading, setLoading] = useState(true);
 
   const [pendingCount, setPendingCount] = useState(0);
   const [showModal, setShowModal] = useState(false);
@@ -37,40 +41,51 @@ export default function Home() {
 
   // Form State
   const [isMultiDay, setIsMultiDay] = useState(false);
-  const [editingEventId, setEditingEventId] = useState(null); // Track if we are editing
+  const [editingEventId, setEditingEventId] = useState(null);
 
   const [formData, setFormData] = useState({
     type: "",
     title: "",
     date: new Date().toISOString().split("T")[0],
-    endDate: "", // New field for multi-day
+    endDate: "",
     venue: "",
   });
 
   const navigate = useNavigate();
 
+  // --- 1. AUTH & USER DATA FETCHING ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!currentUser) {
+        setLoading(false);
         navigate("/login");
         return;
       }
 
-      const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-      if (userDoc.exists()) {
-        const data = userDoc.data();
-        setUserRole(data.role);
-        setUserStatus(data.status);
-        setUserName(data.name || currentUser.displayName || "User");
-      } else {
-        setUserStatus("pending");
+      try {
+        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          setUserRole(data.role);
+          setUserStatus(data.status);
+          setUserName(data.name || currentUser.displayName || "User");
+        } else {
+          // User logged in but no Firestore doc (rare edge case)
+          setUserStatus("pending");
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      } finally {
+        // STOP LOADING once we know the status
+        setLoading(false);
       }
     });
     return () => unsubscribe();
   }, [navigate]);
 
+  // --- 2. FETCH DASHBOARD DATA (Only if approved) ---
   useEffect(() => {
-    if (userStatus === "approved") {
+    if (userStatus === "approved" && !loading) {
       const fetchData = async () => {
         const snap = await getDocs(collection(db, "events"));
         setEvents(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
@@ -84,9 +99,9 @@ export default function Home() {
       };
       fetchData();
     }
-  }, [userStatus, userRole]);
+  }, [userStatus, userRole, loading]);
 
-  // --- OPEN MODAL FOR CREATION ---
+  // --- HANDLERS ---
   const openCreateModal = () => {
     setEditingEventId(null);
     setIsMultiDay(false);
@@ -101,15 +116,11 @@ export default function Home() {
     setShowModal(true);
   };
 
-  // --- OPEN MODAL FOR EDITING ---
   const openEditModal = (e, event) => {
-    e.stopPropagation(); // Stop navigation to details page
+    e.stopPropagation();
     setEditingEventId(event.id);
-
-    // Check if it's a multi-day event
     const isMulti = !!event.endDate;
     setIsMultiDay(isMulti);
-
     setFormData({
       type: event.type,
       title: event.title,
@@ -117,56 +128,61 @@ export default function Home() {
       endDate: event.endDate || "",
       venue: event.venue,
     });
-    setStep(2); // Skip type selection, go straight to form
+    setStep(2);
     setShowModal(true);
   };
 
-  // --- SAVE EVENT (CREATE OR UPDATE) ---
   const handleSaveEvent = async () => {
     if (!formData.title) return;
-
     try {
       const eventData = {
         ...formData,
-        // If single day, clear endDate to keep data clean
         endDate: isMultiDay ? formData.endDate : "",
       };
 
       if (editingEventId) {
-        // UPDATE EXISTING EVENT
         await updateDoc(doc(db, "events", editingEventId), eventData);
-
-        // Update local state
         setEvents(
           events.map((ev) =>
             ev.id === editingEventId ? { ...ev, ...eventData } : ev,
           ),
         );
+        await logAction("UPDATE_EVENT", `Updated event: ${formData.title}`);
       } else {
-        // CREATE NEW EVENT
         const docRef = await addDoc(collection(db, "events"), {
           ...eventData,
           createdBy: userName,
           createdAt: new Date(),
         });
-        await logAction("CREATE_EVENT", `Created event: ${formData.title}`);
         setEvents([...events, { id: docRef.id, ...eventData }]);
+        await logAction("CREATE_EVENT", `Created event: ${formData.title}`);
       }
-
       setShowModal(false);
     } catch (err) {
-      console.error("Error saving event:", err);
+      console.error(err);
       alert("Failed to save event.");
     }
   };
 
-  // Helper to display date nicely
   const formatDateDisplay = (date, endDate) => {
-    if (!endDate) return date; // Single day
-    // Multi-day: "2026-03-05 to 2026-03-08"
+    if (!endDate) return date;
     return `${date} — ${endDate}`;
   };
 
+  // --- RENDER: LOADING SCREEN ---
+  if (loading) {
+    return (
+      <div className="d-flex vh-100 align-items-center justify-content-center bg-body-tertiary">
+        <Spinner
+          animation="border"
+          variant="primary"
+          style={{ width: "3rem", height: "3rem" }}
+        />
+      </div>
+    );
+  }
+
+  // --- RENDER: ACCESS PENDING ---
   if (userStatus === "pending") {
     return (
       <div className="d-flex vh-100 align-items-center justify-content-center bg-body-tertiary">
@@ -184,6 +200,7 @@ export default function Home() {
     );
   }
 
+  // --- RENDER: DASHBOARD ---
   return (
     <Layout>
       {/* Stats Row */}
@@ -260,7 +277,6 @@ export default function Home() {
               className="border-0 shadow-sm h-100 stats-card cursor-pointer position-relative"
               onClick={() => navigate(`/event/${event.id}`)}
             >
-              {/* EDIT BUTTON (Only for Admins) */}
               {(userRole === "admin" || userRole === "super_admin") && (
                 <Button
                   variant="light"
@@ -272,7 +288,6 @@ export default function Home() {
                   <i className="bi bi-pencil-fill text-secondary"></i>
                 </Button>
               )}
-
               <Card.Body>
                 <div className="d-flex justify-content-between mb-3">
                   <Badge
@@ -281,13 +296,10 @@ export default function Home() {
                     {event.type === "youth_festival" ? "YOUTH FEST" : "COLLEGE"}
                   </Badge>
                 </div>
-
-                {/* Date Display */}
                 <small className="text-muted d-block mb-2">
-                  <i className="bi bi-calendar3 me-1"></i>
+                  <i className="bi bi-calendar3 me-1"></i>{" "}
                   {formatDateDisplay(event.date, event.endDate)}
                 </small>
-
                 <Card.Title className="fw-bold mb-1">{event.title}</Card.Title>
                 <div className="text-muted small mb-3">
                   <i className="bi bi-geo-alt-fill me-1"></i> {event.venue}
@@ -349,7 +361,6 @@ export default function Home() {
             </div>
           ) : (
             <Form>
-              {/* Title & Type */}
               <Row className="mb-3">
                 <Col md={8}>
                   <Form.Label>Event Title</Form.Label>
@@ -374,8 +385,6 @@ export default function Home() {
                   </Form.Select>
                 </Col>
               </Row>
-
-              {/* Date Selection Mode */}
               <div className="mb-3">
                 <Form.Label className="d-block">Event Duration</Form.Label>
                 <ButtonGroup>
@@ -403,8 +412,6 @@ export default function Home() {
                   </ToggleButton>
                 </ButtonGroup>
               </div>
-
-              {/* Date Pickers */}
               <Row className="mb-3">
                 <Col md={isMultiDay ? 6 : 12}>
                   <Form.Label>{isMultiDay ? "Start Date" : "Date"}</Form.Label>
@@ -416,7 +423,6 @@ export default function Home() {
                     }
                   />
                 </Col>
-
                 {isMultiDay && (
                   <Col md={6}>
                     <Form.Label>End Date</Form.Label>
@@ -430,8 +436,6 @@ export default function Home() {
                   </Col>
                 )}
               </Row>
-
-              {/* Venue */}
               <Form.Group className="mb-3">
                 <Form.Label>Venue</Form.Label>
                 <Form.Control
