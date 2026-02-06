@@ -229,6 +229,7 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
                 setShowSessionModal(true);
               }}
             >
+              <i className="bi bi-plus-lg me-2"></i>
               Create Meeting
             </Button>
           </div>

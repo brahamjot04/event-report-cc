@@ -297,7 +297,7 @@ export default function EventParticipants({
             <i className="bi bi-link-45deg me-1"></i>{" "}
             {eventProofUrl ? "Proof Linked" : "Link Proof"}
           </Button>
-          <Button variant="outline-primary" onClick={generatePDF}>
+          <Button variant="outline-danger" onClick={generatePDF}>
             <i className="bi bi-file-earmark-pdf me-1"></i> Report
           </Button>
           <Button

@@ -10,12 +10,26 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
-import { Table, Button, Modal, Form, Row, Col, Card } from "react-bootstrap";
+import {
+  Table,
+  Button,
+  Modal,
+  Form,
+  Row,
+  Col,
+  Card,
+  FloatingLabel, // Added FloatingLabel import
+} from "react-bootstrap";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import readXlsxFile from "read-excel-file";
 
-export default function EventSponsorship({ eventId, eventData, goBack }) {
+export default function EventSponsorship({
+  eventId,
+  eventData,
+  eventTitle,
+  goBack,
+}) {
   const [sponsors, setSponsors] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [showPdfOptions, setShowPdfOptions] = useState(false);
@@ -136,8 +150,9 @@ export default function EventSponsorship({ eventId, eventData, goBack }) {
       doc.text("Sponsorship Attendance Report", 14, 15);
       doc.setFontSize(12);
       doc.setFont("helvetica", "normal");
-      // Use eventData passed from parent, or fallback
-      doc.text(`Event: ${eventData?.title || "Event Details"}`, 14, 23);
+
+      const finalTitle = eventTitle || eventData?.title || "Event Details";
+      doc.text(`Event: ${finalTitle}`, 14, 23);
 
       // Group by Date
       const grouped = sponsors.reduce((acc, item) => {
@@ -254,7 +269,6 @@ export default function EventSponsorship({ eventId, eventData, goBack }) {
           <h3 className="fw-bold mb-0">Sponsorship</h3>
         </div>
         <div className="d-flex gap-2">
-          {/* UPDATED: Added Icon for PDF Options */}
           <Button
             variant="outline-primary"
             onClick={() => setShowPdfOptions(true)}
@@ -262,12 +276,10 @@ export default function EventSponsorship({ eventId, eventData, goBack }) {
             <i className="bi bi-gear-fill me-2"></i>PDF Options
           </Button>
 
-          {/* UPDATED: Added Icon for Download Report */}
           <Button variant="outline-danger" onClick={generateSponsorshipPDF}>
             <i className="bi bi-file-earmark-pdf-fill me-2"></i>Download Report
           </Button>
 
-          {/* UPDATED: Added Icon for Add Record */}
           <Button
             onClick={() => {
               setEditingId(null);
@@ -278,7 +290,6 @@ export default function EventSponsorship({ eventId, eventData, goBack }) {
             <i className="bi bi-plus-lg me-2"></i>Add Record
           </Button>
 
-          {/* UPDATED: Added Icon for Upload Excel */}
           <div className="d-inline-block">
             <input
               type="file"
@@ -304,7 +315,11 @@ export default function EventSponsorship({ eventId, eventData, goBack }) {
             <tr>
               <th>Name</th>
               <th>Phone</th>
+              {/* UPDATED: Added CRN, URN, and Time columns */}
+              <th>CRN</th>
+              <th>URN</th>
               <th>Date</th>
+              <th>Time</th>
               <th>Venue</th>
               <th>Action</th>
             </tr>
@@ -314,11 +329,18 @@ export default function EventSponsorship({ eventId, eventData, goBack }) {
               <tr key={s.id}>
                 <td>{s.name}</td>
                 <td>{s.phone}</td>
+                {/* UPDATED: Displaying CRN, URN, and Time */}
+                <td>{s.crn}</td>
+                <td>{s.urn}</td>
                 <td>{formatDate(s.date)}</td>
+                <td>
+                  {s.startTime && s.endTime
+                    ? `${s.startTime} - ${s.endTime}`
+                    : "-"}
+                </td>
                 <td>{s.venue}</td>
                 <td>
                   <div className="d-flex gap-2">
-                    {/* UPDATED: Pencil Icon for Edit */}
                     <Button
                       size="sm"
                       variant="outline-secondary"
@@ -332,7 +354,6 @@ export default function EventSponsorship({ eventId, eventData, goBack }) {
                       <i className="bi bi-pencil-fill text-primary"></i>
                     </Button>
 
-                    {/* UPDATED: Trash Icon for Delete */}
                     <Button
                       size="sm"
                       variant="outline-secondary"
@@ -349,73 +370,93 @@ export default function EventSponsorship({ eventId, eventData, goBack }) {
         </Table>
       </Card>
 
-      {/* ADD/EDIT MODAL */}
+      {/* ADD/EDIT MODAL WITH FLOATING HEADINGS */}
       <Modal show={showModal} onHide={() => setShowModal(false)} centered>
         <Modal.Header closeButton>
           <Modal.Title>{editingId ? "Edit" : "Add"} Sponsor</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <Form className="d-grid gap-2">
-            <Form.Control
-              placeholder="Name"
-              value={form.name || ""}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-            <Form.Control
-              placeholder="Phone"
-              value={form.phone || ""}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
-            />
+          <Form className="d-grid gap-3">
+            {" "}
+            {/* Added gap for spacing */}
+            <FloatingLabel controlId="floatingName" label="Name">
+              <Form.Control
+                placeholder="Name"
+                value={form.name || ""}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </FloatingLabel>
+            <FloatingLabel controlId="floatingPhone" label="Phone">
+              <Form.Control
+                placeholder="Phone"
+                value={form.phone || ""}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              />
+            </FloatingLabel>
             <Row>
               <Col>
-                <Form.Control
-                  placeholder="CRN"
-                  value={form.crn || ""}
-                  onChange={(e) => setForm({ ...form, crn: e.target.value })}
-                />
+                <FloatingLabel controlId="floatingCRN" label="CRN">
+                  <Form.Control
+                    placeholder="CRN"
+                    value={form.crn || ""}
+                    onChange={(e) => setForm({ ...form, crn: e.target.value })}
+                  />
+                </FloatingLabel>
               </Col>
               <Col>
-                <Form.Control
-                  placeholder="URN"
-                  value={form.urn || ""}
-                  onChange={(e) => setForm({ ...form, urn: e.target.value })}
-                />
+                <FloatingLabel controlId="floatingURN" label="URN">
+                  <Form.Control
+                    placeholder="URN"
+                    value={form.urn || ""}
+                    onChange={(e) => setForm({ ...form, urn: e.target.value })}
+                  />
+                </FloatingLabel>
               </Col>
             </Row>
             <Row>
               <Col>
-                <Form.Control
-                  type="date"
-                  value={form.date || ""}
-                  onChange={(e) => setForm({ ...form, date: e.target.value })}
-                />
+                <FloatingLabel controlId="floatingDate" label="Date">
+                  <Form.Control
+                    type="date"
+                    value={form.date || ""}
+                    onChange={(e) => setForm({ ...form, date: e.target.value })}
+                  />
+                </FloatingLabel>
               </Col>
               <Col>
-                <Form.Control
-                  placeholder="Venue"
-                  value={form.venue || ""}
-                  onChange={(e) => setForm({ ...form, venue: e.target.value })}
-                />
+                <FloatingLabel controlId="floatingVenue" label="Venue">
+                  <Form.Control
+                    placeholder="Venue"
+                    value={form.venue || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, venue: e.target.value })
+                    }
+                  />
+                </FloatingLabel>
               </Col>
             </Row>
             <Row>
               <Col>
-                <Form.Control
-                  type="time"
-                  value={form.startTime || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, startTime: e.target.value })
-                  }
-                />
+                <FloatingLabel controlId="floatingStart" label="Start Time">
+                  <Form.Control
+                    type="time"
+                    value={form.startTime || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, startTime: e.target.value })
+                    }
+                  />
+                </FloatingLabel>
               </Col>
               <Col>
-                <Form.Control
-                  type="time"
-                  value={form.endTime || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, endTime: e.target.value })
-                  }
-                />
+                <FloatingLabel controlId="floatingEnd" label="End Time">
+                  <Form.Control
+                    type="time"
+                    value={form.endTime || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, endTime: e.target.value })
+                    }
+                  />
+                </FloatingLabel>
               </Col>
             </Row>
           </Form>
