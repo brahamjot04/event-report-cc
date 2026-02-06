@@ -10,8 +10,6 @@ import {
   deleteDoc,
   orderBy,
   query,
-  arrayUnion,
-  arrayRemove,
 } from "firebase/firestore";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { db } from "../firebase";
@@ -25,13 +23,11 @@ import {
   Row,
   Col,
   Card,
-  InputGroup,
 } from "react-bootstrap";
 import Layout from "../components/Layout";
 import readXlsxFile from "read-excel-file";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { logAction } from "../utils/logger"; // Assuming you have this set up
 
 export default function EventDetails() {
   const { id } = useParams();
@@ -59,13 +55,7 @@ export default function EventDetails() {
   });
   const [editingIndex, setEditingIndex] = useState(null);
 
-  // --- MODULE 2: REGISTRATION FORM BUILDER (PUBLIC) ---
-  const [regSchema, setRegSchema] = useState([]);
-  const [newRegCat, setNewRegCat] = useState("");
-  const [newRegOption, setNewRegOption] = useState("");
-  const [activeRegCat, setActiveRegCat] = useState(null);
-
-  // --- MODULE 3: MEETINGS (ATTENDANCE) ---
+  // --- MODULE 2: MEETINGS (ATTENDANCE) ---
   const [sessions, setSessions] = useState([]);
   const [activeSession, setActiveSession] = useState(null);
   const [sessionStudents, setSessionStudents] = useState([]);
@@ -84,7 +74,7 @@ export default function EventDetails() {
   });
   const [editingSessionStudentId, setEditingSessionStudentId] = useState(null);
 
-  // --- MODULE 4: SPONSORSHIP ---
+  // --- MODULE 3: SPONSORSHIP ---
   const [sponsorshipList, setSponsorshipList] = useState([]);
   const [sponForm, setSponForm] = useState({
     name: "",
@@ -146,9 +136,6 @@ export default function EventDetails() {
         // Fetch Internal Items
         const itemsSnap = await getDocs(collection(db, "events", id, "items"));
         setItems(itemsSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
-
-        // Fetch Registration Schema
-        fetchRegSchema();
       } catch (e) {
         console.error(e);
       }
@@ -156,51 +143,6 @@ export default function EventDetails() {
     fetchData();
     return () => unsubscribe();
   }, [id, navigate, auth]);
-
-  // ==========================================
-  //      MODULE: REGISTRATION FORM BUILDER
-  // ==========================================
-  const fetchRegSchema = async () => {
-    const q = query(
-      collection(db, "events", id, "registration_schema"),
-      orderBy("createdAt", "asc"),
-    );
-    const snap = await getDocs(q);
-    setRegSchema(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-  };
-
-  const handleAddRegCategory = async () => {
-    if (!newRegCat) return;
-    await addDoc(collection(db, "events", id, "registration_schema"), {
-      name: newRegCat,
-      options: [],
-      createdAt: new Date(),
-    });
-    setNewRegCat("");
-    fetchRegSchema();
-  };
-
-  const handleDeleteRegCategory = async (catId) => {
-    if (!window.confirm("Delete this category?")) return;
-    await deleteDoc(doc(db, "events", id, "registration_schema", catId));
-    fetchRegSchema();
-  };
-
-  const handleAddRegOption = async (catId) => {
-    if (!newRegOption) return;
-    await updateDoc(doc(db, "events", id, "registration_schema", catId), {
-      options: arrayUnion(newRegOption),
-    });
-    setNewRegOption("");
-    fetchRegSchema();
-  };
-
-  const handleDeleteRegOption = async (catId, optionName) => {
-    await updateDoc(doc(db, "events", id, "registration_schema", catId), {
-      options: arrayRemove(optionName),
-    });
-    fetchRegSchema();
-  };
 
   // ==========================================
   //      MODULE: INTERNAL PARTICIPANTS
@@ -273,7 +215,6 @@ export default function EventDetails() {
       updateDoc(doc(db, "events", id, "items", activeItem.id), {
         participants: u,
       }).then(() => {
-        // Refresh local state to show new data immediately
         setItems(
           items.map((i) =>
             i.id === activeItem.id ? { ...i, participants: u } : i,
@@ -728,26 +669,7 @@ export default function EventDetails() {
           </div>
         </div>
         <Row className="g-4">
-          {/* NEW MODULE: FORM BUILDER */}
-          <Col md={3}>
-            <Card
-              className="h-100 border-0 shadow-sm cursor-pointer card-hover"
-              onClick={() => setCurrentView("form_builder")}
-            >
-              <Card.Body className="p-4 text-center">
-                <div className="mb-3 text-info">
-                  <i
-                    className="bi bi-ui-checks-grid"
-                    style={{ fontSize: "3rem" }}
-                  ></i>
-                </div>
-                <h5 className="fw-bold text-body">Registration Form</h5>
-                <small className="text-muted">Configure student options</small>
-              </Card.Body>
-            </Card>
-          </Col>
-
-          <Col md={3}>
+          <Col md={4}>
             <Card
               className="h-100 border-0 shadow-sm cursor-pointer card-hover"
               onClick={() => setCurrentView("participants")}
@@ -764,7 +686,7 @@ export default function EventDetails() {
               </Card.Body>
             </Card>
           </Col>
-          <Col md={3}>
+          <Col md={4}>
             <Card
               className="h-100 border-0 shadow-sm cursor-pointer card-hover"
               onClick={() => {
@@ -784,7 +706,7 @@ export default function EventDetails() {
               </Card.Body>
             </Card>
           </Col>
-          <Col md={3}>
+          <Col md={4}>
             <Card
               className="h-100 border-0 shadow-sm cursor-pointer card-hover"
               onClick={() => {
@@ -815,122 +737,6 @@ export default function EventDetails() {
               </Button>
             </Col>
           )}
-        </Row>
-      </Layout>
-    );
-  }
-
-  // ==========================================
-  //          VIEW: FORM BUILDER (NEW)
-  // ==========================================
-  if (currentView === "form_builder") {
-    return (
-      <Layout>
-        <div className="d-flex align-items-center mb-4">
-          <Button
-            variant="outline-secondary"
-            className="me-3 rounded-circle"
-            onClick={() => setCurrentView("dashboard")}
-          >
-            <i className="bi bi-arrow-left"></i>
-          </Button>
-          <div>
-            <h3 className="fw-bold mb-0">Registration Form Builder</h3>
-            <span className="text-muted small">
-              Define categories & options for the student portal
-            </span>
-          </div>
-        </div>
-
-        <Row className="g-4">
-          {/* LEFT: ADD CATEGORY */}
-          <Col md={4}>
-            <Card className="border-0 shadow-sm mb-4">
-              <Card.Header className="bg-white fw-bold">
-                Add Category
-              </Card.Header>
-              <Card.Body>
-                <InputGroup className="mb-3">
-                  <Form.Control
-                    placeholder="Category (e.g. Dance)"
-                    value={newRegCat}
-                    onChange={(e) => setNewRegCat(e.target.value)}
-                  />
-                  <Button variant="primary" onClick={handleAddRegCategory}>
-                    Add
-                  </Button>
-                </InputGroup>
-                <small className="text-muted">
-                  Create headings like Dance, Music, Theatre.
-                </small>
-              </Card.Body>
-            </Card>
-          </Col>
-
-          {/* RIGHT: BUILDER CANVAS */}
-          <Col md={8}>
-            {regSchema.length === 0 ? (
-              <div className="text-center p-5 text-muted border rounded bg-light">
-                No categories yet. Add one to start.
-              </div>
-            ) : (
-              regSchema.map((cat) => (
-                <Card key={cat.id} className="border-0 shadow-sm mb-3">
-                  <Card.Header className="bg-white d-flex justify-content-between align-items-center">
-                    <span className="fw-bold text-uppercase text-primary">
-                      {cat.name}
-                    </span>
-                    <Button
-                      variant="outline-danger"
-                      size="sm"
-                      onClick={() => handleDeleteRegCategory(cat.id)}
-                    >
-                      <i className="bi bi-trash"></i>
-                    </Button>
-                  </Card.Header>
-                  <Card.Body>
-                    <div className="d-flex flex-wrap gap-2 mb-3">
-                      {cat.options?.map((opt, idx) => (
-                        <Badge
-                          key={idx}
-                          bg="light"
-                          text="dark"
-                          className="border px-3 py-2 d-flex align-items-center gap-2"
-                        >
-                          {opt}
-                          <i
-                            className="bi bi-x cursor-pointer text-danger"
-                            onClick={() => handleDeleteRegOption(cat.id, opt)}
-                          ></i>
-                        </Badge>
-                      ))}
-                      {(!cat.options || cat.options.length === 0) && (
-                        <span className="text-muted small fst-italic">
-                          No options yet.
-                        </span>
-                      )}
-                    </div>
-                    <InputGroup size="sm">
-                      <Form.Control
-                        placeholder={`Add option to ${cat.name} (e.g. Solo ${cat.name})`}
-                        value={activeRegCat === cat.id ? newRegOption : ""}
-                        onChange={(e) => {
-                          setActiveRegCat(cat.id);
-                          setNewRegOption(e.target.value);
-                        }}
-                      />
-                      <Button
-                        variant="outline-primary"
-                        onClick={() => handleAddRegOption(cat.id)}
-                      >
-                        Add Option
-                      </Button>
-                    </InputGroup>
-                  </Card.Body>
-                </Card>
-              ))
-            )}
-          </Col>
         </Row>
       </Layout>
     );
