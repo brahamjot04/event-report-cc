@@ -37,6 +37,7 @@ export default function EventDashboard({
       </div>
 
       <Row className="g-4">
+        {/* 1. PARTICIPANTS */}
         <Col md={4}>
           <Card
             className="h-100 border-0 shadow-sm cursor-pointer card-hover"
@@ -56,6 +57,8 @@ export default function EventDashboard({
             </Card.Body>
           </Card>
         </Col>
+
+        {/* 2. MEETINGS */}
         <Col md={4}>
           <Card
             className="h-100 border-0 shadow-sm cursor-pointer card-hover"
@@ -73,6 +76,29 @@ export default function EventDashboard({
             </Card.Body>
           </Card>
         </Col>
+
+        {/* 3. TEAMS (NEW) */}
+        <Col md={4}>
+          <Card
+            className="h-100 border-0 shadow-sm cursor-pointer card-hover"
+            // This triggers the view switch
+            onClick={() => setView("teams")}
+          >
+            <Card.Body className="p-4 text-center">
+              <div className="mb-3 text-info">
+                {/* Diagram icon represents structure/teams */}
+                <i
+                  className="bi bi-diagram-3-fill"
+                  style={{ fontSize: "3rem" }}
+                ></i>
+              </div>
+              <h5 className="fw-bold text-body">Teams</h5>
+              <small className="text-muted">Manage committees & members</small>
+            </Card.Body>
+          </Card>
+        </Col>
+
+        {/* 4. SPONSORSHIP */}
         <Col md={4}>
           <Card
             className="h-100 border-0 shadow-sm cursor-pointer card-hover"

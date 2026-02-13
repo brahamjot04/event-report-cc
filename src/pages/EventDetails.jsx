@@ -11,6 +11,7 @@ import EventDashboard from "../components/events/EventDashboard";
 import EventParticipants from "../components/events/EventParticipants";
 import EventSponsorship from "../components/events/EventSponsorship";
 import EventMeetings from "../components/events/EventMeetings";
+import EventTeams from "../components/events/EventTeams"; // Ensure this path is correct
 
 export default function EventDetails() {
   const { id } = useParams();
@@ -74,13 +75,16 @@ export default function EventDetails() {
             goBack={() => setCurrentView("dashboard")}
           />
         );
+
       case "sponsorship":
         return (
           <EventSponsorship
             eventId={id}
+            eventTitle={eventData.title} // FIXED: Passed title so PDF works
             goBack={() => setCurrentView("dashboard")}
           />
         );
+
       case "attendance_sessions":
         return (
           <EventMeetings
@@ -89,6 +93,16 @@ export default function EventDetails() {
             goBack={() => setCurrentView("dashboard")}
           />
         );
+
+      case "teams": // NEW: Teams View
+        return (
+          <EventTeams
+            eventId={id}
+            eventTitle={eventData.title}
+            goBack={() => setCurrentView("dashboard")}
+          />
+        );
+
       default:
         return (
           <EventDashboard
