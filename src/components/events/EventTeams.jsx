@@ -36,7 +36,6 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
   const [activeTeam, setActiveTeam] = useState(null);
   const [editingMemberIndex, setEditingMemberIndex] = useState(null);
 
-  // UPDATED: Added urn and phone back to state
   const [memberForm, setMemberForm] = useState({
     name: "",
     urn: "",
@@ -57,7 +56,21 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
       id: doc.id,
       ...doc.data(),
     }));
-    setTeams(teamList);
+
+    // UPDATED: Sort so "Core Team" is always first
+    const coreTeam = teamList.find(
+      (t) => t.name.trim().toLowerCase() === "core team",
+    );
+    const otherTeams = teamList.filter(
+      (t) => t.name.trim().toLowerCase() !== "core team",
+    );
+
+    // Combine: Core Team first, then others
+    if (coreTeam) {
+      setTeams([coreTeam, ...otherTeams]);
+    } else {
+      setTeams(teamList);
+    }
   };
 
   // --- TEAM MANAGEMENT ---
@@ -142,7 +155,6 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
       const getIdx = (k) =>
         headers.findIndex((h) => k.some((x) => h.includes(x)));
 
-      // UPDATED: Look for all fields
       const idx = {
         name: getIdx(["name", "student"]),
         urn: getIdx(["urn", "roll"]),
@@ -174,34 +186,62 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
     });
   };
 
-  const generateTeamPDF = (team) => {
+  // --- GLOBAL PDF GENERATION ---
+  const generateAllTeamsPDF = () => {
     const doc = new jsPDF();
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.text(`Team List: ${team.name}`, 14, 15);
+    doc.setFontSize(18);
+    doc.text(`Team Details Report`, 14, 15);
 
-    doc.setFontSize(11);
+    doc.setFontSize(12);
     doc.setFont("helvetica", "normal");
     doc.text(`Event: ${eventTitle || "Event Details"}`, 14, 22);
 
-    // UPDATED: EXCLUDED Phone, Included URN
-    const rows = (team.members || []).map((m, i) => [
-      i + 1,
-      m.name,
-      m.urn || "-",
-      m.branch || "-",
-      m.designation || "-",
-    ]);
+    // Reuse the already sorted state "teams" (Core is already on top)
+    let finalY = 30;
 
-    autoTable(doc, {
-      head: [["S.No", "Student Name", "URN", "Branch", "Designation"]],
-      body: rows,
-      startY: 30,
-      theme: "grid",
-      headStyles: { fillColor: [41, 128, 185] },
+    teams.forEach((team) => {
+      // Check if we need a new page
+      if (finalY > 250) {
+        doc.addPage();
+        finalY = 20;
+      }
+
+      // Team Header
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(0);
+      doc.text(`Team: ${team.name}`, 14, finalY);
+      finalY += 3;
+
+      // Table Data (Phone Excluded)
+      const rows = (team.members || []).map((m, i) => [
+        i + 1,
+        m.name,
+        m.urn || "-",
+        m.branch || "-",
+        m.designation || "-",
+      ]);
+
+      if (rows.length > 0) {
+        autoTable(doc, {
+          startY: finalY,
+          head: [["S.No", "Student Name", "URN", "Branch", "Designation"]],
+          body: rows,
+          theme: "grid",
+          headStyles: { fillColor: [41, 128, 185] },
+          margin: { left: 14, right: 14 },
+        });
+        finalY = doc.lastAutoTable.finalY + 15;
+      } else {
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(10);
+        doc.text("(No members)", 14, finalY + 5);
+        finalY += 15;
+      }
     });
 
-    doc.save(`${team.name}_Members.pdf`);
+    doc.save(`Teams_Report.pdf`);
   };
 
   return (
@@ -218,9 +258,15 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
           </Button>
           <h3 className="fw-bold mb-0">Team Details</h3>
         </div>
-        <Button onClick={() => setShowTeamModal(true)}>
-          <i className="bi bi-plus-lg me-2"></i>Create Team
-        </Button>
+        <div className="d-flex gap-2">
+          {/* Global Export Button */}
+          <Button variant="outline-danger" onClick={generateAllTeamsPDF}>
+            <i className="bi bi-file-earmark-pdf me-2"></i>Export All Teams
+          </Button>
+          <Button onClick={() => setShowTeamModal(true)}>
+            <i className="bi bi-plus-lg me-2"></i>Create Team
+          </Button>
+        </div>
       </div>
 
       {/* TEAMS LIST (Accordion) */}
@@ -276,18 +322,9 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
                     Upload Excel
                   </label>
                 </div>
-
-                <Button
-                  size="sm"
-                  variant="outline-danger"
-                  className="ms-auto"
-                  onClick={() => generateTeamPDF(team)}
-                >
-                  <i className="bi bi-file-earmark-pdf me-2"></i>PDF
-                </Button>
               </div>
 
-              {/* MEMBERS TABLE - Show ALL fields here */}
+              {/* MEMBERS TABLE */}
               <Table hover responsive className="mb-0">
                 <thead className="table-dark">
                   <tr>
@@ -370,7 +407,7 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
         </Modal.Footer>
       </Modal>
 
-      {/* ADD/EDIT MEMBER MODAL - UPDATED FIELDS */}
+      {/* ADD/EDIT MEMBER MODAL */}
       <Modal
         show={showMemberModal}
         onHide={() => setShowMemberModal(false)}
