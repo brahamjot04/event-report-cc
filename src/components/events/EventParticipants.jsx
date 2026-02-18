@@ -11,7 +11,6 @@ import {
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import {
-  Accordion,
   Table,
   Badge,
   Modal,
@@ -21,7 +20,10 @@ import {
   Col,
   InputGroup,
   ListGroup,
+  Dropdown,
+  Card,
 } from "react-bootstrap";
+import { uploadToGitHub } from "../../utils/github";
 import readXlsxFile from "read-excel-file";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -45,15 +47,18 @@ export default function EventParticipants({
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showProofModal, setShowProofModal] = useState(false);
 
+  const [uploadingProof, setUploadingProof] = useState(false);
+
   // Forms State
   const [newItemName, setNewItemName] = useState("");
   const [newItemCategory, setNewItemCategory] = useState("");
   const [newCategoryInput, setNewCategoryInput] = useState("");
+  const [newItemIsGroup, setNewItemIsGroup] = useState(false);
+  const [editingItemId, setEditingItemId] = useState(null);
 
   const [activeItem, setActiveItem] = useState(null);
   const [editingIndex, setEditingIndex] = useState(null);
 
-  // UPDATED: Replaced 'category' with 'position'
   const [partForm, setPartForm] = useState({
     name: "",
     crn: "",
@@ -61,6 +66,7 @@ export default function EventParticipants({
     branch: "",
     phone: "",
     position: "",
+    teamName: "",
   });
 
   useEffect(() => {
@@ -91,18 +97,31 @@ export default function EventParticipants({
 
   const handleAddItem = async () => {
     if (!newItemName) return;
-    await addDoc(collection(db, "events", eventId, "items"), {
-      name: newItemName,
-      category: newItemCategory,
-      participants: [],
-    });
+    if (editingItemId) {
+      // update existing
+      await updateDoc(doc(db, "events", eventId, "items", editingItemId), {
+        name: newItemName,
+        category: newItemCategory,
+        isGroupEvent: !!newItemIsGroup,
+      });
+      setEditingItemId(null);
+    } else {
+      await addDoc(collection(db, "events", eventId, "items"), {
+        name: newItemName,
+        category: newItemCategory,
+        isGroupEvent: !!newItemIsGroup,
+        participants: [],
+      });
+    }
     fetchItems();
     setShowItemModal(false);
     setNewItemName("");
     setNewItemCategory("");
+    setNewItemIsGroup(false);
   };
 
-  const handleDeleteItem = async (itemId) => {
+  const handleDeleteItem = async (e, itemId) => {
+    e.stopPropagation();
     if (window.confirm("Delete Sub-Event?")) {
       await deleteDoc(doc(db, "events", eventId, "items", itemId));
       fetchItems();
@@ -112,35 +131,32 @@ export default function EventParticipants({
   const handleSaveParticipant = async () => {
     if (!activeItem) return;
     let u = [...(activeItem.participants || [])];
-    if (editingIndex !== null) u[editingIndex] = partForm;
-    else u.push(partForm);
+    const participantPayload = { ...partForm };
+    if (editingIndex !== null) u[editingIndex] = participantPayload;
+    else u.push(participantPayload);
 
     await updateDoc(doc(db, "events", eventId, "items", activeItem.id), {
       participants: u,
     });
-    fetchItems();
+    // Update local state immediately for better UX
+    setActiveItem({ ...activeItem, participants: u });
+    fetchItems(); // Background sync
     setShowPartModal(false);
   };
 
-  const handleDeleteParticipant = async (idx, item) => {
+  const handleDeleteParticipant = async (idx) => {
     if (!window.confirm("Remove Student?")) return;
-    const p = item.participants.filter((_, i) => i !== idx);
-    await updateDoc(doc(db, "events", eventId, "items", item.id), {
+    const p = activeItem.participants.filter((_, i) => i !== idx);
+    await updateDoc(doc(db, "events", eventId, "items", activeItem.id), {
       participants: p,
     });
+    setActiveItem({ ...activeItem, participants: p });
     fetchItems();
   };
 
   const formatDate = (date) => {
     if (!date) return "";
-    let dateObj;
-    if (typeof date === "string") {
-      dateObj = new Date(date);
-    } else if (date instanceof Date) {
-      dateObj = date;
-    } else {
-      return "";
-    }
+    let dateObj = typeof date === "string" ? new Date(date) : date;
     const day = String(dateObj.getDate()).padStart(2, "0");
     const month = String(dateObj.getMonth() + 1).padStart(2, "0");
     const year = dateObj.getFullYear();
@@ -160,8 +176,8 @@ export default function EventParticipants({
         urn: getIdx(["urn"]),
         branch: getIdx(["branch"]),
         phone: getIdx(["phone"]),
-        // UPDATED: Look for position columns
         pos: getIdx(["position", "role", "designation"]),
+        team: getIdx(["team", "teamname", "group", "team_name"]),
       };
       const n = r
         .slice(1)
@@ -171,8 +187,8 @@ export default function EventParticipants({
           urn: idx.urn > -1 ? row[idx.urn] : "",
           branch: idx.branch > -1 ? row[idx.branch] : "",
           phone: idx.phone > -1 ? row[idx.phone] : "",
-          // UPDATED: Map to position
           position: idx.pos > -1 ? row[idx.pos] : "",
+          teamName: idx.team > -1 ? row[idx.team] : "",
         }))
         .filter((x) => x.name);
 
@@ -180,6 +196,7 @@ export default function EventParticipants({
       updateDoc(doc(db, "events", eventId, "items", activeItem.id), {
         participants: u,
       });
+      setActiveItem({ ...activeItem, participants: u });
       fetchItems();
       alert("Imported!");
     });
@@ -190,32 +207,18 @@ export default function EventParticipants({
     const pageWidth = doc.internal.pageSize.getWidth();
     const centerX = pageWidth / 2;
 
-    // --- 1. HEADER ---
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
-    doc.text(
-      "Guru Nanak Dev Engineering College, Gill Park, Ludhiana",
-      centerX,
-      15,
-      { align: "center" },
-    );
-
+    doc.text("Guru Nanak Dev Engineering College", centerX, 15, {
+      align: "center",
+    });
     doc.setFontSize(12);
     doc.text("Cultural Committee", centerX, 22, { align: "center" });
-
-    doc.text(
-      `Event Report - ${initialEventData.title} (${formatDate(initialEventData.date)} to ${formatDate(initialEventData.endDate)})`,
-      centerX,
-      29,
-      { align: "center" },
-    );
-
-    doc.text(`Venue - ${initialEventData.venue}`, centerX, 36, {
+    doc.text(`Event Report - ${initialEventData.title}`, centerX, 29, {
       align: "center",
     });
 
-    // --- 2. PROOF LINK ---
-    let startY = 45;
+    let startY = 40;
     if (eventProofUrl) {
       doc.setFontSize(10);
       doc.setTextColor(0, 0, 255);
@@ -226,15 +229,12 @@ export default function EventParticipants({
       startY += 8;
     }
 
-    // --- 3. TABLES ---
     let finalY = startY;
-
     items.forEach((item) => {
       if (finalY > 180) {
         doc.addPage();
         finalY = 20;
       }
-
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
       doc.text(`${item.name} (${item.category || "General"})`, 14, finalY);
@@ -246,7 +246,7 @@ export default function EventParticipants({
         p.urn,
         p.crn,
         p.branch,
-        p.position || "-", // UPDATED: PDF now shows Position
+        p.position || "-",
       ]);
 
       autoTable(doc, {
@@ -261,11 +261,8 @@ export default function EventParticipants({
         },
         styles: { fontSize: 10, cellPadding: 2 },
       });
-
       finalY = doc.lastAutoTable.finalY + 10;
     });
-
-    // UPDATED: Removed Signature Block
     doc.save(`${initialEventData.title}_Report.pdf`);
   };
 
@@ -274,341 +271,796 @@ export default function EventParticipants({
     setShowProofModal(false);
   };
 
-  return (
-    <>
-      {/* HEADER */}
-      <div className="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between mb-4 gap-3">
-        <div className="d-flex align-items-center">
+  // Helper for initials
+  const getInitials = (name) =>
+    name ? name.substring(0, 2).toUpperCase() : "SE";
+
+  // --- RENDER: PARTICIPANT LIST VIEW (DRILL DOWN) ---
+  if (activeItem) {
+    const groupedParticipants = (activeItem.participants || []).reduce(
+      (acc, p) => {
+        const key = (p.teamName || p.team || "No Team").toString() || "No Team";
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(p);
+        return acc;
+      },
+      {},
+    );
+    return (
+      <>
+        <div className="d-flex align-items-center mb-4 gap-3">
           <Button
             variant="outline-secondary"
-            className="me-3 rounded-circle"
-            onClick={goBack}
+            className="me-3 rounded-circle shadow-sm"
+            style={{
+              width: "40px",
+              height: "40px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onClick={() => setActiveItem(null)}
           >
             <i className="bi bi-arrow-left"></i>
           </Button>
-          <h3 className="fw-bold mb-0">Participant Details</h3>
+          <div>
+            <h3 className="fw-bold mb-0">{activeItem.name}</h3>
+            <span className="text-muted small">
+              <Badge
+                className="category-badge me-2"
+                style={{
+                  backgroundColor: "var(--soft-hover)",
+                  color: "var(--text-primary)",
+                  border: "1px solid var(--border-color)",
+                }}
+              >
+                {activeItem.category || "General"}
+              </Badge>
+              {activeItem.participants?.length || 0} Participants
+            </span>
+          </div>
+          <div className="ms-auto d-flex gap-2">
+            <Button
+              variant="primary"
+              className="d-flex align-items-center gap-2"
+              onClick={() => {
+                setEditingIndex(null);
+                setPartForm({
+                  name: "",
+                  crn: "",
+                  urn: "",
+                  branch: "",
+                  phone: "",
+                  position: "",
+                  teamName: "",
+                });
+                setShowPartModal(true);
+              }}
+            >
+              <i className="bi bi-person-plus-fill"></i>{" "}
+              <span className="d-none d-md-inline">Add Student</span>
+            </Button>
+
+            <div className="d-inline-block">
+              <input
+                type="file"
+                id="excel-upload"
+                hidden
+                accept=".xlsx,.xls"
+                onChange={handleFileUpload}
+              />
+              <label
+                htmlFor="excel-upload"
+                className="btn btn-success text-white mb-0 d-flex align-items-center gap-2"
+                style={{ height: "100%" }}
+              >
+                <i className="bi bi-file-earmark-spreadsheet-fill"></i>{" "}
+                <span className="d-none d-md-inline">Import Excel</span>
+              </label>
+            </div>
+          </div>
         </div>
 
-        <div className="d-flex flex-wrap gap-2">
-          <Button
-            variant="outline-success"
-            onClick={() => setShowProofModal(true)}
-          >
-            <i className="bi bi-link-45deg me-1"></i>{" "}
-            {eventProofUrl ? "Proof Linked" : "Link Proof"}
-          </Button>
-          <Button variant="outline-danger" onClick={generatePDF}>
-            <i className="bi bi-file-earmark-pdf me-1"></i> Report
-          </Button>
-          <Button
-            variant="info"
-            className="text-white"
-            onClick={() => setShowCategoryModal(true)}
-          >
-            <i className="bi bi-tags me-1"></i> Categories
-          </Button>
-          <Button variant="primary" onClick={() => setShowItemModal(true)}>
-            <i className="bi bi-plus-lg me-1"></i> Sub-Event
-          </Button>
-        </div>
-      </div>
-
-      {/* LIST */}
-      <Accordion defaultActiveKey="0">
-        {items.map((item, index) => (
-          <Accordion.Item
-            eventKey={index.toString()}
-            key={item.id}
-            className="mb-3 border-0 shadow-sm overflow-hidden"
-          >
-            <Accordion.Header>
-              <span className="fw-bold me-2">{item.name}</span>
-              {item.category && (
-                <Badge bg="info" className="me-2 text-dark">
-                  {item.category}
-                </Badge>
-              )}
-              <Badge bg="secondary">{item.participants?.length || 0}</Badge>
-            </Accordion.Header>
-
-            <Accordion.Body className="p-0">
-              <div className="p-3 d-flex gap-2 align-items-center border-bottom bg-body-tertiary">
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={() => {
-                    setActiveItem(item);
-                    setEditingIndex(null);
-                    setPartForm({});
-                    setShowPartModal(true);
-                  }}
-                >
-                  Add Student
-                </Button>
-
-                <div className="d-inline-block">
-                  <input
-                    type="file"
-                    id={`f-${item.id}`}
-                    hidden
-                    accept=".xlsx,.xls"
-                    onClick={() => setActiveItem(item)}
-                    onChange={handleFileUpload}
-                  />
-                  <label
-                    htmlFor={`f-${item.id}`}
-                    className="btn btn-outline-primary btn-sm mb-0"
-                  >
-                    Upload Excel
-                  </label>
-                </div>
-
-                <Button
-                  size="sm"
-                  variant="outline-danger"
-                  className="ms-auto"
-                  onClick={() => handleDeleteItem(item.id)}
-                >
-                  <i className="bi bi-trash"></i>
-                </Button>
+        <div className="soft-card p-0 overflow-hidden shadow-sm">
+          {activeItem.isGroupEvent ? (
+            Object.keys(groupedParticipants).length === 0 ? (
+              <div className="p-4 text-center text-muted">
+                No participants added yet.
               </div>
-
-              <Table hover responsive className="mb-0">
-                <thead className="table-dark">
+            ) : (
+              Object.entries(groupedParticipants).map(([team, list]) => (
+                <div key={team} className="p-3">
+                  <h6 className="fw-bold mb-2">{team}</h6>
+                  <Table hover responsive className="mb-3 align-middle">
+                    <thead style={{ backgroundColor: "var(--soft-hover)" }}>
+                      <tr>
+                        <th
+                          className="ps-4 py-3 text-secondary text-uppercase small"
+                          style={{ width: "5%" }}
+                        >
+                          #
+                        </th>
+                        <th className="text-secondary text-uppercase small">
+                          Student Name
+                        </th>
+                        <th className="text-secondary text-uppercase small">
+                          URN
+                        </th>
+                        <th className="text-secondary text-uppercase small">
+                          Branch
+                        </th>
+                        <th className="text-secondary text-uppercase small">
+                          Position
+                        </th>
+                        <th className="text-end pe-4 text-secondary text-uppercase small">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {list.map((p, idx) => (
+                        <tr
+                          key={idx}
+                          style={{
+                            borderBottom: "1px solid var(--border-color)",
+                          }}
+                        >
+                          <td className="ps-4 text-muted">{idx + 1}</td>
+                          <td className="fw-bold text-body">{p.name}</td>
+                          <td className="text-muted">
+                            <code className="text-primary">{p.urn}</code>
+                          </td>
+                          <td className="text-muted small">
+                            {p.branch || "-"}
+                          </td>
+                          <td>
+                            {p.position ? (
+                              <Badge bg="warning" text="dark">
+                                {p.position}
+                              </Badge>
+                            ) : (
+                              "-"
+                            )}
+                          </td>
+                          <td className="text-end pe-4">
+                            <div className="d-flex justify-content-end gap-2">
+                              <Button
+                                size="sm"
+                                variant="light"
+                                className="border-0 bg-transparent text-primary p-1"
+                                onClick={() => {
+                                  const g = activeItem.participants.findIndex(
+                                    (pp) => pp === p,
+                                  );
+                                  setEditingIndex(g);
+                                  setPartForm(p);
+                                  setShowPartModal(true);
+                                }}
+                              >
+                                <i className="bi bi-pencil-fill"></i>
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="light"
+                                className="border-0 bg-transparent text-danger p-1"
+                                onClick={() => {
+                                  const g = activeItem.participants.findIndex(
+                                    (pp) => pp === p,
+                                  );
+                                  handleDeleteParticipant(g);
+                                }}
+                              >
+                                <i className="bi bi-trash-fill"></i>
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </div>
+              ))
+            )
+          ) : (
+            <Table hover responsive className="mb-0 align-middle">
+              <thead style={{ backgroundColor: "var(--soft-hover)" }}>
+                <tr>
+                  <th
+                    className="ps-4 py-3 text-secondary text-uppercase small"
+                    style={{ width: "5%" }}
+                  >
+                    #
+                  </th>
+                  <th className="text-secondary text-uppercase small">
+                    Student Name
+                  </th>
+                  <th className="text-secondary text-uppercase small">URN</th>
+                  <th className="text-secondary text-uppercase small">
+                    Branch
+                  </th>
+                  <th className="text-secondary text-uppercase small">
+                    Position
+                  </th>
+                  <th className="text-end pe-4 text-secondary text-uppercase small">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {!activeItem.participants ||
+                activeItem.participants.length === 0 ? (
                   <tr>
-                    <th>#</th>
-                    <th>Name</th>
-                    <th>URN</th>
-                    <th>Branch</th>
-                    <th>Phone</th>
-                    <th>Position</th> {/* UPDATED LABEL */}
-                    <th>Action</th>
+                    <td colSpan="6" className="text-center py-5 text-muted">
+                      <i className="bi bi-people display-4 opacity-25 d-block mb-3"></i>
+                      No participants added yet.
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {item.participants?.map((p, idx) => (
-                    <tr key={idx}>
-                      <td>{idx + 1}</td>
-                      <td className="fw-bold">{p.name}</td>
-                      <td>{p.urn}</td>
-                      <td>{p.branch}</td>
-                      <td>{p.phone}</td>
-                      <td>{p.position || "-"}</td> {/* UPDATED DATA */}
+                ) : (
+                  activeItem.participants.map((p, idx) => (
+                    <tr
+                      key={idx}
+                      style={{ borderBottom: "1px solid var(--border-color)" }}
+                    >
+                      <td className="ps-4 text-muted">{idx + 1}</td>
+                      <td className="fw-bold text-body">{p.name}</td>
+                      <td className="text-muted">
+                        <code className="text-primary">{p.urn}</code>
+                      </td>
+                      <td className="text-muted small">{p.branch || "-"}</td>
                       <td>
-                        <div className="d-flex gap-2">
-                          {/* UPDATED: Pencil Icon for Edit */}
+                        {p.position ? (
+                          <Badge bg="warning" text="dark">
+                            {p.position}
+                          </Badge>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                      <td className="text-end pe-4">
+                        <div className="d-flex justify-content-end gap-2">
                           <Button
                             size="sm"
-                            variant="outline-secondary"
-                            className="border-0"
+                            variant="light"
+                            className="border-0 bg-transparent text-primary p-1"
                             onClick={() => {
-                              setActiveItem(item);
                               setEditingIndex(idx);
                               setPartForm(p);
                               setShowPartModal(true);
                             }}
                           >
-                            <i className="bi bi-pencil-fill text-primary"></i>
+                            <i className="bi bi-pencil-fill"></i>
                           </Button>
-
-                          {/* UPDATED: Trash Icon for Delete */}
                           <Button
                             size="sm"
-                            variant="outline-secondary"
-                            className="border-0"
-                            onClick={() => handleDeleteParticipant(idx, item)}
+                            variant="light"
+                            className="border-0 bg-transparent text-danger p-1"
+                            onClick={() => handleDeleteParticipant(idx)}
                           >
-                            <i className="bi bi-trash-fill text-danger"></i>
+                            <i className="bi bi-trash-fill"></i>
                           </Button>
                         </div>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </Accordion.Body>
-          </Accordion.Item>
-        ))}
-      </Accordion>
+                  ))
+                )}
+              </tbody>
+            </Table>
+          )}
+        </div>
 
-      {/* --- MODALS --- */}
-      <Modal
-        show={showCategoryModal}
-        onHide={() => setShowCategoryModal(false)}
-        centered
-      >
-        <Modal.Header closeButton>
-          <Modal.Title>Manage Categories</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <ListGroup className="mb-3">
-            {categories.map((cat, idx) => (
-              <ListGroup.Item
-                key={idx}
-                className="d-flex justify-content-between"
-              >
-                {cat}{" "}
-                <i
-                  className="bi bi-trash text-danger cursor-pointer"
-                  onClick={() => handleDeleteCategory(cat)}
-                ></i>
-              </ListGroup.Item>
-            ))}
-          </ListGroup>
-          <InputGroup>
-            <Form.Control
-              placeholder="New Category"
-              value={newCategoryInput}
-              onChange={(e) => setNewCategoryInput(e.target.value)}
-            />
-            <Button onClick={handleAddCategory}>Add</Button>
-          </InputGroup>
-        </Modal.Body>
-      </Modal>
+        {/* Modals are rendered below */}
+        {renderModals()}
+      </>
+    );
+  }
 
-      <Modal
-        show={showItemModal}
-        onHide={() => setShowItemModal(false)}
-        centered
-      >
-        <Modal.Header closeButton>
-          <Modal.Title>New Sub-Event</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Form.Group className="mb-3">
-            <Form.Label>Name</Form.Label>
-            <Form.Control
-              value={newItemName}
-              onChange={(e) => setNewItemName(e.target.value)}
-            />
-          </Form.Group>
-          <Form.Group>
-            <Form.Label>Category</Form.Label>
-            <Form.Select
-              value={newItemCategory}
-              onChange={(e) => setNewItemCategory(e.target.value)}
+  // --- RENDER: SUB-EVENT GRID VIEW ---
+  return (
+    <>
+      <div className="d-flex align-items-center mb-4">
+        <Button
+          variant="outline-secondary"
+          className="me-3 rounded-circle shadow-sm"
+          style={{
+            width: "40px",
+            height: "40px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onClick={goBack}
+        >
+          <i className="bi bi-arrow-left"></i>
+        </Button>
+        <div>
+          <h3 className="fw-bold mb-0">Event Participants</h3>
+          <p className="text-muted small mb-0">
+            Manage sub-events and student lists
+          </p>
+        </div>
+
+        <div className="ms-auto d-flex gap-2">
+          <Button
+            variant="outline-success"
+            onClick={() => setShowProofModal(true)}
+            size="sm"
+            className="d-flex align-items-center"
+          >
+            <i className="bi bi-link-45deg me-1"></i>{" "}
+            {eventProofUrl ? "Proof Linked" : "Link Proof"}
+          </Button>
+          <Button
+            variant="outline-danger"
+            onClick={generatePDF}
+            size="sm"
+            className="d-flex align-items-center"
+          >
+            <i className="bi bi-file-earmark-pdf me-1"></i> Report
+          </Button>
+          <Button
+            variant="info"
+            className="text-white d-flex align-items-center"
+            onClick={() => setShowCategoryModal(true)}
+            size="sm"
+          >
+            <i className="bi bi-tags me-1"></i> Cats
+          </Button>
+        </div>
+      </div>
+
+      <Row className="g-4">
+        {/* Add New Sub-Event Card (render first) */}
+        <Col md={6} lg={4}>
+          <div
+            className="h-100 d-flex flex-column align-items-center justify-content-center text-center p-4"
+            style={{
+              border: "2px dashed var(--border-dashed)",
+              borderRadius: "16px",
+              cursor: "pointer",
+              minHeight: "180px",
+              color: "var(--text-muted)",
+              backgroundColor: "transparent",
+            }}
+            onClick={() => {
+              setNewItemName("");
+              setNewItemCategory("");
+              setNewItemIsGroup(false);
+              setEditingItemId(null);
+              setShowItemModal(true);
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = "#0d6efd";
+              e.currentTarget.style.color = "#0d6efd";
+              e.currentTarget.style.backgroundColor =
+                "rgba(13, 110, 253, 0.05)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "var(--border-dashed)";
+              e.currentTarget.style.color = "var(--text-muted)";
+              e.currentTarget.style.backgroundColor = "transparent";
+            }}
+          >
+            <div
+              className="avatar-circle mb-3"
+              style={{
+                width: "50px",
+                height: "50px",
+                backgroundColor: "var(--soft-hover)",
+                color: "inherit",
+              }}
             >
-              <option value="">Select...</option>
-              {categories.map((c, i) => (
-                <option key={i} value={c}>
-                  {c}
-                </option>
-              ))}
-            </Form.Select>
-          </Form.Group>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button onClick={handleAddItem}>Create</Button>
-        </Modal.Footer>
-      </Modal>
+              <i className="bi bi-plus-lg fs-4"></i>
+            </div>
+            <h6 className="fw-bold mb-1">Create Sub-Event</h6>
+            <small>Add new competition/activity</small>
+          </div>
+        </Col>
 
-      <Modal
-        show={showPartModal}
-        onHide={() => setShowPartModal(false)}
-        centered
-        size="lg"
-      >
-        <Modal.Header closeButton>
-          <Modal.Title>Student Details</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Form className="d-grid gap-3">
-            <Row>
-              <Col>
-                <Form.Control
-                  placeholder="Name"
-                  value={partForm.name || ""}
-                  onChange={(e) =>
-                    setPartForm({ ...partForm, name: e.target.value })
-                  }
-                />
-              </Col>
-              <Col>
-                <Form.Control
-                  placeholder="Phone"
-                  value={partForm.phone || ""}
-                  onChange={(e) =>
-                    setPartForm({ ...partForm, phone: e.target.value })
-                  }
-                />
-              </Col>
-            </Row>
-            <Row>
-              <Col>
-                <Form.Control
-                  placeholder="CRN"
-                  value={partForm.crn || ""}
-                  onChange={(e) =>
-                    setPartForm({ ...partForm, crn: e.target.value })
-                  }
-                />
-              </Col>
-              <Col>
-                <Form.Control
-                  placeholder="URN"
-                  value={partForm.urn || ""}
-                  onChange={(e) =>
-                    setPartForm({ ...partForm, urn: e.target.value })
-                  }
-                />
-              </Col>
-            </Row>
-            <Row>
-              <Col>
-                <Form.Control
-                  placeholder="Branch"
-                  value={partForm.branch || ""}
-                  onChange={(e) =>
-                    setPartForm({ ...partForm, branch: e.target.value })
-                  }
-                />
-              </Col>
+        {items.map((item) => (
+          <Col md={6} lg={4} key={item.id}>
+            <div
+              className="soft-card h-100 d-flex flex-column position-relative text-start"
+              style={{ cursor: "pointer", minHeight: "180px" }}
+              onClick={() => setActiveItem(item)}
+            >
+              <div className="d-flex justify-content-between align-items-start mb-3">
+                <Badge
+                  className="category-badge fw-normal"
+                  style={{
+                    backgroundColor: "var(--soft-hover)",
+                    color: "var(--text-primary)",
+                    border: "1px solid var(--border-color)",
+                  }}
+                >
+                  {item.category || "General"}
+                </Badge>
 
-              {/* UPDATED: Replaced Category Select with Optional Position Input */}
-              <Col>
-                <Form.Control
-                  placeholder="Position (Optional)"
-                  value={partForm.position || ""}
-                  onChange={(e) =>
-                    setPartForm({ ...partForm, position: e.target.value })
-                  }
-                />
-              </Col>
-            </Row>
-          </Form>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button onClick={handleSaveParticipant}>Save</Button>
-        </Modal.Footer>
-      </Modal>
+                <Dropdown onClick={(e) => e.stopPropagation()}>
+                  <Dropdown.Toggle
+                    variant="link"
+                    className="text-muted p-0 no-caret"
+                  >
+                    <i className="bi bi-three-dots"></i>
+                  </Dropdown.Toggle>
+                  <Dropdown.Menu align="end">
+                    <Dropdown.Item
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingItemId(item.id);
+                        setNewItemName(item.name || "");
+                        setNewItemCategory(item.category || "");
+                        setNewItemIsGroup(!!item.isGroupEvent);
+                        setShowItemModal(true);
+                      }}
+                    >
+                      <i className="bi bi-pencil-fill me-2"></i>Edit
+                    </Dropdown.Item>
+                    <Dropdown.Item
+                      className="text-danger"
+                      onClick={(e) => handleDeleteItem(e, item.id)}
+                    >
+                      <i className="bi bi-trash me-2"></i>Delete
+                    </Dropdown.Item>
+                  </Dropdown.Menu>
+                </Dropdown>
+              </div>
 
-      <Modal
-        show={showProofModal}
-        onHide={() => setShowProofModal(false)}
-        centered
-      >
-        <Modal.Header closeButton>
-          <Modal.Title>Link Event Proof</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Form.Group>
-            <Form.Label>Proof URL (Drive/Photos Link)</Form.Label>
-            <Form.Control
-              placeholder="https://..."
-              value={eventProofUrl}
-              onChange={(e) => setEventProofUrl(e.target.value)}
-            />
-          </Form.Group>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowProofModal(false)}>
-            Cancel
-          </Button>
-          <Button variant="primary" onClick={handleSaveProof}>
-            Save Link
-          </Button>
-        </Modal.Footer>
-      </Modal>
+              <div className="d-flex align-items-center mb-3">
+                <div
+                  className="avatar-circle me-3 flex-shrink-0"
+                  style={{
+                    width: "45px",
+                    height: "45px",
+                    fontSize: "1.2rem",
+                    backgroundColor: "var(--soft-hover)",
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  {getInitials(item.name)}
+                </div>
+                <h5 className="fw-bold mb-0 text-truncate">{item.name}</h5>
+              </div>
+
+              <div
+                className="mt-auto pt-3 border-top d-flex align-items-center justify-content-between"
+                style={{ borderColor: "var(--border-color)" }}
+              >
+                <div className="small text-muted">
+                  <i className="bi bi-people-fill me-2"></i>
+                  {item.participants?.length || 0} Students
+                </div>
+                <Button size="sm" className="soft-open-btn rounded-pill px-3">
+                  Open <i className="bi bi-arrow-right ms-1"></i>
+                </Button>
+              </div>
+            </div>
+          </Col>
+        ))}
+      </Row>
+
+      {renderModals()}
     </>
   );
+
+  function renderModals() {
+    return (
+      <>
+        {/* CATEGORY MODAL */}
+        <Modal
+          show={showCategoryModal}
+          onHide={() => setShowCategoryModal(false)}
+          centered
+        >
+          <div className="soft-card border-0 p-0 overflow-hidden">
+            <Modal.Header
+              closeButton
+              className="border-bottom"
+              style={{ borderColor: "var(--border-color)" }}
+            >
+              <Modal.Title className="fw-bold h5">
+                Manage Categories
+              </Modal.Title>
+            </Modal.Header>
+            <Modal.Body className="p-4">
+              <ListGroup className="mb-3">
+                {categories.map((cat, idx) => (
+                  <ListGroup.Item
+                    key={idx}
+                    className="d-flex justify-content-between align-items-center bg-transparent border-bottom"
+                    style={{ borderColor: "var(--border-color)" }}
+                  >
+                    {cat}
+                    <i
+                      className="bi bi-trash text-danger cursor-pointer"
+                      onClick={() => handleDeleteCategory(cat)}
+                    ></i>
+                  </ListGroup.Item>
+                ))}
+              </ListGroup>
+              <InputGroup>
+                <Form.Control
+                  placeholder="New Category"
+                  className="form-control"
+                  value={newCategoryInput}
+                  onChange={(e) => setNewCategoryInput(e.target.value)}
+                />
+                <Button onClick={handleAddCategory} variant="primary">
+                  Add
+                </Button>
+              </InputGroup>
+            </Modal.Body>
+          </div>
+        </Modal>
+
+        {/* ITEM MODAL */}
+        <Modal
+          show={showItemModal}
+          onHide={() => setShowItemModal(false)}
+          centered
+        >
+          <div className="soft-card border-0 p-0 overflow-hidden">
+            <Modal.Header
+              closeButton
+              className="border-bottom"
+              style={{ borderColor: "var(--border-color)" }}
+            >
+              <Modal.Title className="fw-bold h5">New Sub-Event</Modal.Title>
+            </Modal.Header>
+            <Modal.Body className="p-4">
+              <Form.Group className="mb-3">
+                <Form.Label className="small fw-bold text-muted">
+                  NAME
+                </Form.Label>
+                <Form.Control
+                  className="form-control"
+                  value={newItemName}
+                  onChange={(e) => setNewItemName(e.target.value)}
+                />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Check
+                  type="switch"
+                  id="isGroupSwitch"
+                  label="Group Event (teams)"
+                  checked={newItemIsGroup}
+                  onChange={(e) => setNewItemIsGroup(e.target.checked)}
+                />
+              </Form.Group>
+              <Form.Group>
+                <Form.Label className="small fw-bold text-muted">
+                  CATEGORY
+                </Form.Label>
+                <Form.Select
+                  className="form-select"
+                  value={newItemCategory}
+                  onChange={(e) => setNewItemCategory(e.target.value)}
+                >
+                  <option value="">Select...</option>
+                  {categories.map((c, i) => (
+                    <option key={i} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </Form.Select>
+              </Form.Group>
+            </Modal.Body>
+            <Modal.Footer className="border-0 p-3 pt-0">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowItemModal(false);
+                  setEditingItemId(null);
+                  setNewItemIsGroup(false);
+                }}
+                className="me-2"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleAddItem}
+                className="w-100"
+              >
+                {editingItemId ? "Save Changes" : "Create Sub-Event"}
+              </Button>
+            </Modal.Footer>
+          </div>
+        </Modal>
+
+        {/* PARTICIPANT MODAL */}
+        <Modal
+          show={showPartModal}
+          onHide={() => setShowPartModal(false)}
+          centered
+          size="lg"
+        >
+          <div className="soft-card border-0 p-0 overflow-hidden">
+            <Modal.Header
+              closeButton
+              className="border-bottom"
+              style={{ borderColor: "var(--border-color)" }}
+            >
+              <Modal.Title className="fw-bold h5">Student Details</Modal.Title>
+            </Modal.Header>
+            <Modal.Body className="p-4">
+              <Form className="d-grid gap-3">
+                <Row>
+                  <Col>
+                    <Form.Control
+                      placeholder="Name"
+                      className="form-control"
+                      value={partForm.name || ""}
+                      onChange={(e) =>
+                        setPartForm({ ...partForm, name: e.target.value })
+                      }
+                    />
+                  </Col>
+                  <Col>
+                    <Form.Control
+                      placeholder="Phone"
+                      className="form-control"
+                      value={partForm.phone || ""}
+                      onChange={(e) =>
+                        setPartForm({ ...partForm, phone: e.target.value })
+                      }
+                    />
+                  </Col>
+                </Row>
+                <Row>
+                  <Col>
+                    <Form.Control
+                      placeholder="CRN"
+                      className="form-control"
+                      value={partForm.crn || ""}
+                      onChange={(e) =>
+                        setPartForm({ ...partForm, crn: e.target.value })
+                      }
+                    />
+                  </Col>
+                  <Col>
+                    <Form.Control
+                      placeholder="URN"
+                      className="form-control"
+                      value={partForm.urn || ""}
+                      onChange={(e) =>
+                        setPartForm({ ...partForm, urn: e.target.value })
+                      }
+                    />
+                  </Col>
+                </Row>
+                <Row>
+                  <Col>
+                    <Form.Control
+                      placeholder="Branch"
+                      className="form-control"
+                      value={partForm.branch || ""}
+                      onChange={(e) =>
+                        setPartForm({ ...partForm, branch: e.target.value })
+                      }
+                    />
+                  </Col>
+                  <Col>
+                    <Form.Control
+                      placeholder="Position (Optional)"
+                      className="form-control"
+                      value={partForm.position || ""}
+                      onChange={(e) =>
+                        setPartForm({ ...partForm, position: e.target.value })
+                      }
+                    />
+                  </Col>
+                </Row>
+                {activeItem?.isGroupEvent && (
+                  <Row>
+                    <Col>
+                      <Form.Control
+                        placeholder="Team Name"
+                        className="form-control"
+                        value={partForm.teamName || ""}
+                        onChange={(e) =>
+                          setPartForm({ ...partForm, teamName: e.target.value })
+                        }
+                      />
+                    </Col>
+                  </Row>
+                )}
+              </Form>
+            </Modal.Body>
+            <Modal.Footer className="border-0 p-3 pt-0">
+              <Button onClick={handleSaveParticipant} variant="primary">
+                Save Student
+              </Button>
+            </Modal.Footer>
+          </div>
+        </Modal>
+
+        {/* PROOF MODAL */}
+        <Modal
+          show={showProofModal}
+          onHide={() => setShowProofModal(false)}
+          centered
+        >
+          <div className="soft-card border-0 p-0 overflow-hidden">
+            <Modal.Header
+              closeButton
+              className="border-bottom"
+              style={{ borderColor: "var(--border-color)" }}
+            >
+              <Modal.Title className="fw-bold h5">Link Event Proof</Modal.Title>
+            </Modal.Header>
+            <Modal.Body className="p-4">
+              <Form.Group className="mb-3">
+                <Form.Label className="small fw-bold text-muted">
+                  URL (Drive/Photos)
+                </Form.Label>
+                <Form.Control
+                  placeholder="https://..."
+                  className="form-control"
+                  value={eventProofUrl}
+                  onChange={(e) => setEventProofUrl(e.target.value)}
+                />
+              </Form.Group>
+              <div className="text-center my-3 text-muted small">- OR -</div>
+              <Form.Group>
+                <Form.Label className="small fw-bold text-muted">
+                  Upload File
+                </Form.Label>
+                <div className="d-flex gap-2">
+                  <input
+                    id={`proof-file-${eventId}`}
+                    type="file"
+                    accept="application/pdf,image/*"
+                    style={{ display: "none" }}
+                    onChange={async (e) => {
+                      const f = e.target.files[0];
+                      if (!f) return;
+                      try {
+                        setUploadingProof(true);
+                        const fileName = `${initialEventData?.title || eventId}_proof_${Date.now()}_${f.name}`;
+                        const url = await uploadToGitHub(
+                          f,
+                          fileName,
+                          `proofs/${eventId}`,
+                        );
+                        if (url) {
+                          await updateDoc(doc(db, "events", eventId), {
+                            proofUrl: url,
+                          });
+                          setEventProofUrl(url);
+                          setShowProofModal(false);
+                          alert("Proof uploaded successfully.");
+                        }
+                      } catch (err) {
+                        alert("Upload failed: " + err.message);
+                      } finally {
+                        setUploadingProof(false);
+                        e.target.value = null;
+                      }
+                    }}
+                  />
+                  <label
+                    htmlFor={`proof-file-${eventId}`}
+                    className="btn btn-outline-primary w-100"
+                  >
+                    {uploadingProof
+                      ? "Uploading..."
+                      : "Choose File (PDF/Image)"}
+                  </label>
+                </div>
+              </Form.Group>
+            </Modal.Body>
+            <Modal.Footer className="border-0 p-3 pt-0">
+              <Button
+                variant="primary"
+                onClick={handleSaveProof}
+                className="w-100"
+              >
+                Save Link
+              </Button>
+            </Modal.Footer>
+          </div>
+        </Modal>
+      </>
+    );
+  }
 }

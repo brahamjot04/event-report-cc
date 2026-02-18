@@ -1,4 +1,4 @@
-import { Button, Row, Col, Card } from "react-bootstrap";
+import { Button, Row, Col } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
 
 export default function EventDashboard({
@@ -17,118 +17,98 @@ export default function EventDashboard({
       : dateString;
   };
 
+  // Helper Component for consistent Soft UI cards
+  const DashboardCard = ({ title, subtitle, icon, colorClass, onClick }) => (
+    <Col md={4}>
+      <div
+        className="soft-card h-100 d-flex flex-column align-items-center justify-content-center p-4"
+        onClick={onClick}
+      >
+        <div
+          className={`avatar-circle bg-${colorClass}-subtle text-${colorClass} mb-3`}
+        >
+          <i className={`bi ${icon}`} style={{ fontSize: "2rem" }}></i>
+        </div>
+        <h5 className="fw-bold mb-1">{title}</h5>
+        <small className="text-muted">{subtitle}</small>
+      </div>
+    </Col>
+  );
+
   return (
     <>
-      <div className="d-flex align-items-center mb-4">
+      {/* HEADER SECTION */}
+      <div className="d-flex align-items-center mb-5">
         <Button
           variant="outline-secondary"
-          className="me-3 rounded-circle"
+          className="me-3 rounded-circle shadow-sm"
           onClick={() => navigate("/")}
+          style={{ width: "45px", height: "45px" }}
         >
           <i className="bi bi-arrow-left"></i>
         </Button>
         <div>
-          <h3 className="fw-bold mb-0">{eventData.title}</h3>
-          <span className="text-muted small">
-            <i className="bi bi-geo-alt"></i> {eventData.venue} &bull;{" "}
+          <h2 className="fw-bold mb-0">{eventData.title}</h2>
+          <span className="text-muted small fw-medium">
+            <i className="bi bi-geo-alt-fill text-danger me-1"></i>{" "}
+            {eventData.venue}
+            <span className="mx-2">&bull;</span>
+            <i className="bi bi-calendar-check-fill text-primary me-1"></i>{" "}
             {formatDate(eventData.date)}
           </span>
         </div>
       </div>
 
+      {/* DASHBOARD GRID */}
       <Row className="g-4">
-        {/* 1. PARTICIPANTS */}
-        <Col md={4}>
-          <Card
-            className="h-100 border-0 shadow-sm cursor-pointer card-hover"
-            onClick={() => setView("participants")}
-          >
-            <Card.Body className="p-4 text-center">
-              <div className="mb-3 text-primary">
-                <i
-                  className="bi bi-people-fill"
-                  style={{ fontSize: "3rem" }}
-                ></i>
-              </div>
-              <h5 className="fw-bold text-body">Participants</h5>
-              <small className="text-muted">
-                Manage items, students & categories
-              </small>
-            </Card.Body>
-          </Card>
-        </Col>
+        <DashboardCard
+          title="Participants"
+          subtitle="Manage items, students & categories"
+          icon="bi-people-fill"
+          colorClass="primary"
+          onClick={() => setView("participants")}
+        />
 
-        {/* 2. MEETINGS */}
-        <Col md={4}>
-          <Card
-            className="h-100 border-0 shadow-sm cursor-pointer card-hover"
-            onClick={() => setView("attendance_sessions")}
-          >
-            <Card.Body className="p-4 text-center">
-              <div className="mb-3 text-success">
-                <i
-                  className="bi bi-calendar-check-fill"
-                  style={{ fontSize: "3rem" }}
-                ></i>
-              </div>
-              <h5 className="fw-bold text-body">Meetings</h5>
-              <small className="text-muted">Track committee attendance</small>
-            </Card.Body>
-          </Card>
-        </Col>
+        <DashboardCard
+          title="Meetings"
+          subtitle="Track committee attendance"
+          icon="bi-calendar-check-fill"
+          colorClass="success"
+          onClick={() => setView("attendance_sessions")}
+        />
 
-        {/* 3. TEAMS (NEW) */}
-        <Col md={4}>
-          <Card
-            className="h-100 border-0 shadow-sm cursor-pointer card-hover"
-            // This triggers the view switch
-            onClick={() => setView("teams")}
-          >
-            <Card.Body className="p-4 text-center">
-              <div className="mb-3 text-info">
-                {/* Diagram icon represents structure/teams */}
-                <i
-                  className="bi bi-diagram-3-fill"
-                  style={{ fontSize: "3rem" }}
-                ></i>
-              </div>
-              <h5 className="fw-bold text-body">Teams</h5>
-              <small className="text-muted">Manage committees & members</small>
-            </Card.Body>
-          </Card>
-        </Col>
+        <DashboardCard
+          title="Teams"
+          subtitle="Manage committees & members"
+          icon="bi-diagram-3-fill"
+          colorClass="info"
+          onClick={() => setView("teams")}
+        />
 
-        {/* 4. SPONSORSHIP */}
-        <Col md={4}>
-          <Card
-            className="h-100 border-0 shadow-sm cursor-pointer card-hover"
-            onClick={() => setView("sponsorship")}
-          >
-            <Card.Body className="p-4 text-center">
-              <div className="mb-3 text-warning">
-                <i
-                  className="bi bi-briefcase-fill"
-                  style={{ fontSize: "3rem" }}
-                ></i>
-              </div>
-              <h5 className="fw-bold text-body">Sponsorship</h5>
-              <small className="text-muted">Manage sponsors & funds</small>
-            </Card.Body>
-          </Card>
-        </Col>
-
-        {(userRole === "admin" || userRole === "super_admin") && (
-          <Col md={12} className="mt-5 text-center">
-            <Button
-              variant="link"
-              className="text-danger text-decoration-none"
-              onClick={onDelete}
-            >
-              <i className="bi bi-trash me-2"></i> Delete This Event
-            </Button>
-          </Col>
-        )}
+        <DashboardCard
+          title="Sponsorship"
+          subtitle="Manage sponsors & funds"
+          icon="bi-briefcase-fill"
+          colorClass="warning"
+          onClick={() => setView("sponsorship")}
+        />
       </Row>
+
+      {/* ADMIN ACTIONS */}
+      {(userRole === "admin" || userRole === "super_admin") && (
+        <div
+          className="mt-5 pt-4 text-center border-top"
+          style={{ borderColor: "var(--border-color)" }}
+        >
+          <Button
+            variant="link"
+            className="text-danger text-decoration-none fw-bold opacity-75 hover-opacity-100"
+            onClick={onDelete}
+          >
+            <i className="bi bi-trash3-fill me-2"></i> Delete This Event
+          </Button>
+        </div>
+      )}
     </>
   );
 }

@@ -11,7 +11,7 @@ import EventDashboard from "../components/events/EventDashboard";
 import EventParticipants from "../components/events/EventParticipants";
 import EventSponsorship from "../components/events/EventSponsorship";
 import EventMeetings from "../components/events/EventMeetings";
-import EventTeams from "../components/events/EventTeams"; // Ensure this path is correct
+import EventTeams from "../components/events/EventTeams";
 
 export default function EventDetails() {
   const { id } = useParams();
@@ -57,15 +57,15 @@ export default function EventDetails() {
     }
   };
 
-  if (loading)
-    return (
-      <div className="vh-100 d-flex justify-content-center align-items-center">
-        <Spinner animation="border" />
-      </div>
-    );
-
   // --- VIEW ROUTER ---
   const renderView = () => {
+    if (loading)
+      return (
+        <div className="vh-100 d-flex justify-content-center align-items-center">
+          <Spinner animation="border" variant="primary" />
+        </div>
+      );
+
     switch (currentView) {
       case "participants":
         return (
@@ -80,7 +80,7 @@ export default function EventDetails() {
         return (
           <EventSponsorship
             eventId={id}
-            eventTitle={eventData.title} // FIXED: Passed title so PDF works
+            eventTitle={eventData.title}
             goBack={() => setCurrentView("dashboard")}
           />
         );
@@ -94,7 +94,7 @@ export default function EventDetails() {
           />
         );
 
-      case "teams": // NEW: Teams View
+      case "teams":
         return (
           <EventTeams
             eventId={id}
@@ -104,6 +104,7 @@ export default function EventDetails() {
         );
 
       default:
+        // This is the "Home" of the event details
         return (
           <EventDashboard
             eventData={eventData}
@@ -115,5 +116,6 @@ export default function EventDetails() {
     }
   };
 
+  // Wrap everything in Layout so Sidebar persists even during loading
   return <Layout>{renderView()}</Layout>;
 }

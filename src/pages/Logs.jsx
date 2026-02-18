@@ -84,12 +84,7 @@ export default function Logs() {
     return "secondary";
   };
 
-  if (loading)
-    return (
-      <div className="p-5 text-center">
-        <Spinner animation="border" variant="primary" />
-      </div>
-    );
+  // Render layout immediately and show loading state inside the page
 
   return (
     <Layout>
@@ -102,68 +97,95 @@ export default function Logs() {
         </div>
         <div style={{ width: "300px" }}>
           <InputGroup>
-            <InputGroup.Text className="bg-body-secondary border-end-0">
+            <InputGroup.Text
+              style={{ backgroundColor: "var(--soft-hover)", borderRight: 0 }}
+            >
               <i className="bi bi-search"></i>
             </InputGroup.Text>
             <Form.Control
               placeholder="Search logs..."
-              className="border-start-0 ps-0 bg-body-secondary"
+              style={{
+                backgroundColor: "var(--bg-main)",
+                color: "var(--text-primary)",
+                borderLeft: 0,
+                borderColor: "var(--border-color)",
+              }}
+              className="ps-0"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </InputGroup>
         </div>
       </div>
-
-      <Card className="border-0 shadow-sm">
+      <Card
+        className="shadow-sm"
+        style={{
+          backgroundColor: "var(--bg-card)",
+          border: "1px solid var(--border-color)",
+        }}
+      >
         <Card.Body className="p-0">
-          <Table hover responsive className="mb-0 align-middle">
-            <thead className="table-dark small text-uppercase">
-              <tr>
-                <th className="ps-4">Time</th>
-                <th>Action</th>
-                <th>Description</th>
-                <th>User Name</th>
-                <th>User Email</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredLogs.map((log) => (
-                <tr key={log.id}>
-                  <td className="ps-4 text-nowrap small text-body-secondary">
-                    {log.timestamp?.seconds
-                      ? new Date(log.timestamp.seconds * 1000).toLocaleString()
-                      : "Just now"}
-                  </td>
-                  <td>
-                    <Badge bg={getBadgeColor(log.action)} className="fw-normal">
-                      {log.action}
-                    </Badge>
-                  </td>
-                  <td className="fw-bold text-body">{log.description}</td>
-                  <td className="text-body">
-                    <div className="d-flex align-items-center">
-                      <div
-                        className="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center me-2 fw-bold"
-                        style={{ width: 30, height: 30, fontSize: "0.8rem" }}
-                      >
-                        {log.performedBy?.charAt(0).toUpperCase() || "U"}
-                      </div>
-                      {log.performedBy}
-                    </div>
-                  </td>
-                  <td className="text-primary small">{log.email || "N/A"}</td>
-                </tr>
-              ))}
-              {filteredLogs.length === 0 && (
+          {loading ? (
+            <div className="p-5 text-center">
+              <Spinner animation="border" variant="primary" />
+            </div>
+          ) : (
+            <Table hover responsive className="mb-0 align-middle">
+              <thead
+                style={{ backgroundColor: "var(--soft-hover)" }}
+                className="small text-uppercase"
+              >
                 <tr>
-                  <td colSpan="5" className="text-center p-5 text-muted">
-                    No logs found.
-                  </td>
+                  <th className="ps-4">Time</th>
+                  <th>Action</th>
+                  <th>Description</th>
+                  <th>User Name</th>
+                  <th>User Email</th>
                 </tr>
-              )}
-            </tbody>
-          </Table>
+              </thead>
+              <tbody>
+                {filteredLogs.map((log) => (
+                  <tr key={log.id}>
+                    <td className="ps-4 text-nowrap small text-body-secondary">
+                      {log.timestamp?.seconds
+                        ? new Date(
+                            log.timestamp.seconds * 1000,
+                          ).toLocaleString()
+                        : "Just now"}
+                    </td>
+                    <td>
+                      <Badge
+                        bg={getBadgeColor(log.action)}
+                        className="fw-normal"
+                      >
+                        {log.action}
+                      </Badge>
+                    </td>
+                    <td className="fw-bold text-body">{log.description}</td>
+                    <td className="text-body">
+                      <div className="d-flex align-items-center">
+                        <div
+                          className="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center me-2 fw-bold"
+                          style={{ width: 30, height: 30, fontSize: "0.8rem" }}
+                        >
+                          {log.performedBy?.charAt(0).toUpperCase() || "U"}
+                        </div>
+                        {log.performedBy}
+                      </div>
+                    </td>
+                    <td className="text-primary small">{log.email || "N/A"}</td>
+                  </tr>
+                ))}
+                {filteredLogs.length === 0 && (
+                  <tr>
+                    <td colSpan="5" className="text-center p-5 text-muted">
+                      No logs found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </Table>
+          )}
         </Card.Body>
       </Card>
     </Layout>

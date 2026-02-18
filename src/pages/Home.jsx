@@ -1,465 +1,198 @@
 import { useState, useEffect } from "react";
-import {
-  collection,
-  getDocs,
-  addDoc,
-  doc,
-  getDoc,
-  updateDoc,
-} from "firebase/firestore";
-import { auth, db } from "../firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { collection, getDocs, addDoc } from "firebase/firestore";
+import { db } from "../firebase"; // Adjust path
+import { Row, Col, Modal, Form, Button, Spinner } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
-import {
-  Card,
-  Row,
-  Col,
-  Button,
-  Badge,
-  Modal,
-  Form,
-  ButtonGroup,
-  ToggleButton,
-  Spinner,
-} from "react-bootstrap";
 import Layout from "../components/Layout";
-import { logAction } from "../utils/logger"; // Import logger
 
 export default function Home() {
   const [events, setEvents] = useState([]);
-
-  const [userRole, setUserRole] = useState(null);
-  const [userStatus, setUserStatus] = useState(null); // Changed default to null
-  const [userName, setUserName] = useState("User");
-
-  // NEW: Loading State to prevent flash
   const [loading, setLoading] = useState(true);
 
-  const [pendingCount, setPendingCount] = useState(0);
-  const [showModal, setShowModal] = useState(false);
-  const [step, setStep] = useState(1);
-
-  // Form State
-  const [isMultiDay, setIsMultiDay] = useState(false);
-  const [editingEventId, setEditingEventId] = useState(null);
-
-  const [formData, setFormData] = useState({
-    type: "",
-    title: "",
-    date: new Date().toISOString().split("T")[0],
-    endDate: "",
-    venue: "",
-  });
+  // Modal States
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [newEventTitle, setNewEventTitle] = useState("");
+  const [newEventDate, setNewEventDate] = useState("");
+  const [newEventVenue, setNewEventVenue] = useState("");
 
   const navigate = useNavigate();
 
-  // --- 1. AUTH & USER DATA FETCHING ---
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (!currentUser) {
-        setLoading(false);
-        navigate("/login");
-        return;
-      }
+    fetchData();
+  }, []);
 
-      try {
-        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          setUserRole(data.role);
-          setUserStatus(data.status);
-          setUserName(data.name || currentUser.displayName || "User");
-        } else {
-          // User logged in but no Firestore doc (rare edge case)
-          setUserStatus("pending");
-        }
-      } catch (error) {
-        console.error("Error fetching user data:", error);
-      } finally {
-        // STOP LOADING once we know the status
-        setLoading(false);
-      }
-    });
-    return () => unsubscribe();
-  }, [navigate]);
-
-  // --- 2. FETCH DASHBOARD DATA (Only if approved) ---
-  useEffect(() => {
-    if (userStatus === "approved" && !loading) {
-      const fetchData = async () => {
-        const snap = await getDocs(collection(db, "events"));
-        setEvents(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-
-        if (userRole === "super_admin") {
-          const usersSnap = await getDocs(collection(db, "users"));
-          setPendingCount(
-            usersSnap.docs.filter((d) => d.data().status === "pending").length,
-          );
-        }
-      };
-      fetchData();
-    }
-  }, [userStatus, userRole, loading]);
-
-  // --- HANDLERS ---
-  const openCreateModal = () => {
-    setEditingEventId(null);
-    setIsMultiDay(false);
-    setStep(1);
-    setFormData({
-      type: "",
-      title: "",
-      date: new Date().toISOString().split("T")[0],
-      endDate: "",
-      venue: "",
-    });
-    setShowModal(true);
-  };
-
-  const openEditModal = (e, event) => {
-    e.stopPropagation();
-    setEditingEventId(event.id);
-    const isMulti = !!event.endDate;
-    setIsMultiDay(isMulti);
-    setFormData({
-      type: event.type,
-      title: event.title,
-      date: event.date,
-      endDate: event.endDate || "",
-      venue: event.venue,
-    });
-    setStep(2);
-    setShowModal(true);
-  };
-
-  const handleSaveEvent = async () => {
-    if (!formData.title) return;
+  const fetchData = async () => {
     try {
-      const eventData = {
-        ...formData,
-        endDate: isMultiDay ? formData.endDate : "",
-      };
-
-      if (editingEventId) {
-        await updateDoc(doc(db, "events", editingEventId), eventData);
-        setEvents(
-          events.map((ev) =>
-            ev.id === editingEventId ? { ...ev, ...eventData } : ev,
-          ),
-        );
-        await logAction("UPDATE_EVENT", `Updated event: ${formData.title}`);
-      } else {
-        const docRef = await addDoc(collection(db, "events"), {
-          ...eventData,
-          createdBy: userName,
-          createdAt: new Date(),
-        });
-        setEvents([...events, { id: docRef.id, ...eventData }]);
-        await logAction("CREATE_EVENT", `Created event: ${formData.title}`);
-      }
-      setShowModal(false);
-    } catch (err) {
-      console.error(err);
-      alert("Failed to save event.");
+      // 1. Fetch Events
+      const eventSnap = await getDocs(collection(db, "events"));
+      const eventList = eventSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setEvents(eventList);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const formatDateDisplay = (date, endDate) => {
-    if (!endDate) return date;
-    return `${date} — ${endDate}`;
+  const handleCreateEvent = async () => {
+    if (!newEventTitle) return;
+    await addDoc(collection(db, "events"), {
+      title: newEventTitle,
+      date: newEventDate,
+      venue: newEventVenue,
+      createdAt: new Date(),
+    });
+    setShowEventModal(false);
+    setNewEventTitle("");
+    setNewEventDate("");
+    setNewEventVenue("");
+    fetchData();
   };
 
-  // --- RENDER: LOADING SCREEN ---
-  if (loading) {
-    return (
-      <div className="d-flex vh-100 align-items-center justify-content-center bg-body-tertiary">
-        <Spinner
-          animation="border"
-          variant="primary"
-          style={{ width: "3rem", height: "3rem" }}
-        />
-      </div>
-    );
-  }
+  // Helper styles for dark-mode compatible form inputs
+  const inputStyle = {
+    backgroundColor: "var(--bg-main)",
+    color: "var(--text-primary)",
+    borderColor: "var(--border-color)",
+  };
 
-  // --- RENDER: ACCESS PENDING ---
-  if (userStatus === "pending") {
+  if (loading)
     return (
-      <div className="d-flex vh-100 align-items-center justify-content-center bg-body-tertiary">
-        <div className="text-center p-5 card shadow rounded border-0">
-          <h1 className="display-1 text-danger">
-            <i className="bi bi-slash-circle"></i>
-          </h1>
-          <h2>Access Pending</h2>
-          <p className="text-muted">Your account awaits Admin approval.</p>
-          <Button variant="outline-danger" onClick={() => auth.signOut()}>
-            Logout
-          </Button>
+      <Layout>
+        <div className="vh-100 d-flex justify-content-center align-items-center">
+          <Spinner animation="border" variant="primary" />
         </div>
-      </div>
+      </Layout>
     );
-  }
 
-  // --- RENDER: DASHBOARD ---
   return (
     <Layout>
-      {/* Stats Row */}
-      <Row className="mb-4 g-3">
-        <Col md={6} lg={3}>
-          <Card className="border-0 shadow-sm h-100 stats-card">
-            <Card.Body className="d-flex align-items-center">
-              <div className="bg-primary bg-opacity-10 p-3 rounded me-3 text-primary">
-                <i className="bi bi-calendar-event fs-4"></i>
-              </div>
-              <div>
-                <h6 className="text-muted mb-0 small fw-bold">EVENTS</h6>
-                <h3 className="fw-bold mb-0">{events.length}</h3>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={6} lg={3}>
-          <Card className="border-0 shadow-sm h-100 stats-card">
-            <Card.Body className="d-flex align-items-center">
-              <div className="bg-success bg-opacity-10 p-3 rounded me-3 text-success">
-                <i className="bi bi-people fs-4"></i>
-              </div>
-              <div>
-                <h6 className="text-muted mb-0 small fw-bold">ACTIVE</h6>
-                <h3 className="fw-bold mb-0">--</h3>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={6} lg={3}>
-          <Card className="border-0 shadow-sm h-100 stats-card">
-            <Card.Body className="d-flex align-items-center">
-              <div className="bg-warning bg-opacity-10 p-3 rounded me-3 text-warning">
-                <i className="bi bi-hourglass-split fs-4"></i>
-              </div>
-              <div>
-                <h6 className="text-muted mb-0 small fw-bold">PENDING</h6>
-                <h3 className="fw-bold mb-0">{pendingCount}</h3>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={6} lg={3}>
-          <Card className="border-0 shadow-sm h-100 stats-card">
-            <Card.Body className="d-flex align-items-center">
-              <div className="bg-danger bg-opacity-10 p-3 rounded me-3 text-danger">
-                <i className="bi bi-file-earmark-text fs-4"></i>
-              </div>
-              <div>
-                <h6 className="text-muted mb-0 small fw-bold">REPORTS</h6>
-                <h3 className="fw-bold mb-0">0</h3>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Header */}
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <h5 className="fw-bold mb-0">Recent Events</h5>
-        {(userRole === "admin" || userRole === "super_admin") && (
-          <Button variant="primary" onClick={openCreateModal}>
-            <i className="bi bi-plus-lg me-2"></i>New Event
-          </Button>
-        )}
+      {/* PAGE TITLE */}
+      <div className="mb-5">
+        <small className="text-muted text-uppercase fw-bold">Management</small>
+        <h2 className="fw-bold mt-1">Dashboard</h2>
       </div>
 
-      {/* Events Grid */}
-      <Row className="g-4">
-        {events.map((event) => (
-          <Col md={6} lg={4} key={event.id}>
-            <Card
-              className="border-0 shadow-sm h-100 stats-card cursor-pointer position-relative"
-              onClick={() => navigate(`/event/${event.id}`)}
-            >
-              {(userRole === "admin" || userRole === "super_admin") && (
-                <Button
-                  variant="light"
-                  size="sm"
-                  className="position-absolute top-0 end-0 m-2 rounded-circle shadow-sm z-3"
-                  onClick={(e) => openEditModal(e, event)}
-                  title="Edit Event"
-                >
-                  <i className="bi bi-pencil-fill text-secondary"></i>
-                </Button>
-              )}
-              <Card.Body>
-                <div className="d-flex justify-content-between mb-3">
-                  <Badge
-                    bg={event.type === "youth_festival" ? "danger" : "info"}
-                  >
-                    {event.type === "youth_festival" ? "YOUTH FEST" : "COLLEGE"}
-                  </Badge>
-                </div>
-                <small className="text-muted d-block mb-2">
-                  <i className="bi bi-calendar3 me-1"></i>{" "}
-                  {formatDateDisplay(event.date, event.endDate)}
-                </small>
-                <Card.Title className="fw-bold mb-1">{event.title}</Card.Title>
-                <div className="text-muted small mb-3">
-                  <i className="bi bi-geo-alt-fill me-1"></i> {event.venue}
-                </div>
-              </Card.Body>
-              <Card.Footer className="bg-transparent border-top-0 text-end">
-                <small className="text-primary fw-bold">
-                  Manage <i className="bi bi-arrow-right ms-1"></i>
-                </small>
-              </Card.Footer>
-            </Card>
-          </Col>
-        ))}
-      </Row>
+      {/* --- EVENTS SECTION --- */}
+      <div className="mb-5">
+        <h5 className="fw-bold mb-3">All Events</h5>
+        <p className="text-muted small mb-4">
+          Select an event to manage participants, sponsors, and meetings.
+        </p>
 
-      {/* Modals */}
-      <Modal
-        show={showModal}
-        onHide={() => setShowModal(false)}
-        centered
-        size={step === 1 ? "" : "lg"}
-      >
-        <Modal.Header closeButton className="border-0">
-          <Modal.Title>
-            {editingEventId
-              ? "Edit Event"
-              : step === 1
-                ? "Select Type"
-                : "Event Details"}
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {step === 1 ? (
-            <div className="d-grid gap-3">
-              <Button
-                variant="outline-light"
-                className="text-start p-3 border text-body"
-                onClick={() => {
-                  setFormData({ ...formData, type: "college" });
-                  setStep(2);
-                }}
+        <Row className="g-3">
+          {events.map((ev) => (
+            <Col key={ev.id} xs={12} sm={6} md={4} lg={3}>
+              <div
+                className="soft-card"
+                onClick={() => navigate(`/event/${ev.id}`)}
               >
-                <h5 className="mb-0 text-primary fw-bold">College Level</h5>
-                <small className="text-muted">
-                  Internal events like Anand Utsav
+                <div className="avatar-circle text-danger bg-danger-subtle">
+                  <i className="bi bi-calendar-check"></i>
+                </div>
+                <h6 className="fw-bold mb-1 text-truncate">{ev.title}</h6>
+                <small className="text-muted d-block mb-2">
+                  {ev.date} &bull; {ev.venue}
                 </small>
-              </Button>
-              <Button
-                variant="outline-light"
-                className="text-start p-3 border text-body"
-                onClick={() => {
-                  setFormData({ ...formData, type: "youth_festival" });
-                  setStep(2);
-                }}
-              >
-                <h5 className="mb-0 text-danger fw-bold">Youth Festival</h5>
-                <small className="text-muted">Zonal and Inter-Zonal</small>
-              </Button>
-            </div>
-          ) : (
-            <Form>
-              <Row className="mb-3">
-                <Col md={8}>
-                  <Form.Label>Event Title</Form.Label>
-                  <Form.Control
-                    value={formData.title}
-                    onChange={(e) =>
-                      setFormData({ ...formData, title: e.target.value })
-                    }
-                    autoFocus
-                  />
-                </Col>
-                <Col md={4}>
-                  <Form.Label>Event Type</Form.Label>
-                  <Form.Select
-                    value={formData.type}
-                    onChange={(e) =>
-                      setFormData({ ...formData, type: e.target.value })
-                    }
-                  >
-                    <option value="college">College Level</option>
-                    <option value="youth_festival">Youth Festival</option>
-                  </Form.Select>
-                </Col>
-              </Row>
-              <div className="mb-3">
-                <Form.Label className="d-block">Event Duration</Form.Label>
-                <ButtonGroup>
-                  <ToggleButton
-                    id="radio-single"
-                    type="radio"
-                    variant="outline-primary"
-                    name="radio"
-                    value="single"
-                    checked={!isMultiDay}
-                    onChange={() => setIsMultiDay(false)}
-                  >
-                    Single Day
-                  </ToggleButton>
-                  <ToggleButton
-                    id="radio-multi"
-                    type="radio"
-                    variant="outline-primary"
-                    name="radio"
-                    value="multi"
-                    checked={isMultiDay}
-                    onChange={() => setIsMultiDay(true)}
-                  >
-                    Multiple Days
-                  </ToggleButton>
-                </ButtonGroup>
+
+                <span
+                  className={`status-badge ${
+                    new Date(ev.date) < new Date()
+                      ? "status-past"
+                      : "status-upcoming"
+                  }`}
+                >
+                  {new Date(ev.date) < new Date() ? "Completed" : "Upcoming"}
+                </span>
               </div>
-              <Row className="mb-3">
-                <Col md={isMultiDay ? 6 : 12}>
-                  <Form.Label>{isMultiDay ? "Start Date" : "Date"}</Form.Label>
-                  <Form.Control
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) =>
-                      setFormData({ ...formData, date: e.target.value })
-                    }
-                  />
-                </Col>
-                {isMultiDay && (
-                  <Col md={6}>
-                    <Form.Label>End Date</Form.Label>
-                    <Form.Control
-                      type="date"
-                      value={formData.endDate}
-                      onChange={(e) =>
-                        setFormData({ ...formData, endDate: e.target.value })
-                      }
-                    />
-                  </Col>
-                )}
-              </Row>
-              <Form.Group className="mb-3">
-                <Form.Label>Venue</Form.Label>
+            </Col>
+          ))}
+
+          {/* Add Event Card */}
+          <Col xs={12} sm={6} md={4} lg={3}>
+            <div
+              className="soft-card add-card"
+              onClick={() => setShowEventModal(true)}
+            >
+              <i className="bi bi-plus-circle-fill fs-3 mb-2"></i>
+              <span className="fw-bold">Create Event</span>
+            </div>
+          </Col>
+        </Row>
+      </div>
+
+      {/* CREATE EVENT MODAL */}
+      <Modal
+        show={showEventModal}
+        onHide={() => setShowEventModal(false)}
+        centered
+      >
+        {/* We apply inline styles to Modal content to respect Dark Mode variables */}
+        <div
+          style={{
+            backgroundColor: "var(--bg-card)",
+            color: "var(--text-primary)",
+          }}
+        >
+          <Modal.Header closeButton className="border-0">
+            <Modal.Title className="fw-bold">Create New Event</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Form className="d-grid gap-3">
+              <Form.Group>
+                <Form.Label className="text-muted small fw-bold">
+                  EVENT TITLE
+                </Form.Label>
                 <Form.Control
-                  value={formData.venue}
-                  onChange={(e) =>
-                    setFormData({ ...formData, venue: e.target.value })
-                  }
+                  size="lg"
+                  placeholder="e.g. Annual Tech Fest"
+                  value={newEventTitle}
+                  onChange={(e) => setNewEventTitle(e.target.value)}
+                  style={inputStyle}
                 />
               </Form.Group>
+              <Row>
+                <Col>
+                  <Form.Group>
+                    <Form.Label className="text-muted small fw-bold">
+                      DATE
+                    </Form.Label>
+                    <Form.Control
+                      type="date"
+                      value={newEventDate}
+                      onChange={(e) => setNewEventDate(e.target.value)}
+                      style={inputStyle}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col>
+                  <Form.Group>
+                    <Form.Label className="text-muted small fw-bold">
+                      VENUE
+                    </Form.Label>
+                    <Form.Control
+                      placeholder="e.g. Auditorium"
+                      value={newEventVenue}
+                      onChange={(e) => setNewEventVenue(e.target.value)}
+                      style={inputStyle}
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
             </Form>
-          )}
-        </Modal.Body>
-        <Modal.Footer className="border-0">
-          {step === 2 && !editingEventId && (
-            <Button variant="secondary" onClick={() => setStep(1)}>
-              Back
+          </Modal.Body>
+          <Modal.Footer className="border-0">
+            <Button
+              variant="outline-secondary"
+              onClick={() => setShowEventModal(false)}
+            >
+              Cancel
             </Button>
-          )}
-          {step === 2 && (
-            <Button variant="primary" onClick={handleSaveEvent}>
-              {editingEventId ? "Save Changes" : "Create Event"}
+            <Button variant="primary" onClick={handleCreateEvent}>
+              Create Event
             </Button>
-          )}
-        </Modal.Footer>
+          </Modal.Footer>
+        </div>
       </Modal>
     </Layout>
   );

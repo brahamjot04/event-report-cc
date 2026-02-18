@@ -9,15 +9,15 @@ import {
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import {
-  Accordion,
   Table,
   Button,
   Modal,
   Form,
-  FloatingLabel,
   Badge,
   Row,
   Col,
+  Dropdown,
+  Card,
 } from "react-bootstrap";
 import readXlsxFile from "read-excel-file";
 import jsPDF from "jspdf";
@@ -65,7 +65,6 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
       (t) => t.name.trim().toLowerCase() !== "core team",
     );
 
-    // Combine: Core Team first, then others
     if (coreTeam) {
       setTeams([coreTeam, ...otherTeams]);
     } else {
@@ -90,7 +89,12 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
     if (window.confirm("Delete this team and all its members?")) {
       await deleteDoc(doc(db, "events", eventId, "teams", teamId));
       fetchTeams();
+      if (activeTeam?.id === teamId) setActiveTeam(null);
     }
+  };
+
+  const openTeamDetails = (team) => {
+    setActiveTeam(team);
   };
 
   // --- MEMBER MANAGEMENT ---
@@ -109,24 +113,26 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
       members: updatedMembers,
     });
 
+    // Update local state immediately
+    setActiveTeam({ ...activeTeam, members: updatedMembers });
     setShowMemberModal(false);
-    fetchTeams();
+    fetchTeams(); // Background sync
   };
 
-  const handleDeleteMember = async (team, memberIndex) => {
+  const handleDeleteMember = async (memberIndex) => {
     if (window.confirm("Remove this member?")) {
-      const updatedMembers = team.members.filter(
+      const updatedMembers = activeTeam.members.filter(
         (_, idx) => idx !== memberIndex,
       );
-      await updateDoc(doc(db, "events", eventId, "teams", team.id), {
+      await updateDoc(doc(db, "events", eventId, "teams", activeTeam.id), {
         members: updatedMembers,
       });
+      setActiveTeam({ ...activeTeam, members: updatedMembers });
       fetchTeams();
     }
   };
 
-  const openAddMemberModal = (team) => {
-    setActiveTeam(team);
+  const openAddMemberModal = () => {
     setEditingMemberIndex(null);
     setMemberForm({
       name: "",
@@ -138,17 +144,16 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
     setShowMemberModal(true);
   };
 
-  const openEditMemberModal = (team, member, index) => {
-    setActiveTeam(team);
+  const openEditMemberModal = (member, index) => {
     setEditingMemberIndex(index);
     setMemberForm(member);
     setShowMemberModal(true);
   };
 
   // --- FILE HANDLING ---
-  const handleFileUpload = (e, team) => {
+  const handleFileUpload = (e) => {
     const file = e.target.files[0];
-    if (!file) return;
+    if (!file || !activeTeam) return;
 
     readXlsxFile(file).then(async (rows) => {
       const headers = rows[0].map((h) => String(h).toLowerCase());
@@ -174,19 +179,20 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
         }))
         .filter((m) => m.name);
 
-      const updatedMembers = [...(team.members || []), ...newMembers];
+      const updatedMembers = [...(activeTeam.members || []), ...newMembers];
 
-      await updateDoc(doc(db, "events", eventId, "teams", team.id), {
+      await updateDoc(doc(db, "events", eventId, "teams", activeTeam.id), {
         members: updatedMembers,
       });
 
-      alert(`Imported ${newMembers.length} members to ${team.name}!`);
+      setActiveTeam({ ...activeTeam, members: updatedMembers });
       fetchTeams();
+      alert(`Imported ${newMembers.length} members!`);
       e.target.value = "";
     });
   };
 
-  // --- GLOBAL PDF GENERATION ---
+  // --- PDF GENERATION ---
   const generateAllTeamsPDF = () => {
     const doc = new jsPDF();
     doc.setFont("helvetica", "bold");
@@ -197,24 +203,20 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
     doc.setFont("helvetica", "normal");
     doc.text(`Event: ${eventTitle || "Event Details"}`, 14, 22);
 
-    // Reuse the already sorted state "teams" (Core is already on top)
     let finalY = 30;
 
     teams.forEach((team) => {
-      // Check if we need a new page
       if (finalY > 250) {
         doc.addPage();
         finalY = 20;
       }
 
-      // Team Header
       doc.setFont("helvetica", "bold");
       doc.setFontSize(14);
       doc.setTextColor(0);
       doc.text(`Team: ${team.name}`, 14, finalY);
       finalY += 3;
 
-      // Table Data (Phone Excluded)
       const rows = (team.members || []).map((m, i) => [
         i + 1,
         m.name,
@@ -244,249 +246,471 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
     doc.save(`Teams_Report.pdf`);
   };
 
-  return (
-    <>
-      {/* HEADER */}
-      <div className="d-flex align-items-center mb-4 justify-content-between">
-        <div className="d-flex align-items-center">
+  const getInitials = (name) =>
+    name ? name.substring(0, 2).toUpperCase() : "TM";
+
+  // --- RENDER: TEAM DETAILS PAGE VIEW ---
+  if (activeTeam) {
+    return (
+      <>
+        <div className="d-flex align-items-center mb-4 gap-3">
           <Button
             variant="outline-secondary"
-            className="me-3 rounded-circle"
-            onClick={goBack}
+            className="me-3 rounded-circle shadow-sm"
+            style={{
+              width: "40px",
+              height: "40px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onClick={() => setActiveTeam(null)}
           >
             <i className="bi bi-arrow-left"></i>
           </Button>
-          <h3 className="fw-bold mb-0">Team Details</h3>
+          <div>
+            <h3 className="fw-bold mb-0">{activeTeam.name}</h3>
+            <p className="text-muted small mb-0">
+              {activeTeam.members?.length || 0} Members
+            </p>
+          </div>
+          <div className="ms-auto d-flex gap-2">
+            <Button
+              variant="primary"
+              onClick={openAddMemberModal}
+              className="d-flex align-items-center gap-2"
+            >
+              <i className="bi bi-person-plus-fill"></i>
+              <span className="d-none d-md-inline">Add Member</span>
+            </Button>
+            <div className="d-inline-block">
+              <input
+                type="file"
+                id="team-upload"
+                hidden
+                accept=".xlsx,.xls"
+                onChange={handleFileUpload}
+              />
+              <label
+                htmlFor="team-upload"
+                className="btn btn-success text-white mb-0 d-flex align-items-center gap-2"
+              >
+                <i className="bi bi-file-earmark-spreadsheet-fill"></i>
+                <span className="d-none d-md-inline">Import Excel</span>
+              </label>
+            </div>
+          </div>
         </div>
-        <div className="d-flex gap-2">
-          {/* Global Export Button */}
-          <Button variant="outline-danger" onClick={generateAllTeamsPDF}>
-            <i className="bi bi-file-earmark-pdf me-2"></i>Export All Teams
-          </Button>
-          <Button onClick={() => setShowTeamModal(true)}>
-            <i className="bi bi-plus-lg me-2"></i>Create Team
+
+        {/* Members Table */}
+        <div className="soft-card p-0 overflow-hidden shadow-sm">
+          <Table hover responsive className="mb-0 align-middle">
+            <thead style={{ backgroundColor: "var(--soft-hover)" }}>
+              <tr>
+                <th
+                  className="ps-4 py-3 text-secondary text-uppercase small"
+                  style={{ width: "5%" }}
+                >
+                  #
+                </th>
+                <th className="text-secondary text-uppercase small">Name</th>
+                <th className="text-secondary text-uppercase small">URN</th>
+                <th className="text-secondary text-uppercase small">Branch</th>
+                <th className="text-secondary text-uppercase small">
+                  Designation
+                </th>
+                <th className="text-end pe-4 text-secondary text-uppercase small">
+                  Action
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {!activeTeam.members || activeTeam.members.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="text-center py-5 text-muted">
+                    <i className="bi bi-people display-4 opacity-25 d-block mb-3"></i>
+                    No members in this team yet.
+                  </td>
+                </tr>
+              ) : (
+                activeTeam.members.map((member, idx) => (
+                  <tr
+                    key={idx}
+                    style={{
+                      borderBottom: "1px solid var(--border-color)",
+                    }}
+                  >
+                    <td className="ps-4 text-muted">{idx + 1}</td>
+                    <td className="fw-bold text-body">{member.name}</td>
+                    <td className="text-muted">
+                      <code className="text-primary">{member.urn}</code>
+                    </td>
+                    <td className="text-muted small">{member.branch || "-"}</td>
+                    <td>
+                      {member.designation ? (
+                        <Badge bg="light" text="dark" className="border">
+                          {member.designation}
+                        </Badge>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                    <td className="text-end pe-4">
+                      <div className="d-flex justify-content-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="light"
+                          className="border-0 bg-transparent text-primary p-1"
+                          onClick={() => openEditMemberModal(member, idx)}
+                        >
+                          <i className="bi bi-pencil-fill"></i>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="light"
+                          className="border-0 bg-transparent text-danger p-1"
+                          onClick={() => handleDeleteMember(idx)}
+                        >
+                          <i className="bi bi-trash-fill"></i>
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </Table>
+        </div>
+
+        {/* Member Modal */}
+        <Modal
+          show={showMemberModal}
+          onHide={() => setShowMemberModal(false)}
+          centered
+        >
+          <div className="soft-card border-0 p-0 overflow-hidden">
+            <Modal.Header
+              closeButton
+              className="border-bottom"
+              style={{ borderColor: "var(--border-color)" }}
+            >
+              <Modal.Title className="fw-bold h5">
+                {editingMemberIndex !== null ? "Edit" : "Add"} Member
+              </Modal.Title>
+            </Modal.Header>
+            <Modal.Body className="p-4">
+              <Form className="d-grid gap-3">
+                <Form.Group>
+                  <Form.Label className="small fw-bold text-muted">
+                    FULL NAME
+                  </Form.Label>
+                  <Form.Control
+                    placeholder="Name"
+                    value={memberForm.name}
+                    onChange={(e) =>
+                      setMemberForm({ ...memberForm, name: e.target.value })
+                    }
+                  />
+                </Form.Group>
+                <Row>
+                  <Col>
+                    <Form.Group>
+                      <Form.Label className="small fw-bold text-muted">
+                        URN
+                      </Form.Label>
+                      <Form.Control
+                        placeholder="URN"
+                        value={memberForm.urn}
+                        onChange={(e) =>
+                          setMemberForm({ ...memberForm, urn: e.target.value })
+                        }
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col>
+                    <Form.Group>
+                      <Form.Label className="small fw-bold text-muted">
+                        PHONE
+                      </Form.Label>
+                      <Form.Control
+                        placeholder="Phone"
+                        value={memberForm.phone}
+                        onChange={(e) =>
+                          setMemberForm({
+                            ...memberForm,
+                            phone: e.target.value,
+                          })
+                        }
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
+                <Row>
+                  <Col>
+                    <Form.Group>
+                      <Form.Label className="small fw-bold text-muted">
+                        BRANCH
+                      </Form.Label>
+                      <Form.Control
+                        placeholder="Branch"
+                        value={memberForm.branch}
+                        onChange={(e) =>
+                          setMemberForm({
+                            ...memberForm,
+                            branch: e.target.value,
+                          })
+                        }
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col>
+                    <Form.Group>
+                      <Form.Label className="small fw-bold text-muted">
+                        DESIGNATION
+                      </Form.Label>
+                      <Form.Select
+                        value={memberForm.designation}
+                        onChange={(e) =>
+                          setMemberForm({
+                            ...memberForm,
+                            designation: e.target.value,
+                          })
+                        }
+                      >
+                        <option value="">Select Designation</option>
+                        <option value="member">Member</option>
+                        <option value="senior">Senior</option>
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                </Row>
+              </Form>
+            </Modal.Body>
+            <Modal.Footer className="border-0 p-3 pt-0">
+              <Button
+                variant="primary"
+                onClick={handleSaveMember}
+                className="w-100"
+              >
+                Save Member
+              </Button>
+            </Modal.Footer>
+          </div>
+        </Modal>
+      </>
+    );
+  }
+
+  // --- RENDER: TEAMS GRID VIEW ---
+  return (
+    <>
+      <div className="d-flex align-items-center mb-4">
+        <Button
+          variant="outline-secondary"
+          className="me-3 rounded-circle shadow-sm"
+          style={{
+            width: "40px",
+            height: "40px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onClick={goBack}
+        >
+          <i className="bi bi-arrow-left"></i>
+        </Button>
+        <div>
+          <h3 className="fw-bold mb-0">Organizing Teams</h3>
+          <p className="text-muted small mb-0">Manage committees and members</p>
+        </div>
+        <div className="ms-auto d-flex gap-2">
+          <Button
+            variant="outline-danger"
+            onClick={generateAllTeamsPDF}
+            size="sm"
+            className="d-flex align-items-center"
+          >
+            <i className="bi bi-file-earmark-pdf me-2"></i>Export Report
           </Button>
         </div>
       </div>
 
-      {/* TEAMS LIST (Accordion) */}
-      <Accordion defaultActiveKey="0">
-        {teams.map((team, idx) => (
-          <Accordion.Item
-            eventKey={idx.toString()}
-            key={team.id}
-            className="mb-3 border-0 shadow-sm"
+      <Row className="g-4">
+        {/* Create Team Card (render first) */}
+        <Col md={6} lg={4}>
+          <div
+            className="h-100 d-flex flex-column align-items-center justify-content-center text-center p-4"
+            style={{
+              border: "2px dashed var(--border-dashed)",
+              borderRadius: "16px",
+              cursor: "pointer",
+              minHeight: "180px",
+              color: "var(--text-muted)",
+              backgroundColor: "transparent",
+            }}
+            onClick={() => {
+              setNewTeamName("");
+              setShowTeamModal(true);
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = "#0d6efd";
+              e.currentTarget.style.color = "#0d6efd";
+              e.currentTarget.style.backgroundColor =
+                "rgba(13, 110, 253, 0.05)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "var(--border-dashed)";
+              e.currentTarget.style.color = "var(--text-muted)";
+              e.currentTarget.style.backgroundColor = "transparent";
+            }}
           >
-            <Accordion.Header>
-              <div className="d-flex justify-content-between align-items-center w-100 me-3">
-                <span className="fw-bold">{team.name}</span>
-                <div className="d-flex align-items-center gap-2">
-                  <Badge bg="primary" pill>
-                    {team.members?.length || 0}
-                  </Badge>
-                  <Button
-                    size="sm"
+            <div
+              className="avatar-circle mb-3"
+              style={{
+                width: "50px",
+                height: "50px",
+                backgroundColor: "var(--soft-hover)",
+                color: "inherit",
+              }}
+            >
+              <i className="bi bi-plus-lg fs-4"></i>
+            </div>
+            <h6 className="fw-bold mb-1">Create New Team</h6>
+            <small>Add committee or group</small>
+          </div>
+        </Col>
+
+        {teams.map((team) => (
+          <Col md={6} lg={4} key={team.id}>
+            <div
+              className="soft-card h-100 d-flex flex-column position-relative"
+              style={{ minHeight: "180px" }}
+            >
+              {/* Team Actions Dropdown */}
+              <div className="position-absolute top-0 end-0 p-3">
+                <Dropdown onClick={(e) => e.stopPropagation()}>
+                  <Dropdown.Toggle
                     variant="link"
-                    className="text-danger p-0 ms-2"
-                    onClick={(e) => handleDeleteTeam(e, team.id)}
+                    className="text-muted p-0 no-caret"
                   >
-                    <i className="bi bi-trash-fill"></i>
-                  </Button>
+                    <i className="bi bi-three-dots"></i>
+                  </Dropdown.Toggle>
+                  <Dropdown.Menu align="end">
+                    <Dropdown.Item
+                      className="text-danger"
+                      onClick={(e) => handleDeleteTeam(e, team.id)}
+                    >
+                      <i className="bi bi-trash me-2"></i>Delete Team
+                    </Dropdown.Item>
+                  </Dropdown.Menu>
+                </Dropdown>
+              </div>
+
+              <div className="d-flex align-items-center mb-3 mt-2">
+                <div
+                  className="avatar-circle me-3 flex-shrink-0"
+                  style={{
+                    width: "50px",
+                    height: "50px",
+                    fontSize: "1.2rem",
+                    backgroundColor: "var(--soft-hover)",
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  {getInitials(team.name)}
+                </div>
+                <div>
+                  <h5
+                    className="fw-bold mb-1 text-truncate"
+                    style={{ maxWidth: "180px" }}
+                  >
+                    {team.name}
+                  </h5>
+                  <Badge
+                    bg="primary"
+                    className="bg-opacity-25 text-primary fw-normal border border-primary"
+                  >
+                    {team.members?.length || 0} Members
+                  </Badge>
                 </div>
               </div>
-            </Accordion.Header>
-            <Accordion.Body className="p-0">
-              {/* TOOLBAR */}
-              <div className="p-3 d-flex gap-2 align-items-center bg-light border-bottom">
+
+              <div
+                className="mt-auto pt-3 border-top d-flex align-items-center justify-content-between"
+                style={{ borderColor: "var(--border-color)" }}
+              >
+                <div className="d-flex align-items-center">
+                  {/* Tiny avatars for visual effect */}
+                  <div className="d-flex ms-2">
+                    {[1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        className="rounded-circle border border-white d-flex align-items-center justify-content-center text-white small"
+                        style={{
+                          width: "24px",
+                          height: "24px",
+                          marginLeft: "-8px",
+                          backgroundColor: "#adb5bd",
+                          fontSize: "0.6rem",
+                        }}
+                      >
+                        <i className="bi bi-person-fill"></i>
+                      </div>
+                    ))}
+                  </div>
+                </div>
                 <Button
                   size="sm"
-                  variant="primary"
-                  onClick={() => openAddMemberModal(team)}
+                  className="soft-open-btn rounded-pill px-3"
+                  onClick={() => openTeamDetails(team)}
                 >
-                  <i className="bi bi-person-plus-fill me-2"></i>Add Member
+                  Manage <i className="bi bi-arrow-right ms-1"></i>
                 </Button>
-
-                <div className="d-inline-block">
-                  <input
-                    type="file"
-                    id={`file-${team.id}`}
-                    hidden
-                    accept=".xlsx,.xls"
-                    onChange={(e) => handleFileUpload(e, team)}
-                  />
-                  <label
-                    htmlFor={`file-${team.id}`}
-                    className="btn btn-sm btn-success text-white mb-0"
-                  >
-                    <i className="bi bi-file-earmark-spreadsheet-fill me-2"></i>
-                    Upload Excel
-                  </label>
-                </div>
               </div>
-
-              {/* MEMBERS TABLE */}
-              <Table hover responsive className="mb-0">
-                <thead className="table-dark">
-                  <tr>
-                    <th>#</th>
-                    <th>Student Name</th>
-                    <th>URN</th>
-                    <th>Phone</th>
-                    <th>Branch</th>
-                    <th>Designation</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(team.members || []).map((member, mIdx) => (
-                    <tr key={mIdx}>
-                      <td>{mIdx + 1}</td>
-                      <td className="fw-bold">{member.name}</td>
-                      <td>{member.urn}</td>
-                      <td>{member.phone}</td>
-                      <td>{member.branch}</td>
-                      <td>{member.designation}</td>
-                      <td>
-                        <div className="d-flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline-secondary"
-                            className="border-0"
-                            onClick={() =>
-                              openEditMemberModal(team, member, mIdx)
-                            }
-                          >
-                            <i className="bi bi-pencil-fill text-primary"></i>
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline-secondary"
-                            className="border-0"
-                            onClick={() => handleDeleteMember(team, mIdx)}
-                          >
-                            <i className="bi bi-trash-fill text-danger"></i>
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {(!team.members || team.members.length === 0) && (
-                    <tr>
-                      <td colSpan="7" className="text-center text-muted py-3">
-                        No members added to this team yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </Table>
-            </Accordion.Body>
-          </Accordion.Item>
+            </div>
+          </Col>
         ))}
-      </Accordion>
+      </Row>
 
-      {/* CREATE TEAM MODAL */}
+      {/* --- MODALS --- */}
+
+      {/* 1. CREATE TEAM MODAL */}
       <Modal
         show={showTeamModal}
         onHide={() => setShowTeamModal(false)}
         centered
       >
-        <Modal.Header closeButton>
-          <Modal.Title>Create New Team</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <FloatingLabel controlId="teamName" label="Team Name">
-            <Form.Control
-              placeholder="Team Name"
-              value={newTeamName}
-              onChange={(e) => setNewTeamName(e.target.value)}
-            />
-          </FloatingLabel>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button onClick={handleCreateTeam}>Create</Button>
-        </Modal.Footer>
-      </Modal>
-
-      {/* ADD/EDIT MEMBER MODAL */}
-      <Modal
-        show={showMemberModal}
-        onHide={() => setShowMemberModal(false)}
-        centered
-      >
-        <Modal.Header closeButton>
-          <Modal.Title>
-            {editingMemberIndex !== null ? "Edit" : "Add"} Team Member
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Form className="d-grid gap-3">
-            <FloatingLabel controlId="memName" label="Student Name">
+        <div className="soft-card border-0 p-0 overflow-hidden">
+          <Modal.Header
+            closeButton
+            className="border-bottom"
+            style={{ borderColor: "var(--border-color)" }}
+          >
+            <Modal.Title className="fw-bold h5">Create New Team</Modal.Title>
+          </Modal.Header>
+          <Modal.Body className="p-4">
+            <Form.Group>
+              <Form.Label className="small fw-bold text-muted">
+                TEAM NAME
+              </Form.Label>
               <Form.Control
-                placeholder="Name"
-                value={memberForm.name}
-                onChange={(e) =>
-                  setMemberForm({ ...memberForm, name: e.target.value })
-                }
+                placeholder="e.g. Discipline Committee"
+                className="form-control"
+                value={newTeamName}
+                onChange={(e) => setNewTeamName(e.target.value)}
               />
-            </FloatingLabel>
-
-            <Row>
-              <Col>
-                <FloatingLabel controlId="memUrn" label="URN">
-                  <Form.Control
-                    placeholder="URN"
-                    value={memberForm.urn}
-                    onChange={(e) =>
-                      setMemberForm({ ...memberForm, urn: e.target.value })
-                    }
-                  />
-                </FloatingLabel>
-              </Col>
-              <Col>
-                <FloatingLabel controlId="memPhone" label="Phone">
-                  <Form.Control
-                    placeholder="Phone"
-                    value={memberForm.phone}
-                    onChange={(e) =>
-                      setMemberForm({ ...memberForm, phone: e.target.value })
-                    }
-                  />
-                </FloatingLabel>
-              </Col>
-            </Row>
-
-            <Row>
-              <Col>
-                <FloatingLabel controlId="memBranch" label="Branch">
-                  <Form.Control
-                    placeholder="Branch"
-                    value={memberForm.branch}
-                    onChange={(e) =>
-                      setMemberForm({ ...memberForm, branch: e.target.value })
-                    }
-                  />
-                </FloatingLabel>
-              </Col>
-              <Col>
-                <FloatingLabel controlId="memDesig" label="Designation">
-                  <Form.Control
-                    placeholder="Designation"
-                    value={memberForm.designation}
-                    onChange={(e) =>
-                      setMemberForm({
-                        ...memberForm,
-                        designation: e.target.value,
-                      })
-                    }
-                  />
-                </FloatingLabel>
-              </Col>
-            </Row>
-          </Form>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button onClick={handleSaveMember}>Save Member</Button>
-        </Modal.Footer>
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer className="border-0 p-3 pt-0">
+            <Button
+              variant="primary"
+              onClick={handleCreateTeam}
+              className="w-100"
+            >
+              Create Team
+            </Button>
+          </Modal.Footer>
+        </div>
       </Modal>
     </>
   );

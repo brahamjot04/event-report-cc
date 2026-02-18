@@ -74,46 +74,62 @@ export default function Calendar() {
                   {eventGroups[month].map((event) => (
                     <Col md={12} key={event.id}>
                       <Card
-                        className="border-0 shadow-sm hover-shadow transition-all"
+                        className="border-0 shadow-sm hover-shadow transition-all soft-card"
                         style={{ transition: "0.2s" }}
                       >
                         <Card.Body className="d-flex align-items-center p-3">
-                          {/* FIX: Changed bg-light/text-dark to bg-body-tertiary/text-body */}
+                          {/* DATE BOX - FIXED COLORS */}
                           <div
-                            className="bg-body-tertiary rounded text-center p-2 me-3 d-flex flex-column justify-content-center border"
-                            style={{ minWidth: "70px", height: "70px" }}
+                            className="rounded text-center p-2 me-3 d-flex flex-column justify-content-center border"
+                            style={{
+                              minWidth: "70px",
+                              height: "70px",
+                              backgroundColor: "var(--soft-hover)", // Adapts to dark/light
+                              borderColor: "var(--border-color)",
+                              color: "var(--text-primary)",
+                            }}
                           >
-                            <span className="h4 fw-bold mb-0 text-body">
+                            <span className="h4 fw-bold mb-0">
                               {new Date(event.date).getDate()}
                             </span>
                             <span
-                              className="small text-uppercase text-muted"
-                              style={{ fontSize: "10px" }}
+                              className="small text-uppercase"
+                              style={{
+                                fontSize: "10px",
+                                color: "var(--text-secondary)",
+                              }}
                             >
                               {new Date(event.date).toLocaleString("default", {
                                 weekday: "short",
                               })}
                             </span>
                           </div>
+
+                          {/* EVENT DETAILS - FIXED COLORS */}
                           <div className="flex-grow-1">
-                            {/* FIX: Changed text-dark to text-body */}
-                            <h5 className="fw-bold mb-1 text-body">
+                            <h5 className="fw-bold mb-1">
                               <a
                                 href="#"
                                 onClick={(e) => {
                                   e.preventDefault();
                                   navigate(`/event/${event.id}`);
                                 }}
-                                className="text-decoration-none text-reset stretched-link"
+                                className="text-decoration-none stretched-link"
+                                style={{ color: "var(--text-primary)" }} // Forces correct text color
                               >
                                 {event.title}
                               </a>
                             </h5>
-                            <div className="text-muted small">
+                            <div
+                              className="small"
+                              style={{ color: "var(--text-secondary)" }}
+                            >
                               <i className="bi bi-geo-alt me-2 text-danger"></i>
                               {event.venue}
                             </div>
                           </div>
+
+                          {/* ACTION BADGE */}
                           <div className="d-none d-md-block text-end">
                             <Badge
                               bg="primary"

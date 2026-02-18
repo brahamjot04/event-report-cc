@@ -19,6 +19,9 @@ import {
   Col,
   Card,
   Badge,
+  Dropdown,
+  OverlayTrigger,
+  Tooltip,
 } from "react-bootstrap";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -41,7 +44,6 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
 
   const [showStudentModal, setShowStudentModal] = useState(false);
 
-  // Team is preserved
   const [studentForm, setStudentForm] = useState({
     name: "",
     urn: "",
@@ -93,11 +95,18 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
   };
 
   const handleDeleteSession = async (e, sid) => {
-    e.stopPropagation();
+    e.stopPropagation(); // Prevent card click
     if (window.confirm("Delete Meeting?")) {
       await deleteDoc(doc(db, "events", eventId, "attendance_sessions", sid));
       fetchSessions();
     }
+  };
+
+  const handleEditSessionClick = (e, s) => {
+    e.stopPropagation(); // Prevent card click
+    setEditingSessionId(s.id);
+    setSessionForm(s);
+    setShowSessionModal(true);
   };
 
   // --- STUDENT LOGIC ---
@@ -208,6 +217,18 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
     doc.save(`Attendance_${activeSession.date}.pdf`);
   };
 
+  // Helper to get initials
+  const getInitials = (name) => {
+    return name
+      ? name
+          .split(" ")
+          .map((n) => n[0])
+          .join("")
+          .substring(0, 2)
+          .toUpperCase()
+      : "??";
+  };
+
   // --- RENDER LIST VIEW ---
   if (!activeSession) {
     return (
@@ -215,14 +236,26 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
         <div className="d-flex align-items-center mb-4">
           <Button
             variant="outline-secondary"
-            className="me-3 rounded-circle"
+            className="me-3 rounded-circle shadow-sm"
+            style={{
+              width: "40px",
+              height: "40px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
             onClick={goBack}
           >
             <i className="bi bi-arrow-left"></i>
           </Button>
-          <h3 className="fw-bold mb-0">Attendance Meetings</h3>
+          <div>
+            <h3 className="fw-bold mb-0">Meeting Schedule</h3>
+            <p className="text-muted small mb-0">Manage attendance & agendas</p>
+          </div>
           <div className="ms-auto">
             <Button
+              variant="primary"
+              className="rounded-pill px-4"
               onClick={() => {
                 setEditingSessionId(null);
                 setSessionForm({});
@@ -230,49 +263,191 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
               }}
             >
               <i className="bi bi-plus-lg me-2"></i>
-              Create Meeting
+              Schedule Meeting
             </Button>
           </div>
         </div>
-        <Row className="g-3">
+
+        <Row className="g-4">
+          {/* Add New Card (Dashed) - moved to the start */}
+          <Col md={6} lg={4}>
+            <div
+              className="h-100 d-flex flex-column align-items-center justify-content-center text-center p-4"
+              style={{
+                border: "2px dashed var(--border-dashed)",
+                borderRadius: "16px",
+                cursor: "pointer",
+                minHeight: "200px",
+                color: "var(--text-muted)",
+                backgroundColor: "transparent",
+              }}
+              onClick={() => {
+                setEditingSessionId(null);
+                setSessionForm({});
+                setShowSessionModal(true);
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "#0d6efd";
+                e.currentTarget.style.color = "#0d6efd";
+                e.currentTarget.style.backgroundColor =
+                  "rgba(13, 110, 253, 0.05)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "var(--border-dashed)";
+                e.currentTarget.style.color = "var(--text-muted)";
+                e.currentTarget.style.backgroundColor = "transparent";
+              }}
+            >
+              <div
+                className="avatar-circle mb-3"
+                style={{
+                  width: "50px",
+                  height: "50px",
+                  backgroundColor: "var(--soft-hover)",
+                  color: "inherit",
+                }}
+              >
+                <i className="bi bi-plus-lg fs-4"></i>
+              </div>
+              <h6 className="fw-bold mb-1">Schedule New Meeting</h6>
+              <small>Plan upcoming discussions</small>
+            </div>
+          </Col>
+
           {sessions.map((s, idx) => (
-            <Col md={4} key={s.id}>
-              <Card
-                className="border-0 shadow-sm cursor-pointer card-hover"
+            <Col md={6} lg={4} key={s.id}>
+              <div
+                className="soft-card h-100 d-flex flex-column position-relative overflow-hidden"
+                style={{ cursor: "pointer", minHeight: "200px" }}
                 onClick={() => handleOpenSession(s)}
               >
-                <Card.Body className="p-4 position-relative">
-                  <div className="position-absolute top-0 end-0 p-3">
-                    <Button
-                      size="sm"
-                      variant="link"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingSessionId(s.id);
-                        setSessionForm(s);
-                        setShowSessionModal(true);
-                      }}
+                {/* Top Colored Bar (Optional aesthetic touch) */}
+                <div
+                  style={{
+                    height: "6px",
+                    width: "100%",
+                    background:
+                      "linear-gradient(90deg, #0d6efd 0%, #6610f2 100%)",
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                  }}
+                ></div>
+
+                <div className="d-flex justify-content-between align-items-start mb-3 mt-2">
+                  {/* Date Box */}
+                  <div
+                    className="rounded p-2 text-center border"
+                    style={{
+                      minWidth: "60px",
+                      backgroundColor: "var(--soft-hover)",
+                      borderColor: "var(--border-color)",
+                    }}
+                  >
+                    <div
+                      className="fw-bold text-primary"
+                      style={{ lineHeight: "1" }}
                     >
-                      <i className="bi bi-pencil"></i>
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="link"
-                      className="text-danger"
-                      onClick={(e) => handleDeleteSession(e, s.id)}
+                      {new Date(s.date).getDate()}
+                    </div>
+                    <div
+                      className="small text-uppercase text-muted"
+                      style={{ fontSize: "0.65rem" }}
                     >
-                      <i className="bi bi-trash"></i>
-                    </Button>
+                      {new Date(s.date).toLocaleString("default", {
+                        month: "short",
+                      })}
+                    </div>
                   </div>
-                  <h5 className="fw-bold mb-1">
-                    Meeting {sessions.length - idx}
-                  </h5>
-                  <Badge bg="light" text="dark" className="border mb-2">
-                    {s.date}
-                  </Badge>
-                  <div className="small text-muted">{s.venue}</div>
-                </Card.Body>
-              </Card>
+
+                  {/* Action Dropdown */}
+                  <Dropdown onClick={(e) => e.stopPropagation()}>
+                    <Dropdown.Toggle
+                      variant="link"
+                      className="text-muted p-0 no-caret"
+                      id={`dropdown-${s.id}`}
+                    >
+                      <i className="bi bi-three-dots"></i>
+                    </Dropdown.Toggle>
+                    <Dropdown.Menu align="end">
+                      <Dropdown.Item
+                        onClick={(e) => handleEditSessionClick(e, s)}
+                      >
+                        <i className="bi bi-pencil me-2"></i>Edit Details
+                      </Dropdown.Item>
+                      <Dropdown.Item
+                        className="text-danger"
+                        onClick={(e) => handleDeleteSession(e, s.id)}
+                      >
+                        <i className="bi bi-trash me-2"></i>Delete
+                      </Dropdown.Item>
+                    </Dropdown.Menu>
+                  </Dropdown>
+                </div>
+
+                <h5 className="fw-bold mb-2 text-truncate pe-2">
+                  {s.agenda || `Meeting #${sessions.length - idx}`}
+                </h5>
+
+                <div className="mb-3 text-muted small d-flex align-items-center">
+                  <i className="bi bi-clock me-2"></i>
+                  {s.time ? (
+                    <span>
+                      {new Date(`1970-01-01T${s.time}`).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  ) : (
+                    "Time TBD"
+                  )}
+                  <span className="mx-2">•</span>
+                  <i className="bi bi-geo-alt me-2"></i>
+                  <span className="text-truncate" style={{ maxWidth: "120px" }}>
+                    {s.venue || "No Venue"}
+                  </span>
+                </div>
+
+                <div
+                  className="mt-auto pt-3 border-top d-flex align-items-center justify-content-between"
+                  style={{ borderColor: "var(--border-color)" }}
+                >
+                  <div className="d-flex align-items-center">
+                    {/* Fake Avatar Stack for visual effect */}
+                    <div className="d-flex ms-2">
+                      {[1, 2, 3].map((i) => (
+                        <div
+                          key={i}
+                          className="rounded-circle border border-white d-flex align-items-center justify-content-center text-white small"
+                          style={{
+                            width: "24px",
+                            height: "24px",
+                            marginLeft: "-8px",
+                            backgroundColor: "#adb5bd",
+                            fontSize: "0.6rem",
+                          }}
+                        >
+                          <i className="bi bi-person-fill"></i>
+                        </div>
+                      ))}
+                    </div>
+                    <small
+                      className="text-muted ms-2"
+                      style={{ fontSize: "0.75rem" }}
+                    >
+                      View Attendees
+                    </small>
+                  </div>
+
+                  <Button
+                    variant="light"
+                    size="sm"
+                    className="rounded-pill px-3 soft-open-btn"
+                  >
+                    Open <i className="bi bi-arrow-right ms-1"></i>
+                  </Button>
+                </div>
+              </div>
             </Col>
           ))}
         </Row>
@@ -283,91 +458,164 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
           onHide={() => setShowSessionModal(false)}
           centered
         >
-          <Modal.Header closeButton>
-            <Modal.Title>Meeting Details</Modal.Title>
-          </Modal.Header>
-          <Modal.Body>
-            <Form className="d-grid gap-3">
-              <Form.Control
-                type="date"
-                value={sessionForm.date || ""}
-                onChange={(e) =>
-                  setSessionForm({ ...sessionForm, date: e.target.value })
-                }
-              />
-              <Row>
-                <Col>
+          <div className="soft-card border-0 p-0 overflow-hidden">
+            <Modal.Header
+              closeButton
+              className="border-bottom"
+              style={{ borderColor: "var(--border-color)" }}
+            >
+              <Modal.Title className="fw-bold h5">Meeting Details</Modal.Title>
+            </Modal.Header>
+            <Modal.Body className="p-4">
+              <Form className="d-grid gap-3">
+                <Form.Group>
+                  <Form.Label className="small fw-bold text-muted">
+                    DATE
+                  </Form.Label>
                   <Form.Control
-                    type="time"
-                    value={sessionForm.time || ""}
+                    type="date"
+                    className="form-control"
+                    value={sessionForm.date || ""}
                     onChange={(e) =>
-                      setSessionForm({ ...sessionForm, time: e.target.value })
+                      setSessionForm({ ...sessionForm, date: e.target.value })
                     }
                   />
-                </Col>
-                <Col>
+                </Form.Group>
+                <Row>
+                  <Col>
+                    <Form.Group>
+                      <Form.Label className="small fw-bold text-muted">
+                        TIME
+                      </Form.Label>
+                      <Form.Control
+                        type="time"
+                        className="form-control"
+                        value={sessionForm.time || ""}
+                        onChange={(e) =>
+                          setSessionForm({
+                            ...sessionForm,
+                            time: e.target.value,
+                          })
+                        }
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col>
+                    <Form.Group>
+                      <Form.Label className="small fw-bold text-muted">
+                        VENUE
+                      </Form.Label>
+                      <Form.Control
+                        placeholder="e.g. Conference Room"
+                        className="form-control"
+                        value={sessionForm.venue || ""}
+                        onChange={(e) =>
+                          setSessionForm({
+                            ...sessionForm,
+                            venue: e.target.value,
+                          })
+                        }
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
+                <Form.Group>
+                  <Form.Label className="small fw-bold text-muted">
+                    AGENDA / TOPIC
+                  </Form.Label>
                   <Form.Control
-                    placeholder="Venue"
-                    value={sessionForm.venue || ""}
+                    as="textarea"
+                    rows={3}
+                    placeholder="What is this meeting about?"
+                    className="form-control"
+                    value={sessionForm.agenda || ""}
                     onChange={(e) =>
-                      setSessionForm({ ...sessionForm, venue: e.target.value })
+                      setSessionForm({ ...sessionForm, agenda: e.target.value })
                     }
                   />
-                </Col>
-              </Row>
-              <Form.Control
-                as="textarea"
-                placeholder="Agenda"
-                value={sessionForm.agenda || ""}
-                onChange={(e) =>
-                  setSessionForm({ ...sessionForm, agenda: e.target.value })
-                }
-              />
-            </Form>
-          </Modal.Body>
-          <Modal.Footer>
-            <Button onClick={handleCreateSession}>Save</Button>
-          </Modal.Footer>
+                </Form.Group>
+              </Form>
+            </Modal.Body>
+            <Modal.Footer className="border-0 p-3 pt-0">
+              <Button
+                variant="light"
+                onClick={() => setShowSessionModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleCreateSession}
+                className="px-4"
+              >
+                Save Meeting
+              </Button>
+            </Modal.Footer>
+          </div>
         </Modal>
       </>
     );
   }
 
-  // --- RENDER DETAIL VIEW ---
+  // --- RENDER DETAIL VIEW (List of Students) ---
   return (
     <>
       <div className="d-flex align-items-center mb-4 gap-3">
         <Button
           variant="outline-secondary"
-          className="me-3 rounded-circle"
+          className="me-3 rounded-circle shadow-sm"
+          style={{
+            width: "40px",
+            height: "40px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
           onClick={() => setActiveSession(null)}
         >
           <i className="bi bi-arrow-left"></i>
         </Button>
         <div>
-          <h3 className="fw-bold mb-0">Meeting Details</h3>
+          <h3
+            className="fw-bold mb-0 text-truncate"
+            style={{ maxWidth: "500px" }}
+          >
+            {activeSession.agenda || "Meeting Details"}
+          </h3>
           <span className="text-muted small">
-            {activeSession.date} &bull; {activeSession.venue}
+            <i className="bi bi-calendar-event me-1"></i> {activeSession.date}
+            <span className="mx-2">•</span>
+            <i className="bi bi-geo-alt me-1"></i>{" "}
+            {activeSession.venue || "No Venue"}
           </span>
         </div>
         <div className="ms-auto d-flex gap-2">
-          {/* UPDATED: Added Icon for PDF */}
-          <Button variant="outline-danger" onClick={generatePDF}>
-            <i className="bi bi-file-earmark-pdf me-2"></i>Generate PDF
-          </Button>
+          <OverlayTrigger
+            placement="bottom"
+            overlay={<Tooltip>Download PDF Report</Tooltip>}
+          >
+            <Button
+              variant="outline-danger"
+              className="d-flex align-items-center"
+              onClick={generatePDF}
+            >
+              <i className="bi bi-file-earmark-pdf fs-5"></i>
+            </Button>
+          </OverlayTrigger>
 
-          {/* UPDATED: Added Icon for Add Student */}
           <Button
+            variant="primary"
+            className="d-flex align-items-center gap-2"
             onClick={() => {
               setEditingStudentId(null);
               setStudentForm({});
               setShowStudentModal(true);
             }}
           >
-            <i className="bi bi-person-plus-fill me-2"></i>Add Student
+            <i className="bi bi-person-plus-fill"></i>{" "}
+            <span className="d-none d-md-inline">Add Student</span>
           </Button>
 
-          {/* UPDATED: Added Icon for Upload Excel */}
           <div className="d-inline-block">
             <input
               type="file"
@@ -378,63 +626,110 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
             />
             <label
               htmlFor="att-file"
-              className="btn btn-success text-white mb-0"
+              className="btn btn-success text-white mb-0 d-flex align-items-center gap-2"
+              style={{ height: "100%" }}
             >
-              <i className="bi bi-file-earmark-spreadsheet-fill me-2"></i>Upload
-              Excel
+              <i className="bi bi-file-earmark-spreadsheet-fill"></i>{" "}
+              <span className="d-none d-md-inline">Import Excel</span>
             </label>
           </div>
         </div>
       </div>
 
-      <Card className="border-0 shadow-sm">
-        <Table hover responsive className="mb-0">
-          <thead className="table-dark">
+      <div className="soft-card p-0 overflow-hidden shadow-sm">
+        <Table hover responsive className="mb-0 align-middle">
+          <thead style={{ backgroundColor: "var(--soft-hover)" }}>
             <tr>
-              <th>#</th>
-              <th>Name</th>
-              <th>URN</th>
-              <th>Team</th>
-              <th>Action</th>
+              <th
+                className="ps-4 py-3 text-secondary text-uppercase small"
+                style={{ width: "5%" }}
+              >
+                #
+              </th>
+              <th
+                className="text-secondary text-uppercase small"
+                style={{ width: "35%" }}
+              >
+                Student Name
+              </th>
+              <th className="text-secondary text-uppercase small">URN</th>
+              <th className="text-secondary text-uppercase small">Team</th>
+              <th className="text-end pe-4 text-secondary text-uppercase small">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody>
-            {sessionStudents.map((s, idx) => (
-              <tr key={s.id}>
-                <td>{idx + 1}</td>
-                <td className="fw-bold">{s.name}</td>
-                <td>{s.urn}</td>
-                <td>{s.team}</td>
-                <td>
-                  <div className="d-flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline-secondary"
-                      className="border-0"
-                      onClick={() => {
-                        setEditingStudentId(s.id);
-                        setStudentForm(s);
-                        setShowStudentModal(true);
-                      }}
-                    >
-                      <i className="bi bi-pencil-fill text-primary"></i>
-                    </Button>
-
-                    <Button
-                      size="sm"
-                      variant="outline-secondary"
-                      className="border-0"
-                      onClick={() => handleDeleteStudent(s.id)}
-                    >
-                      <i className="bi bi-trash-fill text-danger"></i>
-                    </Button>
-                  </div>
+            {sessionStudents.length === 0 ? (
+              <tr>
+                <td colSpan="5" className="text-center py-5 text-muted">
+                  <i className="bi bi-people display-4 opacity-25 d-block mb-3"></i>
+                  No students added to this meeting yet.
                 </td>
               </tr>
-            ))}
+            ) : (
+              sessionStudents.map((s, idx) => (
+                <tr
+                  key={s.id}
+                  style={{ borderBottom: "1px solid var(--border-color)" }}
+                >
+                  <td className="ps-4 text-muted">{idx + 1}</td>
+                  <td>
+                    <div className="d-flex align-items-center">
+                      <div
+                        className="avatar-circle me-3 flex-shrink-0"
+                        style={{
+                          width: "32px",
+                          height: "32px",
+                          fontSize: "0.8rem",
+                          backgroundColor: "var(--bg-main)",
+                          border: "1px solid var(--border-color)",
+                        }}
+                      >
+                        {getInitials(s.name)}
+                      </div>
+                      <span className="fw-bold text-body">{s.name}</span>
+                    </div>
+                  </td>
+                  <td className="text-muted">
+                    <code className="text-primary">{s.urn}</code>
+                  </td>
+                  <td>
+                    <Badge bg="light" text="dark" className="border fw-normal">
+                      {s.team || "General"}
+                    </Badge>
+                  </td>
+                  <td className="text-end pe-4">
+                    <div className="d-flex justify-content-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="light"
+                        className="border-0 bg-transparent text-primary p-1"
+                        onClick={() => {
+                          setEditingStudentId(s.id);
+                          setStudentForm(s);
+                          setShowStudentModal(true);
+                        }}
+                      >
+                        <i className="bi bi-pencil-fill"></i>
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="light"
+                        className="border-0 bg-transparent text-danger p-1"
+                        onClick={() => handleDeleteStudent(s.id)}
+                      >
+                        <i className="bi bi-trash-fill"></i>
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </Table>
-      </Card>
+      </div>
 
       {/* STUDENT MODAL */}
       <Modal
@@ -442,39 +737,92 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
         onHide={() => setShowStudentModal(false)}
         centered
       >
-        <Modal.Body className="d-grid gap-3">
-          <Form.Control
-            placeholder="Name"
-            value={studentForm.name || ""}
-            onChange={(e) =>
-              setStudentForm({ ...studentForm, name: e.target.value })
-            }
-          />
-          <Form.Control
-            placeholder="URN"
-            value={studentForm.urn || ""}
-            onChange={(e) =>
-              setStudentForm({ ...studentForm, urn: e.target.value })
-            }
-          />
-          <Form.Control
-            placeholder="Phone"
-            value={studentForm.phone || ""}
-            onChange={(e) =>
-              setStudentForm({ ...studentForm, phone: e.target.value })
-            }
-          />
-          <Form.Control
-            placeholder="Team"
-            value={studentForm.team || ""}
-            onChange={(e) =>
-              setStudentForm({ ...studentForm, team: e.target.value })
-            }
-          />
-        </Modal.Body>
-        <Modal.Footer>
-          <Button onClick={handleSaveStudent}>Save</Button>
-        </Modal.Footer>
+        <div className="soft-card border-0 p-0 overflow-hidden">
+          <Modal.Header
+            closeButton
+            className="border-bottom"
+            style={{ borderColor: "var(--border-color)" }}
+          >
+            <Modal.Title className="fw-bold h5">Student Details</Modal.Title>
+          </Modal.Header>
+          <Modal.Body className="p-4">
+            <Form className="d-grid gap-3">
+              <Form.Group>
+                <Form.Label className="small fw-bold text-muted">
+                  FULL NAME
+                </Form.Label>
+                <Form.Control
+                  placeholder="e.g. John Doe"
+                  className="form-control"
+                  value={studentForm.name || ""}
+                  onChange={(e) =>
+                    setStudentForm({ ...studentForm, name: e.target.value })
+                  }
+                />
+              </Form.Group>
+              <Row>
+                <Col>
+                  <Form.Group>
+                    <Form.Label className="small fw-bold text-muted">
+                      URN / ID
+                    </Form.Label>
+                    <Form.Control
+                      placeholder="e.g. 2004567"
+                      className="form-control"
+                      value={studentForm.urn || ""}
+                      onChange={(e) =>
+                        setStudentForm({ ...studentForm, urn: e.target.value })
+                      }
+                    />
+                  </Form.Group>
+                </Col>
+                <Col>
+                  <Form.Group>
+                    <Form.Label className="small fw-bold text-muted">
+                      PHONE
+                    </Form.Label>
+                    <Form.Control
+                      placeholder="Optional"
+                      className="form-control"
+                      value={studentForm.phone || ""}
+                      onChange={(e) =>
+                        setStudentForm({
+                          ...studentForm,
+                          phone: e.target.value,
+                        })
+                      }
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+              <Form.Group>
+                <Form.Label className="small fw-bold text-muted">
+                  TEAM / DEPARTMENT
+                </Form.Label>
+                <Form.Control
+                  placeholder="e.g. Logistics"
+                  className="form-control"
+                  value={studentForm.team || ""}
+                  onChange={(e) =>
+                    setStudentForm({ ...studentForm, team: e.target.value })
+                  }
+                />
+              </Form.Group>
+            </Form>
+          </Modal.Body>
+          <Modal.Footer className="border-0 p-3 pt-0">
+            <Button variant="light" onClick={() => setShowStudentModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleSaveStudent}
+              className="px-4"
+            >
+              Save Entry
+            </Button>
+          </Modal.Footer>
+        </div>
       </Modal>
     </>
   );

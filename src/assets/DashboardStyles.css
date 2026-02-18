@@ -1,0 +1,366 @@
+/* src/assets/DashboardStyles.css */
+
+/* =========================================
+   1. COLOR VARIABLES (THEME CONFIG)
+   ========================================= */
+
+/* DEFAULT (LIGHT MODE) */
+:root {
+    --bg-main: #f8f9fa;
+    --bg-sidebar: #ffffff;
+    --bg-card: #ffffff;
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --text-muted: #adb5bd;
+    --border-color: #dee2e6;
+    --border-dashed: #dee2e6;
+    --soft-hover: #f8f9fa;
+    --avatar-bg: #e9ecef;
+    --avatar-color: #495057;
+    --active-nav-bg: #fff0f3;
+    --active-nav-text: #d63384;
+    --shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+
+    /* Badge Colors (Light Mode) */
+    --badge-upcoming-bg: #e6f4ea;
+    --badge-upcoming-text: #1e7e34;
+    --badge-past-bg: #fce8e6;
+    --badge-past-text: #c5221f;
+}
+
+/* DARK MODE OVERRIDES (Bootstrap uses data-bs-theme="dark") */
+[data-bs-theme="dark"] {
+    --bg-main: #121212;
+    --bg-sidebar: #1e1e1e;
+    --bg-card: #1e1e1e;
+    --text-primary: #e0e0e0;
+    --text-secondary: #b0b3b8;
+    --text-muted: #6c757d;
+    --border-color: #333333;
+    --border-dashed: #444444;
+    --soft-hover: #2c2c2c;
+    --avatar-bg: #2c2c2c;
+    --avatar-color: #e0e0e0;
+    --active-nav-bg: #3c1e28;
+    /* Darker pink for dark mode */
+    --active-nav-text: #ff80ab;
+    --shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+
+    /* Badge Colors (Dark Mode) */
+    --badge-upcoming-bg: #1b4d2e;
+    --badge-upcoming-text: #a3cfbb;
+    --badge-past-bg: #5c1e1e;
+    --badge-past-text: #f5c2c7;
+}
+
+/* =========================================
+   2. GLOBAL STYLES
+   ========================================= */
+
+body {
+    background-color: var(--bg-main) !important;
+    color: var(--text-primary) !important;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* =========================================
+   3. SIDEBAR NAVIGATION
+   ========================================= */
+
+.sidebar-nav {
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    padding-top: 2rem;
+    background-color: var(--bg-sidebar) !important;
+    border-right: 1px solid var(--border-color) !important;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.nav-item-custom {
+    padding: 12px 20px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+}
+
+.nav-item-custom:hover:not(.active) {
+    background-color: var(--soft-hover);
+    color: var(--text-primary);
+}
+
+.nav-item-custom.active {
+    background-color: var(--active-nav-bg);
+    color: var(--active-nav-text);
+}
+
+/* =========================================
+   4. CARDS & DASHBOARD ELEMENTS
+   ========================================= */
+
+.soft-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    transition: all 0.2s ease-in-out;
+    text-align: center;
+    padding: 24px;
+    height: 100%;
+    position: relative;
+    color: var(--text-primary);
+}
+
+.soft-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow);
+    border-color: var(--text-secondary);
+    /* Slight highlight on hover */
+    cursor: pointer;
+}
+
+/* Dashed Add Card */
+.add-card {
+    border: 2px dashed var(--border-dashed);
+    background-color: transparent;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+}
+
+.add-card:hover {
+    border-color: #0d6efd;
+    color: #0d6efd;
+    background-color: rgba(13, 110, 253, 0.05);
+}
+
+/* Avatar Circles */
+.avatar-circle {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background-color: var(--avatar-bg);
+    color: var(--avatar-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+        margin: 0 0 16px 0;
+    font-size: 24px;
+}
+
+/* Center avatar inside cards but keep table avatars left-aligned */
+.soft-card .avatar-circle {
+    margin: 0 auto 16px auto;
+}
+
+/* =========================================
+   5. BADGES & UTILITIES
+   ========================================= */
+
+.status-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-top: 8px;
+}
+
+.status-upcoming {
+    background-color: var(--badge-upcoming-bg);
+    color: var(--badge-upcoming-text);
+}
+
+.status-past {
+    background-color: var(--badge-past-bg);
+    color: var(--badge-past-text);
+}
+
+.text-muted {
+    color: var(--text-secondary) !important;
+}
+
+/* =========================================
+   6. FLOATING THEME TOGGLE BUTTON
+   ========================================= */
+
+.theme-toggle-btn {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: none;
+    background-color: #0d6efd;
+    color: white;
+    font-size: 1.5rem;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 1050;
+    transition: transform 0.2s;
+}
+
+.theme-toggle-btn:hover {
+    transform: scale(1.1);
+}
+
+/* =========================================
+   7. FORM INPUTS & PLACEHOLDERS FIX
+   ========================================= */
+
+/* Force inputs to use Theme Variables */
+.form-control,
+.form-select {
+    background-color: var(--bg-main) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-color) !important;
+}
+
+/* Fix Focus State */
+.form-control:focus,
+.form-select:focus {
+    background-color: var(--bg-main) !important;
+    color: var(--text-primary) !important;
+    border-color: #0d6efd !important;
+    /* Bootstrap Primary Blue */
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+/* PLACEHOLDER COLOR FIX */
+/* We use opacity 1 to ensure the color is distinct */
+.form-control::placeholder {
+    color: var(--text-secondary) !important;
+    opacity: 0.7;
+}
+
+/* Webkit (Chrome/Safari/Edge) specific */
+::-webkit-input-placeholder {
+    color: var(--text-secondary) !important;
+}
+
+/* Firefox specific */
+::-moz-placeholder {
+    color: var(--text-secondary) !important;
+}
+
+/* =========================================
+   8. CALENDAR & LINK FIXES
+   ========================================= */
+
+/* Ensure links inside cards use the primary text color (Fixes Calendar Title) */
+.soft-card a {
+    color: var(--text-primary) !important;
+    text-decoration: none;
+}
+
+.soft-card a:hover {
+    color: #0d6efd !important;
+    /* Blue on hover */
+}
+
+/* Fix for disabled/readonly inputs (like in Profile) */
+.form-control:disabled,
+.form-control[readonly] {
+    background-color: var(--soft-hover) !important;
+    opacity: 1;
+}
+
+/* src/assets/DashboardStyles.css */
+
+/* FORCE DARK MODE COLORS */
+/* Use explicit descendant selectors to ensure valid CSS (no nesting) */
+[data-bs-theme="dark"] .form-control,
+[data-bs-theme="dark"] .form-select,
+[data-bs-theme="dark"] .form-control:focus {
+    background-color: #1a1a1a !important; /* Solid dark grey */
+    color: #ffffff !important; /* Pure white text */
+    border: 1px solid #333 !important;
+}
+
+[data-bs-theme="dark"] .form-control::placeholder {
+    color: #888 !important;
+    opacity: 1 !important;
+}
+
+[data-bs-theme="dark"] .soft-card h5,
+[data-bs-theme="dark"] .soft-card .text-body,
+[data-bs-theme="dark"] .soft-card a {
+    color: #ffffff !important;
+}
+
+[data-bs-theme="dark"] .table thead th {
+    background-color: #1a1a1a !important;
+    color: #aaaaaa !important;
+    border-bottom: 1px solid #333 !important;
+}
+
+[data-bs-theme="dark"] .table tbody td {
+    background-color: transparent !important;
+    color: #ffffff !important;
+    border-bottom: 1px solid #222 !important;
+}
+
+[data-bs-theme="dark"] .card {
+    background-color: var(--bg-card) !important;
+    border: 1px solid var(--border-color) !important;
+}
+
+/* Ensure tables inherit dark backgrounds and have transparent row backgrounds */
+[data-bs-theme="dark"] .soft-card {
+    background-color: var(--bg-card) !important;
+    border-color: var(--border-color) !important;
+}
+
+[data-bs-theme="dark"] table,
+[data-bs-theme="dark"] .table {
+    background-color: transparent !important;
+}
+
+[data-bs-theme="dark"] .table > :where(thead, tbody, tfoot) > tr > th,
+[data-bs-theme="dark"] .table > :where(thead, tbody, tfoot) > tr > td {
+    background-color: transparent !important;
+    color: var(--text-primary) !important;
+}
+
+/* Ensure avatar and user columns stay left aligned in tables */
+.table td .avatar-circle {
+    margin: 0 12px 0 0; /* small right gap when placed inline in table rows */
+}
+
+/* When avatar is placed inside a flex row in a soft-card, keep it left aligned */
+.soft-card .d-flex .avatar-circle {
+    margin: 0 12px 0 0 !important;
+    align-self: center;
+}
+
+/* Category badge used inside soft-cards */
+.category-badge {
+    display: inline-block;
+    padding: 6px 10px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+}
+
+/* Small themed button used across dashboard cards (keeps good contrast in dark mode) */
+.soft-open-btn {
+    background-color: var(--soft-hover) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border-color) !important;
+    box-shadow: none !important;
+}
+
+/* Slight hover emphasis */
+.soft-open-btn:hover {
+    background-color: rgba(13,110,253,0.06) !important;
+}
