@@ -6,9 +6,9 @@ import {
   onAuthStateChanged,
 } from "firebase/auth";
 import { auth } from "../firebase";
-import { useNavigate, Link } from "react-router-dom"; // Added Link
+import { useNavigate, Link } from "react-router-dom";
 import { Container, Form, Button, Alert, Spinner } from "react-bootstrap";
-import "../assets/DashboardStyles.css"; // Ensure theme variables are available
+import "../assets/DashboardStyles.css";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -76,22 +76,35 @@ export default function Login() {
       style={{ backgroundColor: "var(--bg-main)" }}
     >
       <Container style={{ maxWidth: "420px" }}>
-        {/* Using soft-card class for theme consistency */}
-        <div className="soft-card p-5 shadow-sm text-start">
-          <h2 className="text-center fw-bold mb-2">Admin Login</h2>
-          <p className="text-center text-muted small mb-4">
-            GNDEC Cultural Committee Portal
-          </p>
+        {/* Soft UI Card with proper background for Dark Mode */}
+        <div
+          className="soft-card p-5 shadow-sm text-start"
+          style={{
+            backgroundColor: "var(--bg-card)",
+            color: "var(--text-primary)",
+          }}
+        >
+          <div className="text-center mb-4">
+            {/* Optional: Add Logo Here if you have one */}
+            {/* <img src="/logo.png" alt="Logo" height="50" className="mb-3" /> */}
+            <h2 className="fw-bold mb-1">Welcome Back</h2>
+            <p className="text-muted small">
+              Sign in to the Cultural Committee Portal
+            </p>
+          </div>
 
           {error && (
-            <Alert variant="danger" className="py-2 small">
+            <Alert variant="danger" className="py-2 small mb-4">
+              <i className="bi bi-exclamation-circle-fill me-2"></i>
               {error}
             </Alert>
           )}
 
           <Form onSubmit={handleLogin}>
             <Form.Group className="mb-3">
-              <Form.Label className="small fw-bold">Email Address</Form.Label>
+              <Form.Label className="small fw-bold text-muted">
+                EMAIL ADDRESS
+              </Form.Label>
               <Form.Control
                 type="email"
                 placeholder="name@example.com"
@@ -99,19 +112,21 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoFocus
-                className="py-2"
+                className="py-2 form-control" // Uses CSS variables from DashboardStyles
               />
             </Form.Group>
 
             <Form.Group className="mb-4">
-              <div className="d-flex justify-content-between align-items-center">
-                <Form.Label className="small fw-bold">Password</Form.Label>
+              <div className="d-flex justify-content-between align-items-center mb-1">
+                <Form.Label className="small fw-bold text-muted mb-0">
+                  PASSWORD
+                </Form.Label>
                 <Link
                   to="/forgot-password"
-                  style={{ fontSize: "0.75rem" }}
-                  className="text-decoration-none"
+                  className="text-decoration-none small"
+                  style={{ color: "#0d6efd" }}
                 >
-                  Forgot?
+                  Forgot password?
                 </Link>
               </div>
               <Form.Control
@@ -120,7 +135,7 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="py-2"
+                className="py-2 form-control"
               />
             </Form.Group>
 
@@ -131,11 +146,12 @@ export default function Login() {
                 disabled={loading}
                 size="lg"
                 className="fw-bold"
+                style={{ fontSize: "1rem" }}
               >
                 {loading ? (
                   <Spinner as="span" animation="border" size="sm" />
                 ) : (
-                  "Log In"
+                  "Sign In"
                 )}
               </Button>
 
@@ -143,7 +159,7 @@ export default function Login() {
                 <hr style={{ borderColor: "var(--border-color)" }} />
                 <span
                   className="position-absolute top-50 start-50 translate-middle px-3 small text-muted"
-                  style={{ backgroundColor: "var(--bg-card)" }}
+                  style={{ backgroundColor: "var(--bg-card)" }} // Matches card bg in Dark Mode
                 >
                   OR
                 </span>
@@ -153,21 +169,25 @@ export default function Login() {
                 variant="outline-secondary"
                 onClick={handleGoogleLogin}
                 disabled={loading}
-                className="d-flex align-items-center justify-content-center py-2"
+                className="d-flex align-items-center justify-content-center py-2 bg-transparent"
                 style={{
                   borderColor: "var(--border-color)",
                   color: "var(--text-primary)",
                 }}
               >
-                <i className="bi bi-google me-2"></i> Continue with Google
+                <i className="bi bi-google me-2 text-danger"></i> Continue with
+                Google
               </Button>
             </div>
           </Form>
 
-          <div className="text-center mt-4">
-            <p className="small text-muted mb-0">
+          <div
+            className="text-center mt-4 pt-2 border-top"
+            style={{ borderColor: "var(--border-color)" }}
+          >
+            <p className="small text-muted mb-0 mt-3">
               Don't have an account?{" "}
-              <Link to="/signup" className="fw-bold text-decoration-none">
+              <Link to="/signup" className="fw-bold text-decoration-none ms-1">
                 Create Account
               </Link>
             </p>
