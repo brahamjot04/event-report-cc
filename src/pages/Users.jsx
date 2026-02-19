@@ -85,11 +85,15 @@ export default function Users() {
   }, []);
 
   const updateStatus = async (userId, newStatus, currentRole) => {
+    const user = users.find((u) => u.id === userId);
     await updateDoc(doc(db, "users", userId), {
       status: newStatus,
       role: currentRole,
     });
     fetchUsers();
+    const action = newStatus === "approved" ? "APPROVE" : "SUSPEND";
+    const message = `${action} user: ${user?.name} (${user?.email}) - Role: ${currentRole}`;
+    await logAction(action, message);
   };
 
   // NEW FUNCTION: specifically for toggling user vs admin roles
@@ -97,10 +101,13 @@ export default function Users() {
     if (
       window.confirm(`Are you sure you want to make this person an ${newRole}?`)
     ) {
+      const user = users.find((u) => u.id === userId);
       await updateDoc(doc(db, "users", userId), {
         role: newRole,
       });
       fetchUsers();
+      const message = `Changed role for ${user?.name} (${user?.email}) to ${newRole}`;
+      await logAction("UPDATE_ROLE", message);
     }
   };
 
@@ -383,15 +390,13 @@ export default function Users() {
                             }
                             size="sm"
                             className="px-3"
-                            onClick={() =>
-                              updateStatus(
-                                user.id,
+                            onClick={() => {
+                              const newStatus =
                                 user.status === "approved"
                                   ? "suspended"
-                                  : "approved",
-                                user.role,
-                              )
-                            }
+                                  : "approved";
+                              updateStatus(user.id, newStatus, user.role);
+                            }}
                           >
                             {user.status === "approved" ? (
                               <>Revoke Access</>
@@ -470,9 +475,9 @@ export default function Users() {
                           variant="success"
                           size="sm"
                           className="me-2 rounded-pill px-3"
-                          onClick={() =>
-                            updateStatus(user.id, "approved", "admin")
-                          }
+                          onClick={() => {
+                            updateStatus(user.id, "approved", "admin");
+                          }}
                         >
                           Approve as Admin
                         </Button>
@@ -480,9 +485,9 @@ export default function Users() {
                           variant="outline-primary"
                           size="sm"
                           className="rounded-pill px-3"
-                          onClick={() =>
-                            updateStatus(user.id, "approved", "user")
-                          }
+                          onClick={() => {
+                            updateStatus(user.id, "approved", "user");
+                          }}
                         >
                           Approve as Viewer
                         </Button>
