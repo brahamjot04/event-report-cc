@@ -43,6 +43,8 @@ export default function Users() {
   const [newUser, setNewUser] = useState({ name: "", email: "", role: "user" });
   const [generatedPass, setGeneratedPass] = useState("");
   const [creating, setCreating] = useState(false);
+  const [selectedRoleFilter, setSelectedRoleFilter] = useState(null);
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState(null);
 
   const navigate = useNavigate();
 
@@ -185,6 +187,96 @@ export default function Users() {
 
       <Tabs defaultActiveKey="active" className="mb-4 custom-tabs border-0">
         <Tab eventKey="active" title={`Active Users (${activeUsers.length})`}>
+          {/* Role Filter Chips */}
+          <div className="mb-3 d-flex flex-wrap gap-2 align-items-center">
+            <span className="text-muted small fw-bold me-2">
+              Filter by role:
+            </span>
+            <Button
+              size="sm"
+              variant={
+                selectedRoleFilter === null ? "primary" : "outline-secondary"
+              }
+              className="rounded-pill"
+              onClick={() => setSelectedRoleFilter(null)}
+            >
+              All Roles
+            </Button>
+            <Button
+              size="sm"
+              variant={
+                selectedRoleFilter === "super_admin"
+                  ? "primary"
+                  : "outline-secondary"
+              }
+              className="rounded-pill"
+              onClick={() => setSelectedRoleFilter("super_admin")}
+            >
+              Super Admin
+            </Button>
+            <Button
+              size="sm"
+              variant={
+                selectedRoleFilter === "admin" ? "primary" : "outline-secondary"
+              }
+              className="rounded-pill"
+              onClick={() => setSelectedRoleFilter("admin")}
+            >
+              Admin
+            </Button>
+            <Button
+              size="sm"
+              variant={
+                selectedRoleFilter === "user" ? "primary" : "outline-secondary"
+              }
+              className="rounded-pill"
+              onClick={() => setSelectedRoleFilter("user")}
+            >
+              User
+            </Button>
+          </div>
+
+          {/* Status Filter Chips */}
+          <div className="mb-4 d-flex flex-wrap gap-2 align-items-center">
+            <span className="text-muted small fw-bold me-2">
+              Filter by status:
+            </span>
+            <Button
+              size="sm"
+              variant={
+                selectedStatusFilter === null ? "primary" : "outline-secondary"
+              }
+              className="rounded-pill"
+              onClick={() => setSelectedStatusFilter(null)}
+            >
+              All
+            </Button>
+            <Button
+              size="sm"
+              variant={
+                selectedStatusFilter === "approved"
+                  ? "primary"
+                  : "outline-secondary"
+              }
+              className="rounded-pill"
+              onClick={() => setSelectedStatusFilter("approved")}
+            >
+              Active
+            </Button>
+            <Button
+              size="sm"
+              variant={
+                selectedStatusFilter === "suspended"
+                  ? "primary"
+                  : "outline-secondary"
+              }
+              className="rounded-pill"
+              onClick={() => setSelectedStatusFilter("suspended")}
+            >
+              Suspended
+            </Button>
+          </div>
+
           <div
             className="soft-card p-0 overflow-hidden"
             style={{ height: "fit-content" }}
@@ -197,77 +289,100 @@ export default function Users() {
                   </th>
                   <th className="text-start">Role</th>
                   <th className="text-start">Status</th>
-                  <th className="text-end pe-4">Actions</th>
+                  <th className="text-center">Make Admin</th>
+                  <th className="text-end pe-4">Revoke Access</th>
                 </tr>
               </thead>
               <tbody>
-                {activeUsers.map((user) => (
-                  <tr
-                    key={user.id}
-                    style={{ borderBottom: "1px solid var(--border-color)" }}
-                  >
-                    <td className="ps-4 py-3">
-                      <div className="d-flex align-items-center text-start">
-                        <div
-                          className="avatar-circle bg-primary-subtle text-primary me-3 flex-shrink-0"
-                          style={{ width: 40, height: 40, fontSize: "1rem" }}
-                        >
-                          {user.name?.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="text-start">
+                {activeUsers
+                  .filter(
+                    (user) =>
+                      (selectedRoleFilter === null ||
+                        user.role === selectedRoleFilter) &&
+                      (selectedStatusFilter === null ||
+                        user.status === selectedStatusFilter),
+                  )
+                  .map((user) => (
+                    <tr
+                      key={user.id}
+                      style={{ borderBottom: "1px solid var(--border-color)" }}
+                    >
+                      <td className="ps-4 py-3">
+                        <div className="d-flex align-items-center text-start">
                           <div
-                            className="fw-bold text-body"
-                            style={{ color: "var(--text-primary) !important" }}
+                            className="avatar-circle bg-primary-subtle text-primary me-3 flex-shrink-0"
+                            style={{ width: 40, height: 40, fontSize: "1rem" }}
                           >
-                            {user.name}
+                            {user.name?.charAt(0).toUpperCase()}
                           </div>
-                          <div className="small text-muted">{user.email}</div>
+                          <div className="text-start">
+                            <div
+                              className="fw-bold text-body"
+                              style={{
+                                color: "var(--text-primary) !important",
+                              }}
+                            >
+                              {user.name}
+                            </div>
+                            <div className="small text-muted">{user.email}</div>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="text-start">
-                      <Badge
-                        bg={user.role === "super_admin" ? "danger" : "primary"}
-                        className="bg-opacity-10 text-primary fw-normal"
-                      >
-                        {user.role?.toUpperCase()}
-                      </Badge>
-                    </td>
-                    <td className="text-start">
-                      <Badge
-                        bg={user.status === "approved" ? "success" : "warning"}
-                        className="bg-opacity-10 text-success rounded-pill px-3"
-                      >
-                        {user.status === "approved" ? "Active" : "Suspended"}
-                      </Badge>
-                    </td>
-                    <td className="text-end pe-4">
-                      {user.role !== "super_admin" && (
-                        <div className="d-flex justify-content-end align-items-center gap-3">
-                          {/* ROLE TOGGLE BUTTON */}
-                          {user.role === "user" ? (
-                            <Button
-                              variant="link"
-                              className="p-0 text-decoration-none small fw-bold"
-                              style={{ color: "var(--text-primary)" }}
-                              onClick={() => updateRole(user.id, "admin")}
-                            >
-                              Make Admin
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="link"
-                              className="text-secondary p-0 text-decoration-none small fw-bold"
-                              onClick={() => updateRole(user.id, "user")}
-                            >
-                              Remove Admin
-                            </Button>
-                          )}
-
-                          {/* SUSPEND/RESTORE BUTTON */}
+                      </td>
+                      <td className="text-start">
+                        <Badge
+                          bg={
+                            user.role === "super_admin" ? "danger" : "primary"
+                          }
+                          className="bg-opacity-10 text-primary fw-normal"
+                        >
+                          {user.role?.toUpperCase()}
+                        </Badge>
+                      </td>
+                      <td className="text-start">
+                        <Badge
+                          bg={
+                            user.status === "approved" ? "success" : "warning"
+                          }
+                          className="bg-opacity-10 text-success rounded-pill px-3"
+                        >
+                          {user.status === "approved" ? "Active" : "Suspended"}
+                        </Badge>
+                      </td>
+                      <td className="text-center">
+                        {user.role !== "super_admin" && (
+                          <>
+                            {user.role === "user" ? (
+                              <Button
+                                variant="outline-primary"
+                                size="sm"
+                                className="px-3"
+                                onClick={() => updateRole(user.id, "admin")}
+                              >
+                                Make Admin
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline-secondary"
+                                size="sm"
+                                className="px-3"
+                                onClick={() => updateRole(user.id, "user")}
+                              >
+                                Remove Admin
+                              </Button>
+                            )}
+                          </>
+                        )}
+                      </td>
+                      <td className="text-center">
+                        {user.role !== "super_admin" && (
                           <Button
-                            variant="link"
-                            className="text-danger p-0 text-decoration-none small fw-bold"
+                            variant={
+                              user.status === "approved"
+                                ? "outline-danger"
+                                : "outline-success"
+                            }
+                            size="sm"
+                            className="px-3"
                             onClick={() =>
                               updateStatus(
                                 user.id,
@@ -278,15 +393,35 @@ export default function Users() {
                               )
                             }
                           >
-                            {user.status === "approved"
-                              ? "Revoke Access"
-                              : "Restore Access"}
+                            {user.status === "approved" ? (
+                              <>Revoke Access</>
+                            ) : (
+                              <>Restore Access</>
+                            )}
                           </Button>
-                        </div>
-                      )}
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                {activeUsers.filter(
+                  (user) =>
+                    (selectedRoleFilter === null ||
+                      user.role === selectedRoleFilter) &&
+                    (selectedStatusFilter === null ||
+                      user.status === selectedStatusFilter),
+                ).length === 0 && (
+                  <tr>
+                    <td
+                      colSpan="5"
+                      className="text-center py-4 text-muted border-0"
+                    >
+                      <i className="bi bi-people display-4 opacity-25 d-block mb-3"></i>
+                      {selectedRoleFilter || selectedStatusFilter
+                        ? "No users match the selected filters"
+                        : "No active users"}
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </Table>
           </div>
