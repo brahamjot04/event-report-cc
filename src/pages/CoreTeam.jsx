@@ -19,7 +19,7 @@ import {
   Image,
 } from "react-bootstrap";
 import Layout from "../components/Layout";
-import { uploadToGitHub } from "../utils/github"; // Import your GitHub utility
+import { uploadToGitHub, fetchImageFromGitHub } from "../utils/github"; // Import both functions
 
 // Custom Toggle for the Three-Dot Menu
 const CustomToggle = ({ children, onClick }) => (
@@ -39,6 +39,7 @@ export default function CoreTeam() {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
+  const [imageDataUrls, setImageDataUrls] = useState({}); // Store loaded image data URLs
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
@@ -70,12 +71,56 @@ export default function CoreTeam() {
           initial: data.name ? data.name.charAt(0).toUpperCase() : "?",
         };
       });
+      console.log("Fetched members:", teamList);
       setMembers(teamList);
+
+      // Load images for members that have imageUrl (path)
+      loadMemberImages(teamList);
     } catch (error) {
       console.error("Error fetching members:", error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadMemberImages = async (membersList) => {
+    const newImageDataUrls = {};
+
+    // Load all images in parallel with a timeout
+    const imagePromises = membersList.map(async (member) => {
+      if (member.imageUrl) {
+        console.log(`Loading image for ${member.name}:`, member.imageUrl);
+        try {
+          // Add a timeout to prevent infinite loading
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Timeout")), 10000),
+          );
+
+          const dataUrl = await Promise.race([
+            fetchImageFromGitHub(member.imageUrl),
+            timeoutPromise,
+          ]);
+
+          if (dataUrl) {
+            newImageDataUrls[member.id] = dataUrl;
+          } else {
+            console.warn(`Failed to load image for ${member.name}`);
+          }
+        } catch (error) {
+          console.error(
+            `Error loading image for ${member.name}:`,
+            error.message,
+          );
+        }
+      }
+    });
+
+    await Promise.all(imagePromises);
+    setImageDataUrls(newImageDataUrls);
+    console.log(
+      "All images loaded. Total:",
+      Object.keys(newImageDataUrls).length,
+    );
   };
 
   const handleImageChange = (e) => {
@@ -128,7 +173,7 @@ export default function CoreTeam() {
         });
       }
       handleCloseModal();
-      fetchMembers();
+      await fetchMembers(); // Refetch members and load images
     } catch (error) {
       console.error("Error saving member:", error);
     } finally {
@@ -141,7 +186,7 @@ export default function CoreTeam() {
     if (window.confirm("Are you sure you want to remove this member?")) {
       try {
         await deleteDoc(doc(db, "global_core_team", id));
-        fetchMembers();
+        await fetchMembers(); // Refetch members and reload images
       } catch (error) {
         console.error("Error deleting member:", error);
       }
@@ -203,25 +248,70 @@ export default function CoreTeam() {
 
       {/* TEAM GRID */}
       <Row className="g-4">
+        {/* ADD MEMBER CARD */}
+        <Col xs={12} sm={6} md={4} lg={3}>
+          <div
+            className="soft-card add-card h-100"
+            onClick={() => {
+              handleCloseModal(); // Reset state
+              setShowModal(true);
+            }}
+            style={{ minHeight: "320px" }}
+          >
+            <i className="bi bi-person-plus-fill fs-1 mb-3"></i>
+            <h6 className="fw-bold">Add Member</h6>
+            <small>Click to add new</small>
+          </div>
+        </Col>
+
         {members.map((member) => (
           <Col key={member.id} xs={12} sm={6} md={4} lg={3}>
             <div className="soft-card position-relative h-100 d-flex flex-column">
               {/* THREE DOT MENU (Top Right) */}
               <div
-                className="position-absolute top-0 end-0 p-2"
-                style={{ zIndex: 10 }}
+                className="position-absolute end-0 p-2"
+                style={{ top: "8px", zIndex: 1000 }}
               >
                 <Dropdown align="end">
                   <Dropdown.Toggle as={CustomToggle}>
                     <i className="bi bi-three-dots-vertical fs-5"></i>
                   </Dropdown.Toggle>
 
-                  <Dropdown.Menu style={{ minWidth: "8rem" }}>
-                    <Dropdown.Item onClick={() => handleEditClick(member)}>
+                  <Dropdown.Menu
+                    style={{
+                      minWidth: "8rem",
+                      backgroundColor: "var(--bg-card)",
+                      border: "1px solid var(--border-color)",
+                      zIndex: 1001,
+                    }}
+                  >
+                    <Dropdown.Item
+                      onClick={() => handleEditClick(member)}
+                      style={{
+                        backgroundColor: "transparent",
+                        color: "var(--text-primary)",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.backgroundColor = "var(--soft-hover)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.backgroundColor = "transparent";
+                      }}
+                    >
                       <i className="bi bi-pencil me-2 text-primary"></i> Edit
                     </Dropdown.Item>
                     <Dropdown.Item
                       onClick={() => handleDeleteMember(member.id)}
+                      style={{
+                        backgroundColor: "transparent",
+                        color: "var(--text-primary)",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.backgroundColor = "var(--soft-hover)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.backgroundColor = "transparent";
+                      }}
                     >
                       <i className="bi bi-trash me-2 text-danger"></i> Delete
                     </Dropdown.Item>
@@ -230,13 +320,29 @@ export default function CoreTeam() {
               </div>
 
               {/* Avatar - Displays Image if available, else initial */}
-              <div className="avatar-circle text-primary bg-primary-subtle mb-3 mt-2 overflow-hidden">
-                {member.imageUrl ? (
+              <div className="avatar-circle text-primary bg-primary-subtle mb-3 mt-2 overflow-hidden position-relative">
+                {imageDataUrls[member.id] ? (
                   <Image
-                    src={member.imageUrl}
+                    src={imageDataUrls[member.id]}
                     alt={member.name}
                     className="w-100 h-100 object-fit-cover"
+                    style={{ position: "absolute", top: 0, left: 0, zIndex: 2 }}
+                    onError={(e) => {
+                      console.error("Image failed to render:", member.imageUrl);
+                      e.target.style.display = "none";
+                    }}
+                    onLoad={() => {
+                      console.log(
+                        "Image rendered successfully for:",
+                        member.name,
+                      );
+                    }}
                   />
+                ) : member.imageUrl ? (
+                  // Show loading state while image is being fetched
+                  <div className="w-100 h-100 d-flex align-items-center justify-content-center">
+                    <Spinner animation="border" size="sm" variant="primary" />
+                  </div>
                 ) : (
                   member.initial
                 )}
@@ -271,22 +377,6 @@ export default function CoreTeam() {
             </div>
           </Col>
         ))}
-
-        {/* ADD MEMBER CARD */}
-        <Col xs={12} sm={6} md={4} lg={3}>
-          <div
-            className="soft-card add-card h-100"
-            onClick={() => {
-              handleCloseModal(); // Reset state
-              setShowModal(true);
-            }}
-            style={{ minHeight: "320px" }}
-          >
-            <i className="bi bi-person-plus-fill fs-1 mb-3"></i>
-            <h6 className="fw-bold">Add Member</h6>
-            <small>Click to add new</small>
-          </div>
-        </Col>
       </Row>
 
       {/* ADD/EDIT MODAL */}

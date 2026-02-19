@@ -7,6 +7,9 @@ const USERNAME = "brahamjot04";
 const REPO_NAME = "event-report-cc-app-data"; // e.g., "event-data"
 const BRANCH = "main"; // or "master"
 
+// Cache for loaded images to avoid repeated API calls
+const imageCache = new Map();
+
 // ⚠️ THE FIX: Added 'folder' argument with a default value
 export const uploadToGitHub = async (file, fileName, folder = "uploads") => {
   try {
@@ -49,8 +52,10 @@ export const uploadToGitHub = async (file, fileName, folder = "uploads") => {
     const data = await response.json();
 
     if (response.ok) {
-      // Return the download URL
-      return data.content.download_url; 
+      // For private repos, store the path - we'll fetch it later via API
+      console.log("Image uploaded successfully:", path);
+      console.log("Full upload response:", data);
+      return path; // Return the path, not the URL
     } else {
       console.error("GitHub Upload Error:", data);
       alert(`GitHub Upload Failed: ${data.message}`);
@@ -58,6 +63,73 @@ export const uploadToGitHub = async (file, fileName, folder = "uploads") => {
     }
   } catch (error) {
     console.error("Upload failed:", error);
+    return null;
+  }
+};
+
+// Fetch image from private GitHub repo and convert to data URL
+export const fetchImageFromGitHub = async (path) => {
+  // Check cache first
+  if (imageCache.has(path)) {
+    console.log("Image loaded from cache:", path);
+    return imageCache.get(path);
+  }
+
+  console.log("Fetching image from GitHub:", path);
+
+  try {
+    const url = `https://api.github.com/repos/${USERNAME}/${REPO_NAME}/contents/${path}`;
+    console.log("Request URL:", url);
+    
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${GITHUB_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
+      },
+    });
+
+    console.log("Response status:", response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Failed to fetch image:", response.status, errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    console.log("GitHub API response data keys:", Object.keys(data));
+    
+    // Check if content exists
+    if (!data.content) {
+      console.error("No content in response:", data);
+      return null;
+    }
+    
+    // GitHub API returns base64 content
+    // Determine mime type from file extension
+    const extension = path.split('.').pop().toLowerCase();
+    const mimeTypes = {
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+      'svg': 'image/svg+xml'
+    };
+    const mimeType = mimeTypes[extension] || 'image/jpeg';
+    
+    // Create data URL - remove all newlines and whitespace from base64
+    const cleanBase64 = data.content.replace(/\s/g, '');
+    const dataUrl = `data:${mimeType};base64,${cleanBase64}`;
+    
+    // Cache it
+    imageCache.set(path, dataUrl);
+    
+    console.log("Image fetched and cached successfully:", path);
+    return dataUrl;
+  } catch (error) {
+    console.error("Error fetching image from GitHub:", error);
+    console.error("Error details:", error.message);
     return null;
   }
 };
