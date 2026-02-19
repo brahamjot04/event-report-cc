@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cc-events-v1';
+const CACHE_NAME = 'cc-events-v2';
 const URLS_TO_CACHE = [
   '/',
   '/index.html',
@@ -31,13 +31,31 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch event - Network first for API calls, Cache first for assets
+// Fetch event - Network first for navigations/API, Cache first for assets
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
   // Skip non-GET requests and non-http schemes
   if (request.method !== 'GET' || !url.protocol.startsWith('http')) {
+    return;
+  }
+
+  // Always use network-first for navigations so / uses fresh index.html
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put('/index.html', clone);
+            });
+          }
+          return response;
+        })
+        .catch(() => caches.match('/index.html'))
+    );
     return;
   }
 
@@ -55,9 +73,7 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         })
-        .catch(() => {
-          return caches.match(request);
-        })
+        .catch(() => caches.match(request))
     );
     return;
   }
