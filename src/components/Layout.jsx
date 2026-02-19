@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Container, Row, Col } from "react-bootstrap";
 import { useNavigate, useLocation } from "react-router-dom";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
@@ -11,6 +11,8 @@ export default function Layout({ children }) {
   const [userName, setUserName] = useState("Loading...");
   const [userInitial, setUserInitial] = useState("?");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarAnimatingOut, setSidebarAnimatingOut] = useState(false);
+  const closeTimerRef = useRef(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     const saved = localStorage.getItem("sidebarCollapsed");
     return saved ? JSON.parse(saved) : false;
@@ -35,10 +37,43 @@ export default function Layout({ children }) {
     return () => unsubscribe();
   }, []);
 
+  const openSidebar = () => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    setSidebarAnimatingOut(false);
+    setSidebarOpen(true);
+  };
+
+  const closeSidebar = () => {
+    if (!sidebarOpen) {
+      return;
+    }
+    setSidebarAnimatingOut(true);
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+    }
+    closeTimerRef.current = setTimeout(() => {
+      setSidebarOpen(false);
+      setSidebarAnimatingOut(false);
+      closeTimerRef.current = null;
+    }, 600);
+  };
+
   // Close mobile sidebar when route changes (but keep collapsed state)
   useEffect(() => {
-    setSidebarOpen(false);
+    closeSidebar();
   }, [location.pathname]);
+
+  useEffect(
+    () => () => {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+      }
+    },
+    [],
+  );
 
   // Helper function to set active class
   const isActive = (path) =>
@@ -46,8 +81,10 @@ export default function Layout({ children }) {
 
   const handleNavClick = (path) => {
     navigate(path);
-    setSidebarOpen(false);
+    closeSidebar();
   };
+
+  const isMobileOpen = sidebarOpen && !sidebarAnimatingOut;
 
   return (
     <Container fluid className="p-0" style={{ minHeight: "100vh" }}>
@@ -55,7 +92,7 @@ export default function Layout({ children }) {
         {/* --- SIDEBAR --- */}
         <Col
           md={2}
-          className={`sidebar-nav ${sidebarOpen ? "mobile-sidebar-open" : ""} d-md-block ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}
+          className={`sidebar-nav ${isMobileOpen ? "mobile-sidebar-open" : ""} ${sidebarAnimatingOut ? "mobile-sidebar-closing" : ""} d-md-block ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}
         >
           <div className="sidebar-header px-4 mb-5 d-flex justify-content-between align-items-center">
             {!sidebarCollapsed && (
@@ -82,7 +119,7 @@ export default function Layout({ children }) {
             </button>
             <button
               className="btn btn-link d-md-none p-0 sidebar-close-btn ms-auto"
-              onClick={() => setSidebarOpen(false)}
+              onClick={closeSidebar}
               style={{
                 fontSize: "1.5rem",
                 border: "none",
@@ -157,8 +194,8 @@ export default function Layout({ children }) {
         {/* Mobile Sidebar Backdrop */}
         {sidebarOpen && (
           <div
-            className="mobile-sidebar-backdrop d-md-none"
-            onClick={() => setSidebarOpen(false)}
+            className={`mobile-sidebar-backdrop d-md-none ${sidebarAnimatingOut ? "fade-out" : ""}`}
+            onClick={closeSidebar}
           />
         )}
 
@@ -175,7 +212,7 @@ export default function Layout({ children }) {
           <div className="d-flex justify-content-between align-items-center mb-5">
             <button
               className="btn btn-link d-md-none p-0 hamburger-btn"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
+              onClick={() => (isMobileOpen ? closeSidebar() : openSidebar())}
               style={{ fontSize: "1.5rem", border: "none", cursor: "pointer" }}
             >
               <i className="bi bi-list"></i>
