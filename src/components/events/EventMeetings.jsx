@@ -636,7 +636,10 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
         </div>
       </div>
 
-      <div className="soft-card p-0 overflow-hidden shadow-sm">
+      <div
+        className="soft-card p-0 overflow-hidden shadow-sm"
+        style={{ height: "fit-content" }}
+      >
         <Table hover responsive className="mb-0 align-middle">
           <thead style={{ backgroundColor: "var(--soft-hover)" }}>
             <tr>

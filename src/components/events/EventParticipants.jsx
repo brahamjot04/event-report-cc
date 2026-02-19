@@ -21,7 +21,6 @@ import {
   InputGroup,
   ListGroup,
   Dropdown,
-  Card,
 } from "react-bootstrap";
 import { uploadToGitHub } from "../../utils/github";
 import readXlsxFile from "read-excel-file";
@@ -152,15 +151,6 @@ export default function EventParticipants({
     });
     setActiveItem({ ...activeItem, participants: p });
     fetchItems();
-  };
-
-  const formatDate = (date) => {
-    if (!date) return "";
-    let dateObj = typeof date === "string" ? new Date(date) : date;
-    const day = String(dateObj.getDate()).padStart(2, "0");
-    const month = String(dateObj.getMonth() + 1).padStart(2, "0");
-    const year = dateObj.getFullYear();
-    return `${day}-${month}-${year}`;
   };
 
   const handleFileUpload = (e) => {
@@ -361,35 +351,45 @@ export default function EventParticipants({
           </div>
         </div>
 
-        <div className="soft-card p-0 overflow-hidden shadow-sm">
+        {/* FIX: Container set to fit-content to stop stretching */}
+        <div
+          className="soft-card p-0 overflow-hidden shadow-sm"
+          style={{ height: "fit-content" }}
+        >
           {activeItem.isGroupEvent ? (
             Object.keys(groupedParticipants).length === 0 ? (
+              // Empty State for Group Events
               <div className="p-4 text-center text-muted">
+                <i className="bi bi-people display-4 opacity-25 d-block mb-3 mt-2"></i>
                 No participants added yet.
               </div>
             ) : (
               Object.entries(groupedParticipants).map(([team, list]) => (
                 <div key={team} className="p-3">
-                  <h6 className="fw-bold mb-2">{team}</h6>
-                  <Table hover responsive className="mb-3 align-middle">
+                  <h6 className="fw-bold mb-2 text-start">{team}</h6>
+                  <Table
+                    hover
+                    responsive
+                    className="mb-3 align-middle text-start"
+                  >
                     <thead style={{ backgroundColor: "var(--soft-hover)" }}>
                       <tr>
                         <th
-                          className="ps-4 py-3 text-secondary text-uppercase small"
+                          className="ps-4 py-3 text-secondary text-uppercase small text-start"
                           style={{ width: "5%" }}
                         >
                           #
                         </th>
-                        <th className="text-secondary text-uppercase small">
+                        <th className="text-secondary text-uppercase small text-start">
                           Student Name
                         </th>
-                        <th className="text-secondary text-uppercase small">
+                        <th className="text-secondary text-uppercase small text-start">
                           URN
                         </th>
-                        <th className="text-secondary text-uppercase small">
+                        <th className="text-secondary text-uppercase small text-start">
                           Branch
                         </th>
-                        <th className="text-secondary text-uppercase small">
+                        <th className="text-secondary text-uppercase small text-start">
                           Position
                         </th>
                         <th className="text-end pe-4 text-secondary text-uppercase small">
@@ -405,15 +405,22 @@ export default function EventParticipants({
                             borderBottom: "1px solid var(--border-color)",
                           }}
                         >
-                          <td className="ps-4 text-muted">{idx + 1}</td>
-                          <td className="fw-bold text-body">{p.name}</td>
-                          <td className="text-muted">
+                          <td className="ps-4 text-muted text-start">
+                            {idx + 1}
+                          </td>
+                          <td
+                            className="fw-bold text-body text-start"
+                            style={{ color: "var(--text-primary) !important" }}
+                          >
+                            {p.name}
+                          </td>
+                          <td className="text-muted text-start">
                             <code className="text-primary">{p.urn}</code>
                           </td>
-                          <td className="text-muted small">
+                          <td className="text-muted small text-start">
                             {p.branch || "-"}
                           </td>
-                          <td>
+                          <td className="text-start">
                             {p.position ? (
                               <Badge bg="warning" text="dark">
                                 {p.position}
@@ -462,23 +469,26 @@ export default function EventParticipants({
               ))
             )
           ) : (
-            <Table hover responsive className="mb-0 align-middle">
+            // Solo Event Table
+            <Table hover responsive className="mb-0 align-middle text-start">
               <thead style={{ backgroundColor: "var(--soft-hover)" }}>
                 <tr>
                   <th
-                    className="ps-4 py-3 text-secondary text-uppercase small"
+                    className="ps-4 py-3 text-secondary text-uppercase small text-start"
                     style={{ width: "5%" }}
                   >
                     #
                   </th>
-                  <th className="text-secondary text-uppercase small">
+                  <th className="text-secondary text-uppercase small text-start">
                     Student Name
                   </th>
-                  <th className="text-secondary text-uppercase small">URN</th>
-                  <th className="text-secondary text-uppercase small">
+                  <th className="text-secondary text-uppercase small text-start">
+                    URN
+                  </th>
+                  <th className="text-secondary text-uppercase small text-start">
                     Branch
                   </th>
-                  <th className="text-secondary text-uppercase small">
+                  <th className="text-secondary text-uppercase small text-start">
                     Position
                   </th>
                   <th className="text-end pe-4 text-secondary text-uppercase small">
@@ -489,9 +499,13 @@ export default function EventParticipants({
               <tbody>
                 {!activeItem.participants ||
                 activeItem.participants.length === 0 ? (
+                  // Empty State for Solo Events
                   <tr>
-                    <td colSpan="6" className="text-center py-5 text-muted">
-                      <i className="bi bi-people display-4 opacity-25 d-block mb-3"></i>
+                    <td
+                      colSpan="6"
+                      className="text-center py-4 text-muted border-0"
+                    >
+                      <i className="bi bi-people display-4 opacity-25 d-block mb-3 mt-2"></i>
                       No participants added yet.
                     </td>
                   </tr>
@@ -501,13 +515,20 @@ export default function EventParticipants({
                       key={idx}
                       style={{ borderBottom: "1px solid var(--border-color)" }}
                     >
-                      <td className="ps-4 text-muted">{idx + 1}</td>
-                      <td className="fw-bold text-body">{p.name}</td>
-                      <td className="text-muted">
+                      <td className="ps-4 text-muted text-start">{idx + 1}</td>
+                      <td
+                        className="fw-bold text-body text-start"
+                        style={{ color: "var(--text-primary) !important" }}
+                      >
+                        {p.name}
+                      </td>
+                      <td className="text-muted text-start">
                         <code className="text-primary">{p.urn}</code>
                       </td>
-                      <td className="text-muted small">{p.branch || "-"}</td>
-                      <td>
+                      <td className="text-muted small text-start">
+                        {p.branch || "-"}
+                      </td>
+                      <td className="text-start">
                         {p.position ? (
                           <Badge bg="warning" text="dark">
                             {p.position}
@@ -751,7 +772,10 @@ export default function EventParticipants({
           onHide={() => setShowCategoryModal(false)}
           centered
         >
-          <div className="soft-card border-0 p-0 overflow-hidden">
+          <div
+            className="soft-card border-0 p-0 overflow-hidden"
+            style={{ height: "auto" }}
+          >
             <Modal.Header
               closeButton
               className="border-bottom"
@@ -766,8 +790,11 @@ export default function EventParticipants({
                 {categories.map((cat, idx) => (
                   <ListGroup.Item
                     key={idx}
-                    className="d-flex justify-content-between align-items-center bg-transparent border-bottom"
-                    style={{ borderColor: "var(--border-color)" }}
+                    className="d-flex justify-content-between align-items-center bg-transparent border-bottom px-0"
+                    style={{
+                      borderColor: "var(--border-color)",
+                      color: "var(--text-primary)",
+                    }}
                   >
                     {cat}
                     <i
@@ -781,6 +808,11 @@ export default function EventParticipants({
                 <Form.Control
                   placeholder="New Category"
                   className="form-control"
+                  style={{
+                    backgroundColor: "var(--bg-main)",
+                    color: "var(--text-primary)",
+                    borderColor: "var(--border-color)",
+                  }}
                   value={newCategoryInput}
                   onChange={(e) => setNewCategoryInput(e.target.value)}
                 />
@@ -798,21 +830,31 @@ export default function EventParticipants({
           onHide={() => setShowItemModal(false)}
           centered
         >
-          <div className="soft-card border-0 p-0 overflow-hidden">
+          <div
+            className="soft-card border-0 p-0 overflow-hidden"
+            style={{ height: "auto" }}
+          >
             <Modal.Header
               closeButton
               className="border-bottom"
               style={{ borderColor: "var(--border-color)" }}
             >
-              <Modal.Title className="fw-bold h5">New Sub-Event</Modal.Title>
+              <Modal.Title className="fw-bold h5 text-start">
+                New Sub-Event
+              </Modal.Title>
             </Modal.Header>
-            <Modal.Body className="p-4">
+            <Modal.Body className="p-4 text-start">
               <Form.Group className="mb-3">
                 <Form.Label className="small fw-bold text-muted">
                   NAME
                 </Form.Label>
                 <Form.Control
                   className="form-control"
+                  style={{
+                    backgroundColor: "var(--bg-main)",
+                    color: "var(--text-primary)",
+                    borderColor: "var(--border-color)",
+                  }}
                   value={newItemName}
                   onChange={(e) => setNewItemName(e.target.value)}
                 />
@@ -832,6 +874,11 @@ export default function EventParticipants({
                 </Form.Label>
                 <Form.Select
                   className="form-select"
+                  style={{
+                    backgroundColor: "var(--bg-main)",
+                    color: "var(--text-primary)",
+                    borderColor: "var(--border-color)",
+                  }}
                   value={newItemCategory}
                   onChange={(e) => setNewItemCategory(e.target.value)}
                 >
@@ -874,7 +921,10 @@ export default function EventParticipants({
           centered
           size="lg"
         >
-          <div className="soft-card border-0 p-0 overflow-hidden">
+          <div
+            className="soft-card border-0 p-0 overflow-hidden"
+            style={{ height: "auto" }}
+          >
             <Modal.Header
               closeButton
               className="border-bottom"
@@ -882,13 +932,21 @@ export default function EventParticipants({
             >
               <Modal.Title className="fw-bold h5">Student Details</Modal.Title>
             </Modal.Header>
-            <Modal.Body className="p-4">
+            <Modal.Body className="p-4 text-start">
               <Form className="d-grid gap-3">
                 <Row>
                   <Col>
+                    <Form.Label className="small fw-bold text-muted">
+                      NAME
+                    </Form.Label>
                     <Form.Control
                       placeholder="Name"
                       className="form-control"
+                      style={{
+                        backgroundColor: "var(--bg-main)",
+                        color: "var(--text-primary)",
+                        borderColor: "var(--border-color)",
+                      }}
                       value={partForm.name || ""}
                       onChange={(e) =>
                         setPartForm({ ...partForm, name: e.target.value })
@@ -896,9 +954,17 @@ export default function EventParticipants({
                     />
                   </Col>
                   <Col>
+                    <Form.Label className="small fw-bold text-muted">
+                      PHONE
+                    </Form.Label>
                     <Form.Control
                       placeholder="Phone"
                       className="form-control"
+                      style={{
+                        backgroundColor: "var(--bg-main)",
+                        color: "var(--text-primary)",
+                        borderColor: "var(--border-color)",
+                      }}
                       value={partForm.phone || ""}
                       onChange={(e) =>
                         setPartForm({ ...partForm, phone: e.target.value })
@@ -908,9 +974,17 @@ export default function EventParticipants({
                 </Row>
                 <Row>
                   <Col>
+                    <Form.Label className="small fw-bold text-muted">
+                      CRN
+                    </Form.Label>
                     <Form.Control
                       placeholder="CRN"
                       className="form-control"
+                      style={{
+                        backgroundColor: "var(--bg-main)",
+                        color: "var(--text-primary)",
+                        borderColor: "var(--border-color)",
+                      }}
                       value={partForm.crn || ""}
                       onChange={(e) =>
                         setPartForm({ ...partForm, crn: e.target.value })
@@ -918,9 +992,17 @@ export default function EventParticipants({
                     />
                   </Col>
                   <Col>
+                    <Form.Label className="small fw-bold text-muted">
+                      URN
+                    </Form.Label>
                     <Form.Control
                       placeholder="URN"
                       className="form-control"
+                      style={{
+                        backgroundColor: "var(--bg-main)",
+                        color: "var(--text-primary)",
+                        borderColor: "var(--border-color)",
+                      }}
                       value={partForm.urn || ""}
                       onChange={(e) =>
                         setPartForm({ ...partForm, urn: e.target.value })
@@ -930,9 +1012,17 @@ export default function EventParticipants({
                 </Row>
                 <Row>
                   <Col>
+                    <Form.Label className="small fw-bold text-muted">
+                      BRANCH
+                    </Form.Label>
                     <Form.Control
                       placeholder="Branch"
                       className="form-control"
+                      style={{
+                        backgroundColor: "var(--bg-main)",
+                        color: "var(--text-primary)",
+                        borderColor: "var(--border-color)",
+                      }}
                       value={partForm.branch || ""}
                       onChange={(e) =>
                         setPartForm({ ...partForm, branch: e.target.value })
@@ -940,9 +1030,17 @@ export default function EventParticipants({
                     />
                   </Col>
                   <Col>
+                    <Form.Label className="small fw-bold text-muted">
+                      POSITION
+                    </Form.Label>
                     <Form.Control
                       placeholder="Position (Optional)"
                       className="form-control"
+                      style={{
+                        backgroundColor: "var(--bg-main)",
+                        color: "var(--text-primary)",
+                        borderColor: "var(--border-color)",
+                      }}
                       value={partForm.position || ""}
                       onChange={(e) =>
                         setPartForm({ ...partForm, position: e.target.value })
@@ -953,9 +1051,17 @@ export default function EventParticipants({
                 {activeItem?.isGroupEvent && (
                   <Row>
                     <Col>
+                      <Form.Label className="small fw-bold text-muted">
+                        TEAM NAME
+                      </Form.Label>
                       <Form.Control
                         placeholder="Team Name"
                         className="form-control"
+                        style={{
+                          backgroundColor: "var(--bg-main)",
+                          color: "var(--text-primary)",
+                          borderColor: "var(--border-color)",
+                        }}
                         value={partForm.teamName || ""}
                         onChange={(e) =>
                           setPartForm({ ...partForm, teamName: e.target.value })
@@ -967,7 +1073,11 @@ export default function EventParticipants({
               </Form>
             </Modal.Body>
             <Modal.Footer className="border-0 p-3 pt-0">
-              <Button onClick={handleSaveParticipant} variant="primary">
+              <Button
+                onClick={handleSaveParticipant}
+                variant="primary"
+                className="w-100"
+              >
                 Save Student
               </Button>
             </Modal.Footer>
@@ -980,7 +1090,10 @@ export default function EventParticipants({
           onHide={() => setShowProofModal(false)}
           centered
         >
-          <div className="soft-card border-0 p-0 overflow-hidden">
+          <div
+            className="soft-card border-0 p-0 overflow-hidden"
+            style={{ height: "auto" }}
+          >
             <Modal.Header
               closeButton
               className="border-bottom"
@@ -988,7 +1101,7 @@ export default function EventParticipants({
             >
               <Modal.Title className="fw-bold h5">Link Event Proof</Modal.Title>
             </Modal.Header>
-            <Modal.Body className="p-4">
+            <Modal.Body className="p-4 text-start">
               <Form.Group className="mb-3">
                 <Form.Label className="small fw-bold text-muted">
                   URL (Drive/Photos)
@@ -996,6 +1109,11 @@ export default function EventParticipants({
                 <Form.Control
                   placeholder="https://..."
                   className="form-control"
+                  style={{
+                    backgroundColor: "var(--bg-main)",
+                    color: "var(--text-primary)",
+                    borderColor: "var(--border-color)",
+                  }}
                   value={eventProofUrl}
                   onChange={(e) => setEventProofUrl(e.target.value)}
                 />

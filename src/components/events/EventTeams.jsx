@@ -57,7 +57,6 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
       ...doc.data(),
     }));
 
-    // UPDATED: Sort so "Core Team" is always first
     const coreTeam = teamList.find(
       (t) => t.name.trim().toLowerCase() === "core team",
     );
@@ -113,10 +112,9 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
       members: updatedMembers,
     });
 
-    // Update local state immediately
     setActiveTeam({ ...activeTeam, members: updatedMembers });
     setShowMemberModal(false);
-    fetchTeams(); // Background sync
+    fetchTeams();
   };
 
   const handleDeleteMember = async (memberIndex) => {
@@ -303,20 +301,29 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
         </div>
 
         {/* Members Table */}
-        <div className="soft-card p-0 overflow-hidden shadow-sm">
+        <div
+          className="soft-card p-0 overflow-hidden shadow-sm"
+          style={{ height: "fit-content" }}
+        >
           <Table hover responsive className="mb-0 align-middle">
             <thead style={{ backgroundColor: "var(--soft-hover)" }}>
               <tr>
                 <th
-                  className="ps-4 py-3 text-secondary text-uppercase small"
+                  className="ps-4 py-3 text-secondary text-uppercase small text-start"
                   style={{ width: "5%" }}
                 >
                   #
                 </th>
-                <th className="text-secondary text-uppercase small">Name</th>
-                <th className="text-secondary text-uppercase small">URN</th>
-                <th className="text-secondary text-uppercase small">Branch</th>
-                <th className="text-secondary text-uppercase small">
+                <th className="text-secondary text-uppercase small text-start">
+                  Name
+                </th>
+                <th className="text-secondary text-uppercase small text-start">
+                  URN
+                </th>
+                <th className="text-secondary text-uppercase small text-start">
+                  Branch
+                </th>
+                <th className="text-secondary text-uppercase small text-start">
                   Designation
                 </th>
                 <th className="text-end pe-4 text-secondary text-uppercase small">
@@ -327,8 +334,11 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
             <tbody>
               {!activeTeam.members || activeTeam.members.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="text-center py-5 text-muted">
-                    <i className="bi bi-people display-4 opacity-25 d-block mb-3"></i>
+                  <td
+                    colSpan="6"
+                    className="text-center py-4 text-muted border-0"
+                  >
+                    <i className="bi bi-people display-4 opacity-25 d-block mb-3 mt-2"></i>
                     No members in this team yet.
                   </td>
                 </tr>
@@ -340,15 +350,23 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
                       borderBottom: "1px solid var(--border-color)",
                     }}
                   >
-                    <td className="ps-4 text-muted">{idx + 1}</td>
-                    <td className="fw-bold text-body">{member.name}</td>
-                    <td className="text-muted">
+                    <td className="ps-4 text-muted text-start">{idx + 1}</td>
+                    <td className="fw-bold text-body text-start">
+                      {member.name}
+                    </td>
+                    <td className="text-muted text-start">
                       <code className="text-primary">{member.urn}</code>
                     </td>
-                    <td className="text-muted small">{member.branch || "-"}</td>
-                    <td>
+                    <td className="text-muted small text-start">
+                      {member.branch || "-"}
+                    </td>
+                    <td className="text-start">
                       {member.designation ? (
-                        <Badge bg="light" text="dark" className="border">
+                        <Badge
+                          bg="light"
+                          text="dark"
+                          className="border fw-normal"
+                        >
                           {member.designation}
                         </Badge>
                       ) : (
@@ -388,7 +406,10 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
           onHide={() => setShowMemberModal(false)}
           centered
         >
-          <div className="soft-card border-0 p-0 overflow-hidden">
+          <div
+            className="soft-card border-0 p-0 overflow-hidden"
+            style={{ height: "auto" }}
+          >
             <Modal.Header
               closeButton
               className="border-bottom"
@@ -398,7 +419,7 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
                 {editingMemberIndex !== null ? "Edit" : "Add"} Member
               </Modal.Title>
             </Modal.Header>
-            <Modal.Body className="p-4">
+            <Modal.Body className="p-4 text-start">
               <Form className="d-grid gap-3">
                 <Form.Group>
                   <Form.Label className="small fw-bold text-muted">
@@ -406,6 +427,12 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
                   </Form.Label>
                   <Form.Control
                     placeholder="Name"
+                    className="form-control"
+                    style={{
+                      backgroundColor: "var(--bg-main)",
+                      color: "var(--text-primary)",
+                      borderColor: "var(--border-color)",
+                    }}
                     value={memberForm.name}
                     onChange={(e) =>
                       setMemberForm({ ...memberForm, name: e.target.value })
@@ -420,6 +447,12 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
                       </Form.Label>
                       <Form.Control
                         placeholder="URN"
+                        className="form-control"
+                        style={{
+                          backgroundColor: "var(--bg-main)",
+                          color: "var(--text-primary)",
+                          borderColor: "var(--border-color)",
+                        }}
                         value={memberForm.urn}
                         onChange={(e) =>
                           setMemberForm({ ...memberForm, urn: e.target.value })
@@ -434,6 +467,12 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
                       </Form.Label>
                       <Form.Control
                         placeholder="Phone"
+                        className="form-control"
+                        style={{
+                          backgroundColor: "var(--bg-main)",
+                          color: "var(--text-primary)",
+                          borderColor: "var(--border-color)",
+                        }}
                         value={memberForm.phone}
                         onChange={(e) =>
                           setMemberForm({
@@ -453,6 +492,12 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
                       </Form.Label>
                       <Form.Control
                         placeholder="Branch"
+                        className="form-control"
+                        style={{
+                          backgroundColor: "var(--bg-main)",
+                          color: "var(--text-primary)",
+                          borderColor: "var(--border-color)",
+                        }}
                         value={memberForm.branch}
                         onChange={(e) =>
                           setMemberForm({
@@ -469,6 +514,12 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
                         DESIGNATION
                       </Form.Label>
                       <Form.Select
+                        className="form-select"
+                        style={{
+                          backgroundColor: "var(--bg-main)",
+                          color: "var(--text-primary)",
+                          borderColor: "var(--border-color)",
+                        }}
                         value={memberForm.designation}
                         onChange={(e) =>
                           setMemberForm({
@@ -582,9 +633,11 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
 
         {teams.map((team) => (
           <Col md={6} lg={4} key={team.id}>
+            {/* FIX: Moved onClick from button to the whole card */}
             <div
               className="soft-card h-100 d-flex flex-column position-relative"
-              style={{ minHeight: "180px" }}
+              style={{ minHeight: "180px", cursor: "pointer" }}
+              onClick={() => openTeamDetails(team)}
             >
               {/* Team Actions Dropdown */}
               <div className="position-absolute top-0 end-0 p-3">
@@ -619,7 +672,7 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
                 >
                   {getInitials(team.name)}
                 </div>
-                <div>
+                <div className="text-start">
                   <h5
                     className="fw-bold mb-1 text-truncate"
                     style={{ maxWidth: "180px" }}
@@ -659,11 +712,8 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
                     ))}
                   </div>
                 </div>
-                <Button
-                  size="sm"
-                  className="soft-open-btn rounded-pill px-3"
-                  onClick={() => openTeamDetails(team)}
-                >
+                {/* FIX: Button is now just visual, action is on the card */}
+                <Button size="sm" className="soft-open-btn rounded-pill px-3">
                   Manage <i className="bi bi-arrow-right ms-1"></i>
                 </Button>
               </div>
@@ -680,15 +730,20 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
         onHide={() => setShowTeamModal(false)}
         centered
       >
-        <div className="soft-card border-0 p-0 overflow-hidden">
+        <div
+          className="soft-card border-0 p-0 overflow-hidden"
+          style={{ height: "auto" }}
+        >
           <Modal.Header
             closeButton
             className="border-bottom"
             style={{ borderColor: "var(--border-color)" }}
           >
-            <Modal.Title className="fw-bold h5">Create New Team</Modal.Title>
+            <Modal.Title className="fw-bold h5 text-start">
+              Create New Team
+            </Modal.Title>
           </Modal.Header>
-          <Modal.Body className="p-4">
+          <Modal.Body className="p-4 text-start">
             <Form.Group>
               <Form.Label className="small fw-bold text-muted">
                 TEAM NAME
@@ -696,6 +751,11 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
               <Form.Control
                 placeholder="e.g. Discipline Committee"
                 className="form-control"
+                style={{
+                  backgroundColor: "var(--bg-main)",
+                  color: "var(--text-primary)",
+                  borderColor: "var(--border-color)",
+                }}
                 value={newTeamName}
                 onChange={(e) => setNewTeamName(e.target.value)}
               />

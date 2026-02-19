@@ -19,7 +19,6 @@ import {
   Spinner,
   Modal,
   Form,
-  Alert,
   Tabs,
   Tab,
 } from "react-bootstrap";
@@ -44,7 +43,6 @@ export default function Users() {
   const [newUser, setNewUser] = useState({ name: "", email: "", role: "user" });
   const [generatedPass, setGeneratedPass] = useState("");
   const [creating, setCreating] = useState(false);
-  const [emailStatus, setEmailStatus] = useState("sending");
 
   const navigate = useNavigate();
 
@@ -84,12 +82,24 @@ export default function Users() {
     fetchUsers();
   }, []);
 
-  const updateStatus = async (userId, newStatus, newRole) => {
+  const updateStatus = async (userId, newStatus, currentRole) => {
     await updateDoc(doc(db, "users", userId), {
       status: newStatus,
-      role: newRole,
+      role: currentRole,
     });
     fetchUsers();
+  };
+
+  // NEW FUNCTION: specifically for toggling user vs admin roles
+  const updateRole = async (userId, newRole) => {
+    if (
+      window.confirm(`Are you sure you want to make this person an ${newRole}?`)
+    ) {
+      await updateDoc(doc(db, "users", userId), {
+        role: newRole,
+      });
+      fetchUsers();
+    }
   };
 
   const handleCreateUser = async () => {
@@ -128,7 +138,6 @@ export default function Users() {
         EMAILJS_PUBLIC_KEY,
       );
 
-      setEmailStatus("success");
       setShowCreateModal(false);
       setShowSuccessModal(true);
       fetchUsers();
@@ -176,7 +185,10 @@ export default function Users() {
 
       <Tabs defaultActiveKey="active" className="mb-4 custom-tabs border-0">
         <Tab eventKey="active" title={`Active Users (${activeUsers.length})`}>
-          <div className="soft-card p-0 overflow-hidden">
+          <div
+            className="soft-card p-0 overflow-hidden"
+            style={{ height: "fit-content" }}
+          >
             <Table hover responsive className="mb-0 align-middle">
               <thead style={{ backgroundColor: "var(--soft-hover)" }}>
                 <tr className="small text-uppercase text-muted">
@@ -231,23 +243,46 @@ export default function Users() {
                     </td>
                     <td className="text-end pe-4">
                       {user.role !== "super_admin" && (
-                        <Button
-                          variant="link"
-                          className="text-danger p-0 text-decoration-none small fw-bold"
-                          onClick={() =>
-                            updateStatus(
-                              user.id,
-                              user.status === "approved"
-                                ? "suspended"
-                                : "approved",
-                              user.role,
-                            )
-                          }
-                        >
-                          {user.status === "approved"
-                            ? "Revoke Access"
-                            : "Restore Access"}
-                        </Button>
+                        <div className="d-flex justify-content-end align-items-center gap-3">
+                          {/* ROLE TOGGLE BUTTON */}
+                          {user.role === "user" ? (
+                            <Button
+                              variant="link"
+                              className="p-0 text-decoration-none small fw-bold"
+                              style={{ color: "var(--text-primary)" }}
+                              onClick={() => updateRole(user.id, "admin")}
+                            >
+                              Make Admin
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="link"
+                              className="text-secondary p-0 text-decoration-none small fw-bold"
+                              onClick={() => updateRole(user.id, "user")}
+                            >
+                              Remove Admin
+                            </Button>
+                          )}
+
+                          {/* SUSPEND/RESTORE BUTTON */}
+                          <Button
+                            variant="link"
+                            className="text-danger p-0 text-decoration-none small fw-bold"
+                            onClick={() =>
+                              updateStatus(
+                                user.id,
+                                user.status === "approved"
+                                  ? "suspended"
+                                  : "approved",
+                                user.role,
+                              )
+                            }
+                          >
+                            {user.status === "approved"
+                              ? "Revoke Access"
+                              : "Restore Access"}
+                          </Button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -261,7 +296,10 @@ export default function Users() {
           eventKey="pending"
           title={`Pending Approvals (${pendingUsers.length})`}
         >
-          <div className="soft-card p-0 overflow-hidden">
+          <div
+            className="soft-card p-0 overflow-hidden"
+            style={{ height: "fit-content" }}
+          >
             <Table hover responsive className="mb-0 align-middle">
               <thead style={{ backgroundColor: "var(--soft-hover)" }}>
                 <tr className="small text-uppercase text-muted">
@@ -271,48 +309,59 @@ export default function Users() {
                 </tr>
               </thead>
               <tbody>
-                {pendingUsers.map((user) => (
-                  <tr
-                    key={user.id}
-                    style={{ borderBottom: "1px solid var(--border-color)" }}
-                  >
-                    <td className="ps-4 py-3 fw-bold text-start text-body">
-                      {user.name}
-                    </td>
-                    <td className="text-start text-muted small">
-                      {user.email}
-                    </td>
-                    <td className="text-end pe-4">
-                      <Button
-                        variant="success"
-                        size="sm"
-                        className="me-2 rounded-pill px-3"
-                        onClick={() =>
-                          updateStatus(user.id, "approved", "admin")
-                        }
-                      >
-                        Approve as Admin
-                      </Button>
-                      <Button
-                        variant="outline-primary"
-                        size="sm"
-                        className="rounded-pill px-3"
-                        onClick={() =>
-                          updateStatus(user.id, "approved", "user")
-                        }
-                      >
-                        Approve as Viewer
-                      </Button>
+                {pendingUsers.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan="3"
+                      className="text-center py-4 text-muted border-0"
+                    >
+                      No pending user requests.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  pendingUsers.map((user) => (
+                    <tr
+                      key={user.id}
+                      style={{ borderBottom: "1px solid var(--border-color)" }}
+                    >
+                      <td className="ps-4 py-3 fw-bold text-start text-body">
+                        {user.name}
+                      </td>
+                      <td className="text-start text-muted small">
+                        {user.email}
+                      </td>
+                      <td className="text-end pe-4">
+                        <Button
+                          variant="success"
+                          size="sm"
+                          className="me-2 rounded-pill px-3"
+                          onClick={() =>
+                            updateStatus(user.id, "approved", "admin")
+                          }
+                        >
+                          Approve as Admin
+                        </Button>
+                        <Button
+                          variant="outline-primary"
+                          size="sm"
+                          className="rounded-pill px-3"
+                          onClick={() =>
+                            updateStatus(user.id, "approved", "user")
+                          }
+                        >
+                          Approve as Viewer
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </Table>
           </div>
         </Tab>
       </Tabs>
 
-      {/* MODALS - Style fixed for dark mode */}
+      {/* MODALS */}
       <Modal
         show={showCreateModal}
         onHide={() => setShowCreateModal(false)}
@@ -328,7 +377,7 @@ export default function Users() {
           <Modal.Header closeButton className="border-0">
             <Modal.Title className="fw-bold">Create New User</Modal.Title>
           </Modal.Header>
-          <Modal.Body>
+          <Modal.Body className="text-start">
             <Form className="d-grid gap-3">
               <Form.Group>
                 <Form.Label className="small fw-bold text-muted">
