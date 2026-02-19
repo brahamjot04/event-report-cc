@@ -8,6 +8,7 @@ import {
   deleteDoc,
   arrayUnion,
   arrayRemove,
+  getDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import {
@@ -68,9 +69,21 @@ export default function EventParticipants({
     teamName: "",
   });
 
+  // Filter State
+  const [selectedCategory, setSelectedCategory] = useState(null);
+
   useEffect(() => {
     fetchItems();
+    fetchCategories();
   }, [eventId]);
+
+  const fetchCategories = async () => {
+    const eventRef = doc(db, "events", eventId);
+    const eventSnap = await getDoc(eventRef);
+    if (eventSnap.exists()) {
+      setCategories(eventSnap.data().categories || []);
+    }
+  };
 
   const fetchItems = async () => {
     const snap = await getDocs(collection(db, "events", eventId, "items"));
@@ -629,6 +642,30 @@ export default function EventParticipants({
         </div>
       </div>
 
+      {/* Category Filter Chips */}
+      <div className="mb-4 d-flex flex-wrap gap-2 align-items-center">
+        <span className="text-muted small fw-bold me-2">Filter by:</span>
+        <Button
+          size="sm"
+          variant={selectedCategory === null ? "primary" : "outline-secondary"}
+          className="rounded-pill"
+          onClick={() => setSelectedCategory(null)}
+        >
+          All Events
+        </Button>
+        {categories.map((cat) => (
+          <Button
+            key={cat}
+            size="sm"
+            variant={selectedCategory === cat ? "primary" : "outline-secondary"}
+            className="rounded-pill"
+            onClick={() => setSelectedCategory(cat)}
+          >
+            {cat}
+          </Button>
+        ))}
+      </div>
+
       <Row className="g-4">
         {/* Add New Sub-Event Card (render first) */}
         <Col md={6} lg={4}>
@@ -677,86 +714,114 @@ export default function EventParticipants({
           </div>
         </Col>
 
-        {items.map((item) => (
-          <Col md={6} lg={4} key={item.id}>
-            <div
-              className="soft-card h-100 d-flex flex-column position-relative text-start"
-              style={{ cursor: "pointer", minHeight: "180px" }}
-              onClick={() => setActiveItem(item)}
-            >
-              <div className="d-flex justify-content-between align-items-start mb-3">
-                <Badge
-                  className="category-badge fw-normal"
-                  style={{
-                    backgroundColor: "var(--soft-hover)",
-                    color: "var(--text-primary)",
-                    border: "1px solid var(--border-color)",
-                  }}
-                >
-                  {item.category || "General"}
-                </Badge>
-
-                <Dropdown onClick={(e) => e.stopPropagation()}>
-                  <Dropdown.Toggle
-                    variant="link"
-                    className="text-muted p-0 no-caret"
-                  >
-                    <i className="bi bi-three-dots"></i>
-                  </Dropdown.Toggle>
-                  <Dropdown.Menu align="end">
-                    <Dropdown.Item
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingItemId(item.id);
-                        setNewItemName(item.name || "");
-                        setNewItemCategory(item.category || "");
-                        setNewItemIsGroup(!!item.isGroupEvent);
-                        setShowItemModal(true);
-                      }}
-                    >
-                      <i className="bi bi-pencil-fill me-2"></i>Edit
-                    </Dropdown.Item>
-                    <Dropdown.Item
-                      className="text-danger"
-                      onClick={(e) => handleDeleteItem(e, item.id)}
-                    >
-                      <i className="bi bi-trash me-2"></i>Delete
-                    </Dropdown.Item>
-                  </Dropdown.Menu>
-                </Dropdown>
-              </div>
-
-              <div className="d-flex align-items-center mb-3">
-                <div
-                  className="avatar-circle me-3 flex-shrink-0"
-                  style={{
-                    width: "45px",
-                    height: "45px",
-                    fontSize: "1.2rem",
-                    backgroundColor: "var(--soft-hover)",
-                    color: "var(--text-primary)",
-                  }}
-                >
-                  {getInitials(item.name)}
-                </div>
-                <h5 className="fw-bold mb-0 text-truncate">{item.name}</h5>
-              </div>
-
+        {items
+          .filter(
+            (item) =>
+              selectedCategory === null || item.category === selectedCategory,
+          )
+          .map((item) => (
+            <Col md={6} lg={4} key={item.id}>
               <div
-                className="mt-auto pt-3 border-top d-flex align-items-center justify-content-between"
-                style={{ borderColor: "var(--border-color)" }}
+                className="soft-card h-100 d-flex flex-column position-relative text-start"
+                style={{ cursor: "pointer", minHeight: "180px" }}
+                onClick={() => setActiveItem(item)}
               >
-                <div className="small text-muted">
-                  <i className="bi bi-people-fill me-2"></i>
-                  {item.participants?.length || 0} Students
+                <div className="d-flex justify-content-between align-items-start mb-3">
+                  <Badge
+                    className="category-badge fw-normal"
+                    style={{
+                      backgroundColor: "var(--soft-hover)",
+                      color: "var(--text-primary)",
+                      border: "1px solid var(--border-color)",
+                    }}
+                  >
+                    {item.category || "General"}
+                  </Badge>
+
+                  <Dropdown onClick={(e) => e.stopPropagation()}>
+                    <Dropdown.Toggle
+                      variant="link"
+                      className="text-muted p-0 no-caret"
+                    >
+                      <i className="bi bi-three-dots"></i>
+                    </Dropdown.Toggle>
+                    <Dropdown.Menu align="end">
+                      <Dropdown.Item
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingItemId(item.id);
+                          setNewItemName(item.name || "");
+                          setNewItemCategory(item.category || "");
+                          setNewItemIsGroup(!!item.isGroupEvent);
+                          setShowItemModal(true);
+                        }}
+                      >
+                        <i className="bi bi-pencil-fill me-2"></i>Edit
+                      </Dropdown.Item>
+                      <Dropdown.Item
+                        className="text-danger"
+                        onClick={(e) => handleDeleteItem(e, item.id)}
+                      >
+                        <i className="bi bi-trash me-2"></i>Delete
+                      </Dropdown.Item>
+                    </Dropdown.Menu>
+                  </Dropdown>
                 </div>
-                <Button size="sm" className="soft-open-btn rounded-pill px-3">
-                  Open <i className="bi bi-arrow-right ms-1"></i>
-                </Button>
+
+                <div className="d-flex align-items-center mb-3">
+                  <div
+                    className="avatar-circle me-3 flex-shrink-0"
+                    style={{
+                      width: "45px",
+                      height: "45px",
+                      fontSize: "1.2rem",
+                      backgroundColor: "var(--soft-hover)",
+                      color: "var(--text-primary)",
+                    }}
+                  >
+                    {getInitials(item.name)}
+                  </div>
+                  <h5 className="fw-bold mb-0 text-truncate">{item.name}</h5>
+                </div>
+
+                <div
+                  className="mt-auto pt-3 border-top d-flex align-items-center justify-content-between"
+                  style={{ borderColor: "var(--border-color)" }}
+                >
+                  <div className="small text-muted">
+                    <i className="bi bi-people-fill me-2"></i>
+                    {item.participants?.length || 0} Students
+                  </div>
+                  <Button size="sm" className="soft-open-btn rounded-pill px-3">
+                    Open <i className="bi bi-arrow-right ms-1"></i>
+                  </Button>
+                </div>
               </div>
+            </Col>
+          ))}
+
+        {items.filter(
+          (item) =>
+            selectedCategory === null || item.category === selectedCategory,
+        ).length === 0 && (
+          <Col xs={12}>
+            <div
+              className="text-center p-5"
+              style={{
+                backgroundColor: "var(--soft-hover)",
+                borderRadius: "12px",
+                border: "1px solid var(--border-color)",
+              }}
+            >
+              <i className="bi bi-inbox display-4 opacity-25 d-block mb-3"></i>
+              <p className="text-muted mb-0">
+                {selectedCategory
+                  ? `No events found in "${selectedCategory}" category`
+                  : "No sub-events created yet"}
+              </p>
             </div>
           </Col>
-        ))}
+        )}
       </Row>
 
       {renderModals()}
