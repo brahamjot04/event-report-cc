@@ -36,6 +36,9 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
   const [activeTeam, setActiveTeam] = useState(null);
   const [editingMemberIndex, setEditingMemberIndex] = useState(null);
 
+  // Filter State
+  const [selectedTeamFilter, setSelectedTeamFilter] = useState(null);
+
   const [memberForm, setMemberForm] = useState({
     name: "",
     urn: "",
@@ -586,6 +589,34 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
         </div>
       </div>
 
+      {/* Team Filter Chips */}
+      <div className="mb-4 d-flex flex-wrap gap-2 align-items-center">
+        <span className="text-muted small fw-bold me-2">Filter by:</span>
+        <Button
+          size="sm"
+          variant={
+            selectedTeamFilter === null ? "primary" : "outline-secondary"
+          }
+          className="rounded-pill"
+          onClick={() => setSelectedTeamFilter(null)}
+        >
+          All Teams
+        </Button>
+        {teams.map((team) => (
+          <Button
+            key={team.id}
+            size="sm"
+            variant={
+              selectedTeamFilter === team.id ? "primary" : "outline-secondary"
+            }
+            className="rounded-pill"
+            onClick={() => setSelectedTeamFilter(team.id)}
+          >
+            {team.name}
+          </Button>
+        ))}
+      </div>
+
       <Row className="g-4">
         {/* Create Team Card (render first) */}
         <Col md={6} lg={4}>
@@ -631,95 +662,123 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
           </div>
         </Col>
 
-        {teams.map((team) => (
-          <Col md={6} lg={4} key={team.id}>
-            {/* FIX: Moved onClick from button to the whole card */}
-            <div
-              className="soft-card h-100 d-flex flex-column position-relative"
-              style={{ minHeight: "180px", cursor: "pointer" }}
-              onClick={() => openTeamDetails(team)}
-            >
-              {/* Team Actions Dropdown */}
-              <div className="position-absolute top-0 end-0 p-3">
-                <Dropdown onClick={(e) => e.stopPropagation()}>
-                  <Dropdown.Toggle
-                    variant="link"
-                    className="text-muted p-0 no-caret"
-                  >
-                    <i className="bi bi-three-dots"></i>
-                  </Dropdown.Toggle>
-                  <Dropdown.Menu align="end">
-                    <Dropdown.Item
-                      className="text-danger"
-                      onClick={(e) => handleDeleteTeam(e, team.id)}
-                    >
-                      <i className="bi bi-trash me-2"></i>Delete Team
-                    </Dropdown.Item>
-                  </Dropdown.Menu>
-                </Dropdown>
-              </div>
-
-              <div className="d-flex align-items-center mb-3 mt-2">
-                <div
-                  className="avatar-circle me-3 flex-shrink-0"
-                  style={{
-                    width: "50px",
-                    height: "50px",
-                    fontSize: "1.2rem",
-                    backgroundColor: "var(--soft-hover)",
-                    color: "var(--text-primary)",
-                  }}
-                >
-                  {getInitials(team.name)}
-                </div>
-                <div className="text-start">
-                  <h5
-                    className="fw-bold mb-1 text-truncate"
-                    style={{ maxWidth: "180px" }}
-                  >
-                    {team.name}
-                  </h5>
-                  <Badge
-                    bg="primary"
-                    className="bg-opacity-25 text-primary fw-normal border border-primary"
-                  >
-                    {team.members?.length || 0} Members
-                  </Badge>
-                </div>
-              </div>
-
+        {teams
+          .filter(
+            (team) =>
+              selectedTeamFilter === null || team.id === selectedTeamFilter,
+          )
+          .map((team) => (
+            <Col md={6} lg={4} key={team.id}>
+              {/* FIX: Moved onClick from button to the whole card */}
               <div
-                className="mt-auto pt-3 border-top d-flex align-items-center justify-content-between"
-                style={{ borderColor: "var(--border-color)" }}
+                className="soft-card h-100 d-flex flex-column position-relative"
+                style={{ minHeight: "180px", cursor: "pointer" }}
+                onClick={() => openTeamDetails(team)}
               >
-                <div className="d-flex align-items-center">
-                  {/* Tiny avatars for visual effect */}
-                  <div className="d-flex ms-2">
-                    {[1, 2, 3].map((i) => (
-                      <div
-                        key={i}
-                        className="rounded-circle border border-white d-flex align-items-center justify-content-center text-white small"
-                        style={{
-                          width: "24px",
-                          height: "24px",
-                          marginLeft: "-8px",
-                          backgroundColor: "#adb5bd",
-                          fontSize: "0.6rem",
-                        }}
+                {/* Team Actions Dropdown */}
+                <div className="position-absolute top-0 end-0 p-3">
+                  <Dropdown onClick={(e) => e.stopPropagation()}>
+                    <Dropdown.Toggle
+                      variant="link"
+                      className="text-muted p-0 no-caret"
+                    >
+                      <i className="bi bi-three-dots"></i>
+                    </Dropdown.Toggle>
+                    <Dropdown.Menu align="end">
+                      <Dropdown.Item
+                        className="text-danger"
+                        onClick={(e) => handleDeleteTeam(e, team.id)}
                       >
-                        <i className="bi bi-person-fill"></i>
-                      </div>
-                    ))}
+                        <i className="bi bi-trash me-2"></i>Delete Team
+                      </Dropdown.Item>
+                    </Dropdown.Menu>
+                  </Dropdown>
+                </div>
+
+                <div className="d-flex align-items-center mb-3 mt-2">
+                  <div
+                    className="avatar-circle me-3 flex-shrink-0"
+                    style={{
+                      width: "50px",
+                      height: "50px",
+                      fontSize: "1.2rem",
+                      backgroundColor: "var(--soft-hover)",
+                      color: "var(--text-primary)",
+                    }}
+                  >
+                    {getInitials(team.name)}
+                  </div>
+                  <div className="text-start">
+                    <h5
+                      className="fw-bold mb-1 text-truncate"
+                      style={{ maxWidth: "180px" }}
+                    >
+                      {team.name}
+                    </h5>
+                    <Badge
+                      bg="primary"
+                      className="bg-opacity-25 text-primary fw-normal border border-primary"
+                    >
+                      {team.members?.length || 0} Members
+                    </Badge>
                   </div>
                 </div>
-                {/* FIX: Button is now just visual, action is on the card */}
-                <Button size="sm" className="soft-open-btn rounded-pill px-3">
-                  Manage <i className="bi bi-arrow-right ms-1"></i>
-                </Button>
+
+                <div
+                  className="mt-auto pt-3 border-top d-flex align-items-center justify-content-between"
+                  style={{ borderColor: "var(--border-color)" }}
+                >
+                  <div className="d-flex align-items-center">
+                    {/* Tiny avatars for visual effect */}
+                    <div className="d-flex ms-2">
+                      {[1, 2, 3].map((i) => (
+                        <div
+                          key={i}
+                          className="rounded-circle border border-white d-flex align-items-center justify-content-center text-white small"
+                          style={{
+                            width: "24px",
+                            height: "24px",
+                            marginLeft: "-8px",
+                            backgroundColor: "#adb5bd",
+                            fontSize: "0.6rem",
+                          }}
+                        >
+                          <i className="bi bi-person-fill"></i>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {/* FIX: Button is now just visual, action is on the card */}
+                  <Button size="sm" className="soft-open-btn rounded-pill px-3">
+                    Manage <i className="bi bi-arrow-right ms-1"></i>
+                  </Button>
+                </div>
               </div>
+            </Col>
+          ))}
+
+        {teams.filter(
+          (team) =>
+            selectedTeamFilter === null || team.id === selectedTeamFilter,
+        ).length === 0 && (
+          <Col xs={12}>
+            <div
+              className="text-center p-5"
+              style={{
+                backgroundColor: "var(--soft-hover)",
+                borderRadius: "12px",
+                border: "1px solid var(--border-color)",
+              }}
+            >
+              <i className="bi bi-people display-4 opacity-25 d-block mb-3"></i>
+              <p className="text-muted mb-0">
+                {selectedTeamFilter
+                  ? "No team selected or team not found"
+                  : "No teams created yet"}
+              </p>
             </div>
           </Col>
-        ))}
+        )}
       </Row>
 
       {/* --- MODALS --- */}

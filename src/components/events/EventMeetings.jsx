@@ -22,6 +22,7 @@ import {
   Dropdown,
   OverlayTrigger,
   Tooltip,
+  Popover,
 } from "react-bootstrap";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -52,6 +53,12 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
   });
   const [editingStudentId, setEditingStudentId] = useState(null);
 
+  // Filter State
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [uniqueDates, setUniqueDates] = useState([]);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+
   useEffect(() => {
     fetchSessions();
   }, [eventId]);
@@ -62,7 +69,13 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
       orderBy("date", "desc"),
     );
     const snap = await getDocs(q);
-    setSessions(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    const sessionsList = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    setSessions(sessionsList);
+    // Extract unique dates for filter
+    const dates = [...new Set(sessionsList.map((s) => s.date))]
+      .sort()
+      .reverse();
+    setUniqueDates(dates);
   };
 
   const fetchSessionStudents = async (sid) => {
@@ -268,6 +281,198 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
           </div>
         </div>
 
+        {/* Date Filter Calendar */}
+        <div className="mb-4 d-flex align-items-center gap-2">
+          <OverlayTrigger
+            show={showCalendar}
+            placement="bottom"
+            overlay={
+              <Popover
+                className="custom-calendar-popover"
+                style={{
+                  backgroundColor: "var(--bg-main)",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: "12px",
+                }}
+              >
+                <Popover.Body style={{ padding: "0" }}>
+                  <div
+                    style={{
+                      padding: "16px",
+                      backgroundColor: "var(--bg-main)",
+                      borderRadius: "12px",
+                    }}
+                  >
+                    {/* Calendar Header */}
+                    <div className="d-flex justify-content-between align-items-center mb-3">
+                      <Button
+                        variant="link"
+                        size="sm"
+                        onClick={() =>
+                          setCurrentMonth(
+                            new Date(
+                              currentMonth.getFullYear(),
+                              currentMonth.getMonth() - 1,
+                            ),
+                          )
+                        }
+                        className="text-muted p-0"
+                      >
+                        <i className="bi bi-chevron-left"></i>
+                      </Button>
+                      <span className="fw-bold text-center" style={{ flex: 1 }}>
+                        {currentMonth.toLocaleString("default", {
+                          month: "long",
+                          year: "numeric",
+                        })}
+                      </span>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        onClick={() =>
+                          setCurrentMonth(
+                            new Date(
+                              currentMonth.getFullYear(),
+                              currentMonth.getMonth() + 1,
+                            ),
+                          )
+                        }
+                        className="text-muted p-0"
+                      >
+                        <i className="bi bi-chevron-right"></i>
+                      </Button>
+                    </div>
+
+                    {/* Days of Week */}
+                    <div
+                      className="d-grid mb-2"
+                      style={{
+                        gridTemplateColumns: "repeat(7, 1fr)",
+                        gap: "8px",
+                      }}
+                    >
+                      {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                        (day) => (
+                          <div
+                            key={day}
+                            className="text-center small text-muted fw-bold"
+                            style={{ height: "28px" }}
+                          >
+                            {day}
+                          </div>
+                        ),
+                      )}
+                    </div>
+
+                    {/* Calendar Dates */}
+                    <div
+                      className="d-grid"
+                      style={{
+                        gridTemplateColumns: "repeat(7, 1fr)",
+                        gap: "8px",
+                      }}
+                    >
+                      {(() => {
+                        const year = currentMonth.getFullYear();
+                        const month = currentMonth.getMonth();
+                        const firstDay = new Date(year, month, 1).getDay();
+                        const daysInMonth = new Date(
+                          year,
+                          month + 1,
+                          0,
+                        ).getDate();
+                        const days = [];
+
+                        // Empty cells before month starts
+                        for (let i = 0; i < firstDay; i++) {
+                          days.push(
+                            <div
+                              key={`empty-${i}`}
+                              style={{ height: "28px" }}
+                            ></div>,
+                          );
+                        }
+
+                        // Days of month
+                        for (let day = 1; day <= daysInMonth; day++) {
+                          const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                          const hasMeeting = uniqueDates.includes(dateStr);
+                          const isSelected = selectedDate === dateStr;
+
+                          days.push(
+                            <button
+                              key={day}
+                              onClick={() => {
+                                if (hasMeeting) {
+                                  setSelectedDate(dateStr);
+                                  setShowCalendar(false);
+                                }
+                              }}
+                              style={{
+                                height: "28px",
+                                border: hasMeeting
+                                  ? isSelected
+                                    ? "2px solid #0d6efd"
+                                    : "1px solid #0d6efd"
+                                  : "1px solid var(--border-color)",
+                                backgroundColor: isSelected
+                                  ? "#0d6efd"
+                                  : hasMeeting
+                                    ? "rgba(13, 110, 253, 0.1)"
+                                    : "transparent",
+                                color: isSelected
+                                  ? "white"
+                                  : "var(--text-primary)",
+                                borderRadius: "4px",
+                                cursor: hasMeeting ? "pointer" : "default",
+                                fontSize: "0.85rem",
+                                fontWeight: hasMeeting ? "bold" : "normal",
+                                opacity: hasMeeting ? 1 : 0.3,
+                                padding: "0",
+                              }}
+                            >
+                              {day}
+                            </button>,
+                          );
+                        }
+
+                        return days;
+                      })()}
+                    </div>
+
+                    {/* Clear Filter */}
+                    <div
+                      className="mt-3 pt-2 border-top"
+                      style={{ borderColor: "var(--border-color)" }}
+                    >
+                      <Button
+                        variant="outline-secondary"
+                        size="sm"
+                        className="w-100"
+                        onClick={() => {
+                          setSelectedDate(null);
+                          setShowCalendar(false);
+                        }}
+                      >
+                        Clear Filter
+                      </Button>
+                    </div>
+                  </div>
+                </Popover.Body>
+              </Popover>
+            }
+          >
+            <Button
+              variant={selectedDate ? "primary" : "outline-secondary"}
+              className="d-flex align-items-center gap-2"
+              onClick={() => setShowCalendar(!showCalendar)}
+            >
+              <i className="bi bi-calendar-event"></i>
+              {selectedDate ? `${selectedDate}` : "Filter by Date"}
+            </Button>
+          </OverlayTrigger>
+        </div>
+
         <Row className="g-4">
           {/* Add New Card (Dashed) - moved to the start */}
           <Col md={6} lg={4}>
@@ -314,142 +519,176 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
             </div>
           </Col>
 
-          {sessions.map((s, idx) => (
-            <Col md={6} lg={4} key={s.id}>
-              <div
-                className="soft-card h-100 d-flex flex-column position-relative overflow-hidden"
-                style={{ cursor: "pointer", minHeight: "200px" }}
-                onClick={() => handleOpenSession(s)}
-              >
-                {/* Top Colored Bar (Optional aesthetic touch) */}
+          {sessions
+            .filter((s) => selectedDate === null || s.date === selectedDate)
+            .map((s, idx) => (
+              <Col md={6} lg={4} key={s.id}>
                 <div
-                  style={{
-                    height: "6px",
-                    width: "100%",
-                    background:
-                      "linear-gradient(90deg, #0d6efd 0%, #6610f2 100%)",
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                  }}
-                ></div>
-
-                <div className="d-flex justify-content-between align-items-start mb-3 mt-2">
-                  {/* Date Box */}
-                  <div
-                    className="rounded p-2 text-center border"
-                    style={{
-                      minWidth: "60px",
-                      backgroundColor: "var(--soft-hover)",
-                      borderColor: "var(--border-color)",
-                    }}
-                  >
-                    <div
-                      className="fw-bold text-primary"
-                      style={{ lineHeight: "1" }}
-                    >
-                      {new Date(s.date).getDate()}
-                    </div>
-                    <div
-                      className="small text-uppercase text-muted"
-                      style={{ fontSize: "0.65rem" }}
-                    >
-                      {new Date(s.date).toLocaleString("default", {
-                        month: "short",
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Action Dropdown */}
-                  <Dropdown onClick={(e) => e.stopPropagation()}>
-                    <Dropdown.Toggle
-                      variant="link"
-                      className="text-muted p-0 no-caret"
-                      id={`dropdown-${s.id}`}
-                    >
-                      <i className="bi bi-three-dots"></i>
-                    </Dropdown.Toggle>
-                    <Dropdown.Menu align="end">
-                      <Dropdown.Item
-                        onClick={(e) => handleEditSessionClick(e, s)}
-                      >
-                        <i className="bi bi-pencil me-2"></i>Edit Details
-                      </Dropdown.Item>
-                      <Dropdown.Item
-                        className="text-danger"
-                        onClick={(e) => handleDeleteSession(e, s.id)}
-                      >
-                        <i className="bi bi-trash me-2"></i>Delete
-                      </Dropdown.Item>
-                    </Dropdown.Menu>
-                  </Dropdown>
-                </div>
-
-                <h5 className="fw-bold mb-2 text-truncate pe-2">
-                  {s.agenda || `Meeting #${sessions.length - idx}`}
-                </h5>
-
-                <div className="mb-3 text-muted small d-flex align-items-center">
-                  <i className="bi bi-clock me-2"></i>
-                  {s.time ? (
-                    <span>
-                      {new Date(`1970-01-01T${s.time}`).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                  ) : (
-                    "Time TBD"
-                  )}
-                  <span className="mx-2">•</span>
-                  <i className="bi bi-geo-alt me-2"></i>
-                  <span className="text-truncate" style={{ maxWidth: "120px" }}>
-                    {s.venue || "No Venue"}
-                  </span>
-                </div>
-
-                <div
-                  className="mt-auto pt-3 border-top d-flex align-items-center justify-content-between"
-                  style={{ borderColor: "var(--border-color)" }}
+                  className="soft-card h-100 d-flex flex-column position-relative overflow-hidden"
+                  style={{ cursor: "pointer", minHeight: "200px" }}
+                  onClick={() => handleOpenSession(s)}
                 >
-                  <div className="d-flex align-items-center">
-                    {/* Fake Avatar Stack for visual effect */}
-                    <div className="d-flex ms-2">
-                      {[1, 2, 3].map((i) => (
-                        <div
-                          key={i}
-                          className="rounded-circle border border-white d-flex align-items-center justify-content-center text-white small"
-                          style={{
-                            width: "24px",
-                            height: "24px",
-                            marginLeft: "-8px",
-                            backgroundColor: "#adb5bd",
-                            fontSize: "0.6rem",
-                          }}
-                        >
-                          <i className="bi bi-person-fill"></i>
-                        </div>
-                      ))}
-                    </div>
-                    <small
-                      className="text-muted ms-2"
-                      style={{ fontSize: "0.75rem" }}
+                  {/* Top Colored Bar (Optional aesthetic touch) */}
+                  <div
+                    style={{
+                      height: "6px",
+                      width: "100%",
+                      background:
+                        "linear-gradient(90deg, #0d6efd 0%, #6610f2 100%)",
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                    }}
+                  ></div>
+
+                  <div className="d-flex justify-content-between align-items-start mb-3 mt-2 gap-2">
+                    {/* Date Box */}
+                    <div
+                      className="rounded p-2 text-center border flex-shrink-0"
+                      style={{
+                        minWidth: "60px",
+                        backgroundColor: "var(--soft-hover)",
+                        borderColor: "var(--border-color)",
+                      }}
                     >
-                      View Attendees
-                    </small>
+                      <div
+                        className="fw-bold text-primary"
+                        style={{ lineHeight: "1" }}
+                      >
+                        {new Date(s.date).getDate()}
+                      </div>
+                      <div
+                        className="small text-uppercase text-muted"
+                        style={{ fontSize: "0.65rem" }}
+                      >
+                        {new Date(s.date).toLocaleString("default", {
+                          month: "short",
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Agenda Title */}
+                    <h5 className="fw-bold mb-0 text-truncate flex-grow-1">
+                      {s.agenda || `Meeting #${sessions.length - idx}`}
+                    </h5>
+
+                    {/* Action Dropdown */}
+                    <Dropdown
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex-shrink-0"
+                    >
+                      <Dropdown.Toggle
+                        variant="link"
+                        className="text-muted p-0 no-caret"
+                        id={`dropdown-${s.id}`}
+                      >
+                        <i className="bi bi-three-dots"></i>
+                      </Dropdown.Toggle>
+                      <Dropdown.Menu align="end">
+                        <Dropdown.Item
+                          onClick={(e) => handleEditSessionClick(e, s)}
+                        >
+                          <i className="bi bi-pencil me-2"></i>Edit Details
+                        </Dropdown.Item>
+                        <Dropdown.Item
+                          className="text-danger"
+                          onClick={(e) => handleDeleteSession(e, s.id)}
+                        >
+                          <i className="bi bi-trash me-2"></i>Delete
+                        </Dropdown.Item>
+                      </Dropdown.Menu>
+                    </Dropdown>
                   </div>
 
-                  <Button
-                    variant="light"
-                    size="sm"
-                    className="rounded-pill px-3 soft-open-btn"
+                  <div className="mb-3 text-muted small d-flex align-items-center">
+                    <i className="bi bi-clock me-2"></i>
+                    {s.time ? (
+                      <span>
+                        {new Date(`1970-01-01T${s.time}`).toLocaleTimeString(
+                          [],
+                          {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          },
+                        )}
+                      </span>
+                    ) : (
+                      "Time TBD"
+                    )}
+                    <span className="mx-2">•</span>
+                    <i className="bi bi-geo-alt me-2"></i>
+                    <span
+                      className="text-truncate"
+                      style={{ maxWidth: "120px" }}
+                    >
+                      {s.venue || "No Venue"}
+                    </span>
+                  </div>
+
+                  <div
+                    className="mt-auto pt-3 border-top d-flex align-items-center justify-content-between"
+                    style={{ borderColor: "var(--border-color)" }}
                   >
-                    Open <i className="bi bi-arrow-right ms-1"></i>
-                  </Button>
+                    <div className="d-flex align-items-center">
+                      {/* Fake Avatar Stack for visual effect */}
+                      <div className="d-flex ms-2">
+                        {[1, 2, 3].map((i) => (
+                          <div
+                            key={i}
+                            className="rounded-circle border border-white d-flex align-items-center justify-content-center text-white small"
+                            style={{
+                              width: "24px",
+                              height: "24px",
+                              marginLeft: "-8px",
+                              backgroundColor: "#adb5bd",
+                              fontSize: "0.6rem",
+                            }}
+                          >
+                            <i className="bi bi-person-fill"></i>
+                          </div>
+                        ))}
+                      </div>
+                      <small
+                        className="text-muted ms-2"
+                        style={{ fontSize: "0.75rem" }}
+                      >
+                        View Attendees
+                      </small>
+                    </div>
+
+                    <Button
+                      variant="light"
+                      size="sm"
+                      className="rounded-pill px-3 soft-open-btn"
+                    >
+                      Open <i className="bi bi-arrow-right ms-1"></i>
+                    </Button>
+                  </div>
                 </div>
+              </Col>
+            ))}
+
+          {sessions.filter(
+            (s) => selectedDate === null || s.date === selectedDate,
+          ).length === 0 && (
+            <Col xs={12}>
+              <div
+                className="text-center p-5"
+                style={{
+                  backgroundColor: "var(--soft-hover)",
+                  borderRadius: "12px",
+                  border: "1px solid var(--border-color)",
+                }}
+              >
+                <i className="bi bi-calendar-x display-4 opacity-25 d-block mb-3"></i>
+                <p className="text-muted mb-0">
+                  {selectedDate
+                    ? `No meetings scheduled for ${selectedDate}`
+                    : "No meetings scheduled yet"}
+                </p>
               </div>
             </Col>
-          ))}
+          )}
         </Row>
 
         {/* SESSION MODAL */}
@@ -575,19 +814,19 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
         >
           <i className="bi bi-arrow-left"></i>
         </Button>
-        <div>
-          <h3
-            className="fw-bold mb-0 text-truncate"
-            style={{ maxWidth: "500px" }}
-          >
-            {activeSession.agenda || "Meeting Details"}
-          </h3>
-          <span className="text-muted small">
-            <i className="bi bi-calendar-event me-1"></i> {activeSession.date}
+        <div className="d-flex align-items-center gap-3 flex-grow-1">
+          <span className="text-muted small d-flex align-items-center">
+            <i className="bi bi-calendar-event me-2"></i> {activeSession.date}
             <span className="mx-2">•</span>
             <i className="bi bi-geo-alt me-1"></i>{" "}
             {activeSession.venue || "No Venue"}
           </span>
+          <h3
+            className="fw-bold mb-0 text-truncate"
+            style={{ maxWidth: "400px" }}
+          >
+            {activeSession.agenda || "Meeting Details"}
+          </h3>
         </div>
         <div className="ms-auto d-flex gap-2">
           <OverlayTrigger
