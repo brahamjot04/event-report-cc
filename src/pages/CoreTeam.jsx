@@ -352,7 +352,7 @@ export default function CoreTeam() {
               <h5 className="fw-bold mb-1 text-truncate" title={member.name}>
                 {member.name}
               </h5>
-              <p className="text-primary small fw-bold mb-3 text-uppercase">
+              <p className="text-primary small fw-bold mb-3">
                 {member.designation}
               </p>
 
