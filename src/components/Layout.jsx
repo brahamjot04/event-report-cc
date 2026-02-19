@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { Container, Row, Col } from "react-bootstrap";
 import { useNavigate, useLocation } from "react-router-dom";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { db } from "../firebase";
 import ThemeToggle from "./ThemeToggle";
 import "../assets/DashboardStyles.css";
 
@@ -17,6 +19,7 @@ export default function Layout({ children }) {
     const saved = localStorage.getItem("sidebarCollapsed");
     return saved ? JSON.parse(saved) : false;
   });
+  const [pendingCount, setPendingCount] = useState(0);
 
   // Persist sidebar collapsed state
   useEffect(() => {
@@ -33,6 +36,15 @@ export default function Layout({ children }) {
       } else {
         setUserName("Guest");
       }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Real-time listener for pending users count
+  useEffect(() => {
+    const q = query(collection(db, "users"), where("status", "==", "pending"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setPendingCount(snapshot.size);
     });
     return () => unsubscribe();
   }, []);
@@ -220,7 +232,7 @@ export default function Layout({ children }) {
             <div></div>
             <div className="d-flex align-items-center gap-3">
               <div
-                className="bg-white p-2 rounded-circle shadow-sm cursor-pointer"
+                className="bg-white p-2 rounded-circle shadow-sm cursor-pointer position-relative"
                 style={{
                   width: 40,
                   height: 40,
@@ -228,8 +240,21 @@ export default function Layout({ children }) {
                   alignItems: "center",
                   justifyContent: "center",
                 }}
+                onClick={() => navigate("/users")}
+                title="Pending Approvals"
               >
                 <i className="bi bi-bell text-dark"></i>
+                {pendingCount > 0 && (
+                  <span
+                    className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                    style={{
+                      fontSize: "0.65rem",
+                      padding: "0.25rem 0.4rem",
+                    }}
+                  >
+                    {pendingCount}
+                  </span>
+                )}
               </div>
               <div
                 className="bg-white px-3 py-2 rounded-pill shadow-sm d-flex align-items-center gap-2 cursor-pointer"
