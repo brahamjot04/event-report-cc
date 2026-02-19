@@ -790,7 +790,7 @@ export default function EventParticipants({
                 {categories.map((cat, idx) => (
                   <ListGroup.Item
                     key={idx}
-                    className="d-flex justify-content-between align-items-center bg-transparent border-bottom px-0"
+                    className="category-list-item d-flex justify-content-between align-items-center bg-transparent border-bottom"
                     style={{
                       borderColor: "var(--border-color)",
                       color: "var(--text-primary)",
@@ -798,13 +798,13 @@ export default function EventParticipants({
                   >
                     {cat}
                     <i
-                      className="bi bi-trash text-danger cursor-pointer"
+                      className="bi bi-trash text-danger cursor-pointer category-trash"
                       onClick={() => handleDeleteCategory(cat)}
                     ></i>
                   </ListGroup.Item>
                 ))}
               </ListGroup>
-              <InputGroup>
+              <InputGroup className="category-input-group">
                 <Form.Control
                   placeholder="New Category"
                   className="form-control"
