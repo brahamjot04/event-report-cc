@@ -343,7 +343,11 @@ export default function EventSponsorship({
       </div>
 
       {/* MODERN TABLE LAYOUT */}
-      <div className="soft-card p-0 overflow-hidden shadow-sm">
+      {/* Add the fit-content style here */}
+      <div
+        className="soft-card p-0 overflow-hidden shadow-sm"
+        style={{ height: "fit-content" }}
+      >
         <Table hover responsive className="mb-0 align-middle">
           <thead style={{ backgroundColor: "var(--soft-hover)" }}>
             <tr>
@@ -369,7 +373,10 @@ export default function EventSponsorship({
           <tbody>
             {sponsors.length === 0 ? (
               <tr>
-                <td colSpan="6" className="text-center py-5 text-muted">
+                <td
+                  colSpan="6"
+                  className="text-center py-4 text-muted border-0"
+                >
                   <i className="bi bi-inbox display-4 opacity-25 d-block mb-3"></i>
                   No sponsorship records found.
                 </td>
