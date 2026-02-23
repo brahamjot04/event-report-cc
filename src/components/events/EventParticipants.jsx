@@ -243,6 +243,7 @@ export default function EventParticipants({
       doc.text(`${item.name} (${item.category || "General"})`, 14, finalY);
       finalY += 3;
 
+      // Phone is NOT included here
       const rows = item.participants?.map((p, i) => [
         i + 1,
         p.name,
@@ -364,7 +365,6 @@ export default function EventParticipants({
           </div>
         </div>
 
-        {/* FIX: Container set to fit-content to stop stretching */}
         <div
           className="soft-card p-0 overflow-hidden shadow-sm"
           style={{ height: "fit-content" }}
@@ -399,6 +399,10 @@ export default function EventParticipants({
                         <th className="text-secondary text-uppercase small text-start">
                           URN
                         </th>
+                        {/* PHONE COLUMN */}
+                        <th className="text-secondary text-uppercase small text-start">
+                          Phone
+                        </th>
                         <th className="text-secondary text-uppercase small text-start">
                           Branch
                         </th>
@@ -429,6 +433,10 @@ export default function EventParticipants({
                           </td>
                           <td className="text-muted text-start">
                             <code className="text-primary">{p.urn}</code>
+                          </td>
+                          {/* PHONE DATA */}
+                          <td className="text-muted small text-start">
+                            {p.phone || "-"}
                           </td>
                           <td className="text-muted small text-start">
                             {p.branch || "-"}
@@ -498,6 +506,10 @@ export default function EventParticipants({
                   <th className="text-secondary text-uppercase small text-start">
                     URN
                   </th>
+                  {/* PHONE COLUMN */}
+                  <th className="text-secondary text-uppercase small text-start">
+                    Phone
+                  </th>
                   <th className="text-secondary text-uppercase small text-start">
                     Branch
                   </th>
@@ -515,7 +527,7 @@ export default function EventParticipants({
                   // Empty State for Solo Events
                   <tr>
                     <td
-                      colSpan="6"
+                      colSpan="7"
                       className="text-center py-4 text-muted border-0"
                     >
                       <i className="bi bi-people display-4 opacity-25 d-block mb-3 mt-2"></i>
@@ -537,6 +549,10 @@ export default function EventParticipants({
                       </td>
                       <td className="text-muted text-start">
                         <code className="text-primary">{p.urn}</code>
+                      </td>
+                      {/* PHONE DATA */}
+                      <td className="text-muted small text-start">
+                        {p.phone || "-"}
                       </td>
                       <td className="text-muted small text-start">
                         {p.branch || "-"}
@@ -855,7 +871,7 @@ export default function EventParticipants({
                 {categories.map((cat, idx) => (
                   <ListGroup.Item
                     key={idx}
-                    className="category-list-item d-flex justify-content-between align-items-center bg-transparent border-bottom"
+                    className="category-list-item d-flex justify-content-between align-items-center bg-transparent border-bottom px-0"
                     style={{
                       borderColor: "var(--border-color)",
                       color: "var(--text-primary)",
@@ -1129,7 +1145,10 @@ export default function EventParticipants({
                         }}
                         value={partForm.teamName || ""}
                         onChange={(e) =>
-                          setPartForm({ ...partForm, teamName: e.target.value })
+                          setPartForm({
+                            ...partForm,
+                            teamName: e.target.value,
+                          })
                         }
                       />
                     </Col>
