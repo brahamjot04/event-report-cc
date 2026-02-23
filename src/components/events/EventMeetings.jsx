@@ -17,7 +17,6 @@ import {
   Form,
   Row,
   Col,
-  Card,
   Badge,
   Dropdown,
   OverlayTrigger,
@@ -883,19 +882,27 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
           <thead style={{ backgroundColor: "var(--soft-hover)" }}>
             <tr>
               <th
-                className="ps-4 py-3 text-secondary text-uppercase small"
+                className="ps-4 py-3 text-secondary text-uppercase small text-start"
                 style={{ width: "5%" }}
               >
                 #
               </th>
               <th
-                className="text-secondary text-uppercase small"
-                style={{ width: "35%" }}
+                className="text-secondary text-uppercase small text-start"
+                style={{ width: "25%" }}
               >
                 Student Name
               </th>
-              <th className="text-secondary text-uppercase small">URN</th>
-              <th className="text-secondary text-uppercase small">Team</th>
+              <th className="text-secondary text-uppercase small text-start">
+                URN
+              </th>
+              {/* NEW COLUMN */}
+              <th className="text-secondary text-uppercase small text-start">
+                Phone
+              </th>
+              <th className="text-secondary text-uppercase small text-start">
+                Team
+              </th>
               <th className="text-end pe-4 text-secondary text-uppercase small">
                 Actions
               </th>
@@ -904,7 +911,7 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
           <tbody>
             {sessionStudents.length === 0 ? (
               <tr>
-                <td colSpan="5" className="text-center py-5 text-muted">
+                <td colSpan="6" className="text-center py-5 text-muted">
                   <i className="bi bi-people display-4 opacity-25 d-block mb-3"></i>
                   No students added to this meeting yet.
                 </td>
@@ -915,9 +922,9 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
                   key={s.id}
                   style={{ borderBottom: "1px solid var(--border-color)" }}
                 >
-                  <td className="ps-4 text-muted">{idx + 1}</td>
-                  <td>
-                    <div className="d-flex align-items-center">
+                  <td className="ps-4 text-muted text-start">{idx + 1}</td>
+                  <td className="text-start">
+                    <div className="d-flex align-items-center text-start">
                       <div
                         className="avatar-circle me-3 flex-shrink-0"
                         style={{
@@ -930,13 +937,22 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
                       >
                         {getInitials(s.name)}
                       </div>
-                      <span className="fw-bold text-body">{s.name}</span>
+                      <span
+                        className="fw-bold text-body"
+                        style={{ color: "var(--text-primary) !important" }}
+                      >
+                        {s.name}
+                      </span>
                     </div>
                   </td>
-                  <td className="text-muted">
+                  <td className="text-muted text-start">
                     <code className="text-primary">{s.urn}</code>
                   </td>
-                  <td>
+                  {/* NEW COLUMN */}
+                  <td className="text-muted small text-start">
+                    {s.phone || "-"}
+                  </td>
+                  <td className="text-start">
                     <Badge bg="light" text="dark" className="border fw-normal">
                       {s.team || "General"}
                     </Badge>
@@ -979,7 +995,10 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
         onHide={() => setShowStudentModal(false)}
         centered
       >
-        <div className="soft-card border-0 p-0 overflow-hidden">
+        <div
+          className="soft-card border-0 p-0 overflow-hidden"
+          style={{ height: "auto" }}
+        >
           <Modal.Header
             closeButton
             className="border-bottom"
@@ -996,6 +1015,11 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
                 <Form.Control
                   placeholder="e.g. John Doe"
                   className="form-control"
+                  style={{
+                    backgroundColor: "var(--bg-main)",
+                    color: "var(--text-primary)",
+                    borderColor: "var(--border-color)",
+                  }}
                   value={studentForm.name || ""}
                   onChange={(e) =>
                     setStudentForm({ ...studentForm, name: e.target.value })
@@ -1011,6 +1035,11 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
                     <Form.Control
                       placeholder="e.g. 2004567"
                       className="form-control"
+                      style={{
+                        backgroundColor: "var(--bg-main)",
+                        color: "var(--text-primary)",
+                        borderColor: "var(--border-color)",
+                      }}
                       value={studentForm.urn || ""}
                       onChange={(e) =>
                         setStudentForm({ ...studentForm, urn: e.target.value })
@@ -1021,11 +1050,16 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
                 <Col>
                   <Form.Group>
                     <Form.Label className="small fw-bold text-muted">
-                      PHONE
+                      PHONE <span className="text-danger">*</span>
                     </Form.Label>
                     <Form.Control
-                      placeholder="Optional"
+                      placeholder="Required"
                       className="form-control"
+                      style={{
+                        backgroundColor: "var(--bg-main)",
+                        color: "var(--text-primary)",
+                        borderColor: "var(--border-color)",
+                      }}
                       value={studentForm.phone || ""}
                       onChange={(e) =>
                         setStudentForm({
@@ -1033,6 +1067,7 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
                           phone: e.target.value,
                         })
                       }
+                      required
                     />
                   </Form.Group>
                 </Col>
@@ -1042,8 +1077,13 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
                   TEAM / DEPARTMENT
                 </Form.Label>
                 <Form.Control
-                  placeholder="e.g. Logistics"
+                  placeholder="e.g. Record Keeping"
                   className="form-control"
+                  style={{
+                    backgroundColor: "var(--bg-main)",
+                    color: "var(--text-primary)",
+                    borderColor: "var(--border-color)",
+                  }}
                   value={studentForm.team || ""}
                   onChange={(e) =>
                     setStudentForm({ ...studentForm, team: e.target.value })
