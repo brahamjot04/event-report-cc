@@ -25,16 +25,24 @@ import autoTable from "jspdf-autotable";
 
 export default function EventTeams({ eventId, eventTitle, goBack }) {
   const [teams, setTeams] = useState([]);
+  const [coreTeamMembers, setCoreTeamMembers] = useState([]);
 
   // Modal States
   const [showTeamModal, setShowTeamModal] = useState(false);
   const [showMemberModal, setShowMemberModal] = useState(false);
+  const [showHeadModal, setShowHeadModal] = useState(false);
 
   // Form States
   const [newTeamName, setNewTeamName] = useState("");
+  const [selectedTeamHead, setSelectedTeamHead] = useState(null);
+  const [manualTeamHead, setManualTeamHead] = useState("");
+  const [pendingTeamHeads, setPendingTeamHeads] = useState([]);
+  const [isEditingTeam, setIsEditingTeam] = useState(false);
+  const [editingTeamId, setEditingTeamId] = useState(null);
 
   const [activeTeam, setActiveTeam] = useState(null);
   const [editingMemberIndex, setEditingMemberIndex] = useState(null);
+  const [editingHeadMemberIndex, setEditingHeadMemberIndex] = useState(null);
 
   // Filter State
   const [selectedTeamFilter, setSelectedTeamFilter] = useState(null);
@@ -47,9 +55,30 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
     designation: "",
   });
 
+  const [headForm, setHeadForm] = useState({
+    name: "",
+    urn: "",
+    phone: "",
+    branch: "",
+  });
+
   useEffect(() => {
     fetchTeams();
+    fetchCoreTeam();
   }, [eventId]);
+
+  const fetchCoreTeam = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, "global_core_team"));
+      const coreTeam = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setCoreTeamMembers(coreTeam);
+    } catch (error) {
+      console.error("Error fetching core team:", error);
+    }
+  };
 
   const fetchTeams = async () => {
     const querySnapshot = await getDocs(
@@ -75,15 +104,161 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
   };
 
   // --- TEAM MANAGEMENT ---
+  const buildHeadFromInputs = () => {
+    if (selectedTeamHead) {
+      const headMember = coreTeamMembers.find((m) => m.id === selectedTeamHead);
+      if (headMember) {
+        return {
+          id: headMember.id,
+          name: headMember.name,
+          urn: headMember.urn || "",
+          phone: headMember.phone || "",
+          branch: headMember.branch || "",
+          designation: "Head",
+        };
+      }
+    }
+
+    if (manualTeamHead.trim()) {
+      return {
+        name: manualTeamHead.trim(),
+        urn: "",
+        phone: "",
+        branch: "",
+        designation: "Head",
+        isEventWiseHead: true,
+      };
+    }
+
+    return null;
+  };
+
+  const handleAddHeadToList = () => {
+    const newHead = buildHeadFromInputs();
+    if (!newHead?.name) return;
+
+    setPendingTeamHeads((prev) => {
+      const exists = prev.some(
+        (h) =>
+          h.name?.trim().toLowerCase() === newHead.name.trim().toLowerCase() &&
+          (h.urn || "") === (newHead.urn || ""),
+      );
+      if (exists) return prev;
+      return [...prev, newHead];
+    });
+
+    setSelectedTeamHead(null);
+    setManualTeamHead("");
+  };
+
+  const removePendingHead = (indexToRemove) => {
+    setPendingTeamHeads((prev) =>
+      prev.filter((_, idx) => idx !== indexToRemove),
+    );
+  };
+
   const handleCreateTeam = async () => {
     if (!newTeamName.trim()) return;
-    await addDoc(collection(db, "events", eventId, "teams"), {
-      name: newTeamName,
-      members: [],
-    });
+
+    const inputHead = buildHeadFromInputs();
+    const headsToSave = [...pendingTeamHeads];
+    if (inputHead?.name) {
+      const exists = headsToSave.some(
+        (h) =>
+          h.name?.trim().toLowerCase() ===
+            inputHead.name.trim().toLowerCase() &&
+          (h.urn || "") === (inputHead.urn || ""),
+      );
+      if (!exists) headsToSave.push(inputHead);
+    }
+
+    const primaryHead = headsToSave[0] || null;
+    const headMembers = headsToSave.map((head) => ({
+      name: head.name,
+      urn: head.urn || "",
+      phone: head.phone || "",
+      branch: head.branch || "",
+      designation: "Head",
+    }));
+
+    if (isEditingTeam && editingTeamId) {
+      const currentTeam =
+        teams.find((t) => t.id === editingTeamId) || activeTeam;
+      const currentMembers = currentTeam?.members || [];
+      const nonHeadMembers = currentMembers.filter(
+        (m) => (m.designation || "").toLowerCase() !== "head",
+      );
+
+      // Update existing team
+      await updateDoc(doc(db, "events", eventId, "teams", editingTeamId), {
+        name: newTeamName,
+        teamHead: primaryHead,
+        teamHeads: headsToSave,
+        members: [...headMembers, ...nonHeadMembers],
+      });
+      setIsEditingTeam(false);
+      setEditingTeamId(null);
+    } else {
+      // Create new team
+      await addDoc(collection(db, "events", eventId, "teams"), {
+        name: newTeamName,
+        teamHead: primaryHead,
+        teamHeads: headsToSave,
+        members: headMembers,
+      });
+    }
     setNewTeamName("");
+    setSelectedTeamHead(null);
+    setManualTeamHead("");
+    setPendingTeamHeads([]);
     setShowTeamModal(false);
     fetchTeams();
+  };
+
+  const openEditTeamModal = (team) => {
+    setIsEditingTeam(true);
+    setEditingTeamId(team.id);
+    setNewTeamName(team.name);
+    const headsFromMembers = (team.members || [])
+      .filter((m) => (m.designation || "").toLowerCase() === "head")
+      .map((m) => ({
+        name: m.name,
+        urn: m.urn || "",
+        phone: m.phone || "",
+        branch: m.branch || "",
+        designation: "Head",
+      }));
+
+    if (headsFromMembers.length > 0) {
+      setPendingTeamHeads(headsFromMembers);
+    } else if (team.teamHead?.name) {
+      setPendingTeamHeads([
+        {
+          name: team.teamHead.name,
+          urn: team.teamHead.urn || "",
+          phone: team.teamHead.phone || "",
+          branch: team.teamHead.branch || "",
+          designation: "Head",
+          id: team.teamHead.id,
+          isEventWiseHead: team.teamHead.isEventWiseHead,
+        },
+      ]);
+    } else {
+      setPendingTeamHeads([]);
+    }
+
+    setSelectedTeamHead(null);
+    setManualTeamHead("");
+    setShowTeamModal(true);
+  };
+
+  const resetTeamForm = () => {
+    setIsEditingTeam(false);
+    setEditingTeamId(null);
+    setNewTeamName("");
+    setSelectedTeamHead(null);
+    setManualTeamHead("");
+    setPendingTeamHeads([]);
   };
 
   const handleDeleteTeam = async (e, teamId) => {
@@ -145,6 +320,55 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
     setShowMemberModal(true);
   };
 
+  const openEditHeadModal = (headMember, memberIndex = null) => {
+    setEditingHeadMemberIndex(memberIndex);
+    setHeadForm({
+      name: headMember?.name || "",
+      urn: headMember?.urn || "",
+      phone: headMember?.phone || "",
+      branch: headMember?.branch || "",
+    });
+    setShowHeadModal(true);
+  };
+
+  const handleSaveHeadDetails = async () => {
+    if (!activeTeam || !headForm.name.trim()) return;
+
+    const updatedMembers = [...(activeTeam.members || [])];
+
+    if (editingHeadMemberIndex !== null) {
+      const existing = updatedMembers[editingHeadMemberIndex] || {};
+      updatedMembers[editingHeadMemberIndex] = {
+        ...existing,
+        ...headForm,
+        designation: "Head",
+      };
+    }
+
+    const updatedTeamHead = {
+      ...(activeTeam.teamHead || {}),
+      name: headForm.name,
+      urn: headForm.urn,
+      phone: headForm.phone,
+      branch: headForm.branch,
+      designation: "Head",
+    };
+
+    await updateDoc(doc(db, "events", eventId, "teams", activeTeam.id), {
+      teamHead: updatedTeamHead,
+      members: updatedMembers,
+    });
+
+    setActiveTeam({
+      ...activeTeam,
+      teamHead: updatedTeamHead,
+      members: updatedMembers,
+    });
+    setShowHeadModal(false);
+    setEditingHeadMemberIndex(null);
+    fetchTeams();
+  };
+
   const openEditMemberModal = (member, index) => {
     setEditingMemberIndex(index);
     setMemberForm(member);
@@ -194,61 +418,320 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
   };
 
   // --- PDF GENERATION ---
-  const generateAllTeamsPDF = () => {
-    const doc = new jsPDF();
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
-    doc.text(`Team Details Report`, 14, 15);
+  const generateAllTeamsPDF = async () => {
+    try {
+      // Fetch global_core_team data for Student Coordinators only
+      const coreTeamSnapshot = await getDocs(
+        collection(db, "global_core_team"),
+      );
+      const coreTeamData = coreTeamSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
 
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Event: ${eventTitle || "Event Details"}`, 14, 22);
+      // Extract Student Coordinators
+      const studentCoordinators = coreTeamData.filter(
+        (m) =>
+          m.designation?.toLowerCase().includes("coordinator") ||
+          (m.designation?.toLowerCase().includes("student") &&
+            m.designation?.toLowerCase().includes("co")),
+      );
 
-    let finalY = 30;
+      const pdfDoc = new jsPDF();
+      pdfDoc.setFont("helvetica", "bold");
+      pdfDoc.setFontSize(18);
+      pdfDoc.text(`Team Details Report`, 14, 15);
 
-    teams.forEach((team) => {
-      if (finalY > 250) {
-        doc.addPage();
-        finalY = 20;
-      }
+      pdfDoc.setFontSize(12);
+      pdfDoc.setFont("helvetica", "normal");
+      pdfDoc.text(`Event: ${eventTitle || "Event Details"}`, 14, 22);
 
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(14);
-      doc.setTextColor(0);
-      doc.text(`Team: ${team.name}`, 14, finalY);
-      finalY += 3;
+      let finalY = 30;
 
-      const rows = (team.members || []).map((m, i) => [
-        i + 1,
-        m.name,
-        m.urn || "-",
-        m.branch || "-",
-        m.designation || "-",
-      ]);
+      // Helper function to add section to PDF
+      const addSection = (title, members) => {
+        if (finalY > 250) {
+          pdfDoc.addPage();
+          finalY = 20;
+        }
 
-      if (rows.length > 0) {
-        autoTable(doc, {
-          startY: finalY,
-          head: [["S.No", "Student Name", "URN", "Branch", "Designation"]],
-          body: rows,
-          theme: "grid",
-          headStyles: { fillColor: [41, 128, 185] },
-          margin: { left: 14, right: 14 },
+        // Section Title
+        pdfDoc.setFont("helvetica", "bold");
+        pdfDoc.setFontSize(12);
+        pdfDoc.setTextColor(41, 128, 185);
+        pdfDoc.text(title, 14, finalY);
+        finalY += 6;
+
+        const rows = (members || []).map((m, i) => [
+          i + 1,
+          m.name || "-",
+          m.urn || "-",
+          m.branch || "-",
+          m.designation || "-",
+        ]);
+
+        if (rows.length > 0) {
+          autoTable(pdfDoc, {
+            startY: finalY,
+            head: [["S.No", "Student Name", "URN", "Branch", "Designation"]],
+            body: rows,
+            theme: "grid",
+            headStyles: { fillColor: [41, 128, 185] },
+            margin: { left: 14, right: 14 },
+          });
+          finalY = pdfDoc.lastAutoTable.finalY + 5;
+        } else {
+          pdfDoc.setFont("helvetica", "italic");
+          pdfDoc.setFontSize(10);
+          pdfDoc.setTextColor(0);
+          pdfDoc.text("(No members)", 14, finalY + 3);
+          finalY += 10;
+        }
+      };
+
+      // Add Student Coordinators Section
+      addSection("Student Coordinators", studentCoordinators);
+      finalY += 5; // Extra space before teams
+
+      // Add each event team
+      teams.forEach((team) => {
+        if (finalY > 240) {
+          pdfDoc.addPage();
+          finalY = 20;
+        }
+
+        // Team Title
+        pdfDoc.setFont("helvetica", "bold");
+        pdfDoc.setFontSize(13);
+        pdfDoc.setTextColor(0, 51, 102);
+        pdfDoc.text(team.name, 14, finalY);
+        finalY += 6;
+
+        const normalizedMembers = team.members || [];
+        const headMembers = normalizedMembers.filter(
+          (m) => (m.designation || "").toLowerCase() === "head",
+        );
+        const executiveMembers = normalizedMembers.filter(
+          (m) => (m.designation || "").toLowerCase() === "executive",
+        );
+        const regularMembers = normalizedMembers.filter(
+          (m) =>
+            !["head", "executive"].includes(
+              (m.designation || "").toLowerCase(),
+            ),
+        );
+
+        const rows = [];
+
+        if (headMembers.length > 0 || team.teamHead?.name) {
+          rows.push({
+            isSection: true,
+            cells: ["Team Head Details", "", "", "", ""],
+          });
+
+          if (headMembers.length > 0) {
+            headMembers.forEach((m, i) => {
+              rows.push({
+                isSection: false,
+                cells: [
+                  i + 1,
+                  m.name || "-",
+                  m.urn || "-",
+                  m.branch || "-",
+                  m.designation || "Head",
+                ],
+              });
+            });
+          } else {
+            rows.push({
+              isSection: false,
+              cells: [
+                1,
+                team.teamHead.name || "-",
+                team.teamHead.urn || "-",
+                team.teamHead.branch || "-",
+                "Head",
+              ],
+            });
+          }
+        }
+
+        if (executiveMembers.length > 0) {
+          rows.push({
+            isSection: true,
+            cells: ["Team Executives", "", "", "", ""],
+          });
+
+          executiveMembers.forEach((m, i) => {
+            rows.push({
+              isSection: false,
+              cells: [
+                i + 1,
+                m.name || "-",
+                m.urn || "-",
+                m.branch || "-",
+                m.designation || "Executive",
+              ],
+            });
+          });
+        }
+
+        rows.push({
+          isSection: true,
+          cells: ["Team Members", "", "", "", ""],
         });
-        finalY = doc.lastAutoTable.finalY + 15;
-      } else {
-        doc.setFont("helvetica", "italic");
-        doc.setFontSize(10);
-        doc.text("(No members)", 14, finalY + 5);
-        finalY += 15;
-      }
-    });
+        if (regularMembers.length > 0) {
+          regularMembers.forEach((m, i) => {
+            rows.push({
+              isSection: false,
+              cells: [
+                i + 1,
+                m.name || "-",
+                m.urn || "-",
+                m.branch || "-",
+                m.designation || "Member",
+              ],
+            });
+          });
+        } else {
+          rows.push({
+            isSection: false,
+            cells: ["-", "No Members", "-", "-", "-"],
+          });
+        }
 
-    doc.save(`Teams_Report.pdf`);
+        if (rows.length > 0) {
+          autoTable(pdfDoc, {
+            startY: finalY,
+            head: [["S.No", "Student Name", "URN", "Branch", "Designation"]],
+            body: rows.map((row) => row.cells),
+            theme: "grid",
+            headStyles: { fillColor: [41, 128, 185] },
+            margin: { left: 14, right: 14 },
+            didParseCell: (data) => {
+              if (data.section === "body") {
+                const row = rows[data.row.index];
+                if (row?.isSection) {
+                  data.cell.styles.fillColor = [236, 240, 241];
+                  data.cell.styles.fontStyle = "bold";
+                  if (data.column.index > 0) {
+                    data.cell.text = [""];
+                  }
+                }
+              }
+            },
+          });
+          finalY = pdfDoc.lastAutoTable.finalY + 8;
+        }
+      });
+
+      pdfDoc.save(`Teams_Report.pdf`);
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      alert("Error generating PDF. Please try again.");
+    }
   };
 
   const getInitials = (name) =>
     name ? name.substring(0, 2).toUpperCase() : "TM";
+
+  const getTeamHeadsCount = (team) => {
+    const headMembersCount = (team?.members || []).filter(
+      (member) => (member.designation || "").toLowerCase() === "head",
+    ).length;
+
+    if (headMembersCount > 0) return headMembersCount;
+    if (Array.isArray(team?.teamHeads) && team.teamHeads.length > 0) {
+      return team.teamHeads.length;
+    }
+    return team?.teamHead?.name ? 1 : 0;
+  };
+
+  const getTeamExecutivesCount = (team) =>
+    (team?.members || []).filter(
+      (member) => (member.designation || "").toLowerCase() === "executive",
+    ).length;
+
+  const getTeamMembersCount = (team) =>
+    (team?.members || []).filter((member) => {
+      const designation = (member.designation || "").toLowerCase();
+      return !["head", "executive"].includes(designation);
+    }).length;
+
+  const getHierarchicalRows = (team) => {
+    const membersWithIndex = (team?.members || []).map((member, index) => ({
+      ...member,
+      originalIndex: index,
+    }));
+
+    const heads = membersWithIndex.filter(
+      (m) => (m.designation || "").toLowerCase() === "head",
+    );
+    const executives = membersWithIndex.filter(
+      (m) => (m.designation || "").toLowerCase() === "executive",
+    );
+    const teamMembers = membersWithIndex.filter(
+      (m) =>
+        !["head", "executive"].includes((m.designation || "").toLowerCase()),
+    );
+
+    const rows = [];
+
+    rows.push({ type: "section", label: "Team Head Details" });
+    if (heads.length > 0) {
+      heads.forEach((member, index) =>
+        rows.push({
+          type: "member",
+          group: "head",
+          member: { ...member, serial: index + 1 },
+        }),
+      );
+    } else if (team?.teamHead?.name) {
+      rows.push({
+        type: "head-only",
+        group: "head",
+        member: {
+          name: team.teamHead.name,
+          urn: team.teamHead.urn || "-",
+          phone: team.teamHead.phone || "-",
+          branch: team.teamHead.branch || "-",
+          designation: "Head",
+          originalIndex: null,
+          serial: 1,
+        },
+      });
+    } else {
+      rows.push({ type: "empty", message: "Not Assigned" });
+    }
+
+    rows.push({ type: "section", label: "Team Executives" });
+    if (executives.length > 0) {
+      executives.forEach((member, index) =>
+        rows.push({
+          type: "member",
+          group: "executive",
+          member: { ...member, serial: index + 1 },
+        }),
+      );
+    } else {
+      rows.push({ type: "empty", message: "No Executives" });
+    }
+
+    rows.push({ type: "section", label: "Team Members" });
+    if (teamMembers.length > 0) {
+      teamMembers.forEach((member, index) =>
+        rows.push({
+          type: "member",
+          group: "member",
+          member: { ...member, serial: index + 1 },
+        }),
+      );
+    } else {
+      rows.push({ type: "empty", message: "No Members" });
+    }
+
+    return rows;
+  };
 
   // --- RENDER: TEAM DETAILS PAGE VIEW ---
   if (activeTeam) {
@@ -272,10 +755,25 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
           <div>
             <h3 className="fw-bold mb-0">{activeTeam.name}</h3>
             <p className="text-muted small mb-0">
-              {activeTeam.members?.length || 0} Members
+              {getTeamMembersCount(activeTeam)} Members •{" "}
+              {getTeamExecutivesCount(activeTeam)} Executives •{" "}
+              {getTeamHeadsCount(activeTeam)} Heads
             </p>
+            {activeTeam.teamHead?.name && (
+              <p className="text-muted small mb-0">
+                Head: {activeTeam.teamHead.name}
+              </p>
+            )}
           </div>
           <div className="ms-auto d-flex gap-2">
+            <Button
+              variant="outline-primary"
+              onClick={() => openEditTeamModal(activeTeam)}
+              className="d-flex align-items-center gap-2"
+            >
+              <i className="bi bi-pencil"></i>
+              <span className="d-none d-md-inline">Edit Team</span>
+            </Button>
             <Button
               variant="primary"
               onClick={openAddMemberModal}
@@ -324,6 +822,9 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
                   URN
                 </th>
                 <th className="text-secondary text-uppercase small text-start">
+                  Phone
+                </th>
+                <th className="text-secondary text-uppercase small text-start">
                   Branch
                 </th>
                 <th className="text-secondary text-uppercase small text-start">
@@ -338,7 +839,7 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
               {!activeTeam.members || activeTeam.members.length === 0 ? (
                 <tr>
                   <td
-                    colSpan="6"
+                    colSpan="7"
                     className="text-center py-4 text-muted border-0"
                   >
                     <i className="bi bi-people display-4 opacity-25 d-block mb-3 mt-2"></i>
@@ -346,62 +847,244 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
                   </td>
                 </tr>
               ) : (
-                activeTeam.members.map((member, idx) => (
-                  <tr
-                    key={idx}
-                    style={{
-                      borderBottom: "1px solid var(--border-color)",
-                    }}
-                  >
-                    <td className="ps-4 text-muted text-start">{idx + 1}</td>
-                    <td className="fw-bold text-body text-start">
-                      {member.name}
-                    </td>
-                    <td className="text-muted text-start">
-                      <code className="text-primary">{member.urn}</code>
-                    </td>
-                    <td className="text-muted small text-start">
-                      {member.branch || "-"}
-                    </td>
-                    <td className="text-start">
-                      {member.designation ? (
-                        <Badge
-                          bg="light"
-                          text="dark"
-                          className="border fw-normal"
+                getHierarchicalRows(activeTeam).map((row, idx) => {
+                  if (row.type === "section") {
+                    return (
+                      <tr key={`section-${idx}`}>
+                        <td
+                          colSpan="7"
+                          className="fw-bold text-primary text-start"
+                          style={{
+                            backgroundColor: "var(--soft-hover)",
+                            borderBottom: "1px solid var(--border-color)",
+                          }}
                         >
-                          {member.designation}
-                        </Badge>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                    <td className="text-end pe-4">
-                      <div className="d-flex justify-content-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="light"
-                          className="border-0 bg-transparent text-primary p-1"
-                          onClick={() => openEditMemberModal(member, idx)}
-                        >
-                          <i className="bi bi-pencil-fill"></i>
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="light"
-                          className="border-0 bg-transparent text-danger p-1"
-                          onClick={() => handleDeleteMember(idx)}
-                        >
-                          <i className="bi bi-trash-fill"></i>
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                          {row.label}
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  if (row.type === "empty") {
+                    return (
+                      <tr key={`empty-${idx}`}>
+                        <td className="ps-4 text-muted text-start">-</td>
+                        <td className="text-muted text-start">{row.message}</td>
+                        <td className="text-muted text-start">-</td>
+                        <td className="text-muted text-start">-</td>
+                        <td className="text-muted text-start">-</td>
+                        <td className="text-muted text-start">-</td>
+                        <td className="text-end pe-4">-</td>
+                      </tr>
+                    );
+                  }
+
+                  const member = row.member;
+                  return (
+                    <tr
+                      key={`member-${member.originalIndex ?? idx}`}
+                      style={{
+                        borderBottom: "1px solid var(--border-color)",
+                      }}
+                    >
+                      <td className="ps-4 text-muted text-start">
+                        {member.serial}
+                      </td>
+                      <td className="fw-bold text-body text-start">
+                        {member.name}
+                      </td>
+                      <td className="text-muted text-start">
+                        <code className="text-primary">
+                          {member.urn || "-"}
+                        </code>
+                      </td>
+                      <td className="text-muted small text-start">
+                        {member.phone || "-"}
+                      </td>
+                      <td className="text-muted small text-start">
+                        {member.branch || "-"}
+                      </td>
+                      <td className="text-start">
+                        {member.designation ? (
+                          <Badge
+                            bg="light"
+                            text="dark"
+                            className="border fw-normal"
+                          >
+                            {member.designation}
+                          </Badge>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                      <td className="text-end pe-4">
+                        {row.group === "head" ? (
+                          <div className="d-flex justify-content-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="light"
+                              className="border-0 bg-transparent text-primary p-1"
+                              onClick={() =>
+                                openEditHeadModal(member, member.originalIndex)
+                              }
+                              title="Edit Team Head"
+                            >
+                              <i className="bi bi-pencil-fill"></i>
+                            </Button>
+                          </div>
+                        ) : member.originalIndex !== null ? (
+                          <div className="d-flex justify-content-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="light"
+                              className="border-0 bg-transparent text-primary p-1"
+                              onClick={() =>
+                                openEditMemberModal(
+                                  member,
+                                  member.originalIndex,
+                                )
+                              }
+                            >
+                              <i className="bi bi-pencil-fill"></i>
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="light"
+                              className="border-0 bg-transparent text-danger p-1"
+                              onClick={() =>
+                                handleDeleteMember(member.originalIndex)
+                              }
+                            >
+                              <i className="bi bi-trash-fill"></i>
+                            </Button>
+                          </div>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </Table>
         </div>
+
+        {/* Team Head Modal */}
+        <Modal
+          show={showHeadModal}
+          onHide={() => {
+            setShowHeadModal(false);
+            setEditingHeadMemberIndex(null);
+          }}
+          centered
+        >
+          <div
+            className="soft-card border-0 p-0 overflow-hidden"
+            style={{ height: "auto" }}
+          >
+            <Modal.Header
+              closeButton
+              className="border-bottom"
+              style={{ borderColor: "var(--border-color)" }}
+            >
+              <Modal.Title className="fw-bold h5">Edit Team Head</Modal.Title>
+            </Modal.Header>
+            <Modal.Body className="p-4 text-start">
+              <Form className="d-grid gap-3">
+                <Form.Group>
+                  <Form.Label className="small fw-bold text-muted">
+                    FULL NAME
+                  </Form.Label>
+                  <Form.Control
+                    placeholder="Name"
+                    className="form-control"
+                    style={{
+                      backgroundColor: "var(--bg-main)",
+                      color: "var(--text-primary)",
+                      borderColor: "var(--border-color)",
+                    }}
+                    value={headForm.name}
+                    onChange={(e) =>
+                      setHeadForm({ ...headForm, name: e.target.value })
+                    }
+                  />
+                </Form.Group>
+
+                <Row>
+                  <Col>
+                    <Form.Group>
+                      <Form.Label className="small fw-bold text-muted">
+                        CRN / URN
+                      </Form.Label>
+                      <Form.Control
+                        placeholder="CRN / URN"
+                        className="form-control"
+                        style={{
+                          backgroundColor: "var(--bg-main)",
+                          color: "var(--text-primary)",
+                          borderColor: "var(--border-color)",
+                        }}
+                        value={headForm.urn}
+                        onChange={(e) =>
+                          setHeadForm({ ...headForm, urn: e.target.value })
+                        }
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col>
+                    <Form.Group>
+                      <Form.Label className="small fw-bold text-muted">
+                        PHONE
+                      </Form.Label>
+                      <Form.Control
+                        placeholder="Phone"
+                        className="form-control"
+                        style={{
+                          backgroundColor: "var(--bg-main)",
+                          color: "var(--text-primary)",
+                          borderColor: "var(--border-color)",
+                        }}
+                        value={headForm.phone}
+                        onChange={(e) =>
+                          setHeadForm({ ...headForm, phone: e.target.value })
+                        }
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
+
+                <Form.Group>
+                  <Form.Label className="small fw-bold text-muted">
+                    BRANCH
+                  </Form.Label>
+                  <Form.Control
+                    placeholder="Branch"
+                    className="form-control"
+                    style={{
+                      backgroundColor: "var(--bg-main)",
+                      color: "var(--text-primary)",
+                      borderColor: "var(--border-color)",
+                    }}
+                    value={headForm.branch}
+                    onChange={(e) =>
+                      setHeadForm({ ...headForm, branch: e.target.value })
+                    }
+                  />
+                </Form.Group>
+              </Form>
+            </Modal.Body>
+            <Modal.Footer className="border-0 p-3 pt-0">
+              <Button
+                variant="primary"
+                onClick={handleSaveHeadDetails}
+                className="w-100"
+              >
+                Save Team Head
+              </Button>
+            </Modal.Footer>
+          </div>
+        </Modal>
 
         {/* Member Modal */}
         <Modal
@@ -532,8 +1215,8 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
                         }
                       >
                         <option value="">Select Designation</option>
-                        <option value="member">Member</option>
-                        <option value="senior">Senior</option>
+                        <option value="Executive">Executive</option>
+                        <option value="Member">Member</option>
                       </Form.Select>
                     </Form.Group>
                   </Col>
@@ -547,6 +1230,159 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
                 className="w-100"
               >
                 Save Member
+              </Button>
+            </Modal.Footer>
+          </div>
+        </Modal>
+
+        {/* Create/Edit Team Modal (available in team details view) */}
+        <Modal
+          show={showTeamModal}
+          onHide={() => {
+            setShowTeamModal(false);
+            resetTeamForm();
+          }}
+          centered
+        >
+          <div
+            className="soft-card border-0 p-0 overflow-hidden"
+            style={{ height: "auto" }}
+          >
+            <Modal.Header
+              closeButton
+              className="border-bottom"
+              style={{ borderColor: "var(--border-color)" }}
+            >
+              <Modal.Title className="fw-bold h5 text-start">
+                {isEditingTeam ? "Edit Team" : "Create New Team"}
+              </Modal.Title>
+            </Modal.Header>
+            <Modal.Body className="p-4 text-start d-grid gap-3">
+              <Form.Group>
+                <Form.Label className="small fw-bold text-muted">
+                  TEAM NAME
+                </Form.Label>
+                <Form.Control
+                  placeholder="e.g. Discipline Committee"
+                  className="form-control"
+                  style={{
+                    backgroundColor: "var(--bg-main)",
+                    color: "var(--text-primary)",
+                    borderColor: "var(--border-color)",
+                  }}
+                  value={newTeamName}
+                  onChange={(e) => setNewTeamName(e.target.value)}
+                />
+              </Form.Group>
+
+              <Form.Group>
+                <Form.Label className="small fw-bold text-muted">
+                  TEAM HEAD (FROM CORE TEAM) - Optional
+                </Form.Label>
+                <div className="d-flex gap-2 align-items-center">
+                  <Form.Select
+                    style={{
+                      backgroundColor: "var(--bg-main)",
+                      color: "var(--text-primary)",
+                      borderColor: "var(--border-color)",
+                    }}
+                    value={selectedTeamHead || ""}
+                    onChange={(e) => {
+                      setSelectedTeamHead(e.target.value || null);
+                      if (e.target.value) {
+                        setManualTeamHead("");
+                      }
+                    }}
+                  >
+                    <option value="">-- Select from Core Team --</option>
+                    {coreTeamMembers.map((member) => (
+                      <option key={member.id} value={member.id}>
+                        {member.name} ({member.designation || "Member"})
+                      </option>
+                    ))}
+                  </Form.Select>
+                  <Button
+                    type="button"
+                    variant="outline-primary"
+                    onClick={handleAddHeadToList}
+                    title="Add Team Head"
+                    className="d-flex align-items-center justify-content-center"
+                    style={{ width: "38px", height: "38px", padding: 0 }}
+                  >
+                    <i className="bi bi-plus-lg"></i>
+                  </Button>
+                </div>
+              </Form.Group>
+
+              {!selectedTeamHead && (
+                <Form.Group>
+                  <Form.Label className="small fw-bold text-muted">
+                    ADD EVENT-WISE TEAM HEAD - Optional
+                  </Form.Label>
+                  <div className="d-flex gap-2 align-items-center">
+                    <Form.Control
+                      placeholder="e.g. Student Name"
+                      className="form-control"
+                      style={{
+                        backgroundColor: "var(--bg-main)",
+                        color: "var(--text-primary)",
+                        borderColor: "var(--border-color)",
+                      }}
+                      value={manualTeamHead}
+                      onChange={(e) => setManualTeamHead(e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline-primary"
+                      onClick={handleAddHeadToList}
+                      title="Add Team Head"
+                      className="d-flex align-items-center justify-content-center"
+                      style={{ width: "38px", height: "38px", padding: 0 }}
+                    >
+                      <i className="bi bi-plus-lg"></i>
+                    </Button>
+                  </div>
+                  <small className="text-muted d-block mt-1">
+                    Use this if Team Head is not in Core Team
+                  </small>
+                </Form.Group>
+              )}
+
+              {pendingTeamHeads.length > 0 && (
+                <div>
+                  <Form.Label className="small fw-bold text-muted mb-2 d-block">
+                    SELECTED TEAM HEADS
+                  </Form.Label>
+                  <div className="d-flex flex-wrap gap-2">
+                    {pendingTeamHeads.map((head, idx) => (
+                      <Badge
+                        key={`${head.name}-${idx}`}
+                        bg="primary"
+                        className="d-flex align-items-center gap-2"
+                      >
+                        <span>{head.name}</span>
+                        <Button
+                          type="button"
+                          variant="link"
+                          className="p-0 text-white text-decoration-none"
+                          onClick={() => removePendingHead(idx)}
+                          style={{ lineHeight: 1 }}
+                        >
+                          <i className="bi bi-x-lg"></i>
+                        </Button>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Modal.Body>
+            <Modal.Footer className="border-0 p-3 pt-0">
+              <Button
+                variant="primary"
+                onClick={handleCreateTeam}
+                className="w-100"
+              >
+                {isEditingTeam ? "Update Team" : "Create Team"}
               </Button>
             </Modal.Footer>
           </div>
@@ -631,7 +1467,7 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
               backgroundColor: "transparent",
             }}
             onClick={() => {
-              setNewTeamName("");
+              resetTeamForm();
               setShowTeamModal(true);
             }}
             onMouseEnter={(e) => {
@@ -686,6 +1522,15 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
                     </Dropdown.Toggle>
                     <Dropdown.Menu align="end">
                       <Dropdown.Item
+                        className="text-primary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditTeamModal(team);
+                        }}
+                      >
+                        <i className="bi bi-pencil me-2"></i>Edit Team
+                      </Dropdown.Item>
+                      <Dropdown.Item
                         className="text-danger"
                         onClick={(e) => handleDeleteTeam(e, team.id)}
                       >
@@ -719,7 +1564,19 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
                       bg="primary"
                       className="bg-opacity-25 text-primary fw-normal border border-primary"
                     >
-                      {team.members?.length || 0} Members
+                      {getTeamMembersCount(team)} Members
+                    </Badge>
+                    <Badge
+                      bg="info"
+                      className="ms-2 bg-opacity-25 text-info fw-normal border border-info"
+                    >
+                      {getTeamExecutivesCount(team)} Executives
+                    </Badge>
+                    <Badge
+                      bg="secondary"
+                      className="ms-2 bg-opacity-25 text-secondary fw-normal border border-secondary"
+                    >
+                      {getTeamHeadsCount(team)} Heads
                     </Badge>
                   </div>
                 </div>
@@ -783,10 +1640,13 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
 
       {/* --- MODALS --- */}
 
-      {/* 1. CREATE TEAM MODAL */}
+      {/* 1. CREATE/EDIT TEAM MODAL */}
       <Modal
         show={showTeamModal}
-        onHide={() => setShowTeamModal(false)}
+        onHide={() => {
+          setShowTeamModal(false);
+          resetTeamForm();
+        }}
         centered
       >
         <div
@@ -799,10 +1659,10 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
             style={{ borderColor: "var(--border-color)" }}
           >
             <Modal.Title className="fw-bold h5 text-start">
-              Create New Team
+              {isEditingTeam ? "Edit Team" : "Create New Team"}
             </Modal.Title>
           </Modal.Header>
-          <Modal.Body className="p-4 text-start">
+          <Modal.Body className="p-4 text-start d-grid gap-3">
             <Form.Group>
               <Form.Label className="small fw-bold text-muted">
                 TEAM NAME
@@ -819,6 +1679,107 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
                 onChange={(e) => setNewTeamName(e.target.value)}
               />
             </Form.Group>
+
+            <Form.Group>
+              <Form.Label className="small fw-bold text-muted">
+                TEAM HEAD (FROM CORE TEAM) - Optional
+              </Form.Label>
+              <div className="d-flex gap-2 align-items-center">
+                <Form.Select
+                  style={{
+                    backgroundColor: "var(--bg-main)",
+                    color: "var(--text-primary)",
+                    borderColor: "var(--border-color)",
+                  }}
+                  value={selectedTeamHead || ""}
+                  onChange={(e) => {
+                    setSelectedTeamHead(e.target.value || null);
+                    if (e.target.value) {
+                      setManualTeamHead("");
+                    }
+                  }}
+                >
+                  <option value="">-- Select from Core Team --</option>
+                  {coreTeamMembers.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.name} ({member.designation || "Member"})
+                    </option>
+                  ))}
+                </Form.Select>
+                <Button
+                  type="button"
+                  variant="outline-primary"
+                  onClick={handleAddHeadToList}
+                  title="Add Team Head"
+                  className="d-flex align-items-center justify-content-center"
+                  style={{ width: "38px", height: "38px", padding: 0 }}
+                >
+                  <i className="bi bi-plus-lg"></i>
+                </Button>
+              </div>
+            </Form.Group>
+
+            {!selectedTeamHead && (
+              <Form.Group>
+                <Form.Label className="small fw-bold text-muted">
+                  ADD EVENT-WISE TEAM HEAD - Optional
+                </Form.Label>
+                <div className="d-flex gap-2 align-items-center">
+                  <Form.Control
+                    placeholder="e.g. Student Name"
+                    className="form-control"
+                    style={{
+                      backgroundColor: "var(--bg-main)",
+                      color: "var(--text-primary)",
+                      borderColor: "var(--border-color)",
+                    }}
+                    value={manualTeamHead}
+                    onChange={(e) => setManualTeamHead(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline-primary"
+                    onClick={handleAddHeadToList}
+                    title="Add Team Head"
+                    className="d-flex align-items-center justify-content-center"
+                    style={{ width: "38px", height: "38px", padding: 0 }}
+                  >
+                    <i className="bi bi-plus-lg"></i>
+                  </Button>
+                </div>
+                <small className="text-muted d-block mt-1">
+                  Use this if Team Head is not in Core Team
+                </small>
+              </Form.Group>
+            )}
+
+            {pendingTeamHeads.length > 0 && (
+              <div>
+                <Form.Label className="small fw-bold text-muted mb-2 d-block">
+                  SELECTED TEAM HEADS
+                </Form.Label>
+                <div className="d-flex flex-wrap gap-2">
+                  {pendingTeamHeads.map((head, idx) => (
+                    <Badge
+                      key={`${head.name}-${idx}`}
+                      bg="primary"
+                      className="d-flex align-items-center gap-2"
+                    >
+                      <span>{head.name}</span>
+                      <Button
+                        type="button"
+                        variant="link"
+                        className="p-0 text-white text-decoration-none"
+                        onClick={() => removePendingHead(idx)}
+                        style={{ lineHeight: 1 }}
+                      >
+                        <i className="bi bi-x-lg"></i>
+                      </Button>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
           </Modal.Body>
           <Modal.Footer className="border-0 p-3 pt-0">
             <Button
@@ -826,7 +1787,7 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
               onClick={handleCreateTeam}
               className="w-100"
             >
-              Create Team
+              {isEditingTeam ? "Update Team" : "Create Team"}
             </Button>
           </Modal.Footer>
         </div>
