@@ -31,6 +31,8 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
   const [showTeamModal, setShowTeamModal] = useState(false);
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [showHeadModal, setShowHeadModal] = useState(false);
+  const [showExportPDFModal, setShowExportPDFModal] = useState(false);
+  const [includePhoneInPDF, setIncludePhoneInPDF] = useState(false);
 
   // Form States
   const [newTeamName, setNewTeamName] = useState("");
@@ -418,7 +420,7 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
   };
 
   // --- PDF GENERATION ---
-  const generateAllTeamsPDF = async () => {
+  const generateAllTeamsPDF = async (includePhone = false) => {
     try {
       // Fetch global_core_team data for Student Coordinators only
       const coreTeamSnapshot = await getDocs(
@@ -465,18 +467,25 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
         pdfDoc.text(title, 14, finalY);
         finalY += 6;
 
-        const rows = (members || []).map((m, i) => [
-          i + 1,
-          m.name || "-",
-          m.urn || "-",
-          m.branch || "-",
-          m.designation || "-",
-        ]);
+        const rows = (members || []).map((m, i) => {
+          const baseCells = [i + 1, m.name || "-", m.urn || "-"];
+          if (includePhone) {
+            baseCells.push(m.phone || "-");
+          }
+          baseCells.push(m.branch || "-", m.designation || "-");
+          return baseCells;
+        });
 
         if (rows.length > 0) {
+          const tableHead = ["S.No", "Student Name", "URN"];
+          if (includePhone) {
+            tableHead.push("Phone");
+          }
+          tableHead.push("Branch", "Designation");
+
           autoTable(pdfDoc, {
             startY: finalY,
-            head: [["S.No", "Student Name", "URN", "Branch", "Designation"]],
+            head: [tableHead],
             body: rows,
             theme: "grid",
             headStyles: { fillColor: [41, 128, 185] },
@@ -527,35 +536,52 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
 
         const rows = [];
 
+        const getSectionCells = (label) => {
+          const cells = [label, "", ""];
+          if (includePhone) cells.push("");
+          cells.push("", "");
+          return cells;
+        };
+
+        const getMemberCells = (serial, member, defaultDesignation) => {
+          const cells = [serial, member.name || "-", member.urn || "-"];
+          if (includePhone) {
+            cells.push(member.phone || "-");
+          }
+          cells.push(
+            member.branch || "-",
+            member.designation || defaultDesignation,
+          );
+          return cells;
+        };
+
         if (headMembers.length > 0 || team.teamHead?.name) {
           rows.push({
             isSection: true,
-            cells: ["Team Head Details", "", "", "", ""],
+            cells: getSectionCells("Team Head Details"),
           });
 
           if (headMembers.length > 0) {
             headMembers.forEach((m, i) => {
               rows.push({
                 isSection: false,
-                cells: [
-                  i + 1,
-                  m.name || "-",
-                  m.urn || "-",
-                  m.branch || "-",
-                  m.designation || "Head",
-                ],
+                cells: getMemberCells(i + 1, m, "Head"),
               });
             });
           } else {
             rows.push({
               isSection: false,
-              cells: [
+              cells: getMemberCells(
                 1,
-                team.teamHead.name || "-",
-                team.teamHead.urn || "-",
-                team.teamHead.branch || "-",
+                {
+                  name: team.teamHead.name,
+                  urn: team.teamHead.urn,
+                  phone: team.teamHead.phone,
+                  branch: team.teamHead.branch,
+                  designation: "Head",
+                },
                 "Head",
-              ],
+              ),
             });
           }
         }
@@ -563,19 +589,13 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
         if (executiveMembers.length > 0) {
           rows.push({
             isSection: true,
-            cells: ["Team Executives", "", "", "", ""],
+            cells: getSectionCells("Team Executives"),
           });
 
           executiveMembers.forEach((m, i) => {
             rows.push({
               isSection: false,
-              cells: [
-                i + 1,
-                m.name || "-",
-                m.urn || "-",
-                m.branch || "-",
-                m.designation || "Executive",
-              ],
+              cells: getMemberCells(i + 1, m, "Executive"),
             });
           });
         }
@@ -583,27 +603,27 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
         if (regularMembers.length > 0) {
           rows.push({
             isSection: true,
-            cells: ["Team Members", "", "", "", ""],
+            cells: getSectionCells("Team Members"),
           });
 
           regularMembers.forEach((m, i) => {
             rows.push({
               isSection: false,
-              cells: [
-                i + 1,
-                m.name || "-",
-                m.urn || "-",
-                m.branch || "-",
-                m.designation || "Member",
-              ],
+              cells: getMemberCells(i + 1, m, "Member"),
             });
           });
         }
 
         if (rows.length > 0) {
+          const tableHead = ["S.No", "Student Name", "URN"];
+          if (includePhone) {
+            tableHead.push("Phone");
+          }
+          tableHead.push("Branch", "Designation");
+
           autoTable(pdfDoc, {
             startY: finalY,
-            head: [["S.No", "Student Name", "URN", "Branch", "Designation"]],
+            head: [tableHead],
             body: rows.map((row) => row.cells),
             theme: "grid",
             headStyles: { fillColor: [41, 128, 185] },
@@ -661,7 +681,7 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
       pdfDoc.setTextColor(0);
       pdfDoc.text(`Core Members: ${totalCoreMembers}`, 14, finalY);
       finalY += 6;
-      pdfDoc.text(`Team Members: ${totalTeamMembers}`, 14, finalY);
+      pdfDoc.text(`Team Members (Unique): ${totalTeamMembers}`, 14, finalY);
       finalY += 6;
       pdfDoc.text(`Total Members: ${totalMembers}`, 14, finalY);
 
@@ -699,12 +719,10 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
     }).length;
 
   const getMemberUniqueKey = (member) => {
-    const urn = String(member?.urn || "")
+    const name = String(member?.name || "")
       .trim()
       .toLowerCase();
-    if (urn) return `urn:${urn}`;
-
-    const name = String(member?.name || "")
+    const urn = String(member?.urn || "")
       .trim()
       .toLowerCase();
     const phone = String(member?.phone || "")
@@ -714,7 +732,7 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
       .trim()
       .toLowerCase();
 
-    return `fallback:${name}|${phone}|${branch}`;
+    return `identity:${name}|${urn}|${phone}|${branch}`;
   };
 
   const getOverallMemberStats = (teamList = []) => {
@@ -774,6 +792,15 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
   };
 
   const overallStats = getOverallMemberStats(teams);
+
+  const handleExportPDFClick = () => {
+    setShowExportPDFModal(true);
+  };
+
+  const handleConfirmExportPDF = () => {
+    generateAllTeamsPDF(includePhoneInPDF);
+    setShowExportPDFModal(false);
+  };
 
   const getHierarchicalRows = (team) => {
     const membersWithIndex = (team?.members || []).map((member, index) => ({
@@ -1536,7 +1563,7 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
         <div className="ms-auto d-flex gap-2">
           <Button
             variant="outline-danger"
-            onClick={generateAllTeamsPDF}
+            onClick={handleExportPDFClick}
             size="sm"
             className="d-flex align-items-center"
           >
@@ -1908,6 +1935,78 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
               className="w-100"
             >
               {isEditingTeam ? "Update Team" : "Create Team"}
+            </Button>
+          </Modal.Footer>
+        </div>
+      </Modal>
+
+      <Modal
+        show={showExportPDFModal}
+        onHide={() => setShowExportPDFModal(false)}
+        centered
+      >
+        <div className="soft-card border-0 p-0 overflow-hidden">
+          <Modal.Header
+            closeButton
+            className="border-bottom"
+            style={{ borderColor: "var(--border-color)" }}
+          >
+            <Modal.Title className="fw-bold h5">Export PDF</Modal.Title>
+          </Modal.Header>
+          <Modal.Body className="p-4 text-start">
+            <Form.Check
+              type="switch"
+              id="include-phone-export-switch"
+              label="Include phone numbers in the export"
+              checked={includePhoneInPDF}
+              onChange={(e) => setIncludePhoneInPDF(e.target.checked)}
+            />
+          </Modal.Body>
+          <Modal.Footer className="border-0 p-3 pt-0 d-flex gap-2">
+            <Button
+              variant="outline-secondary"
+              onClick={() => setShowExportPDFModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={handleConfirmExportPDF}>
+              Export
+            </Button>
+          </Modal.Footer>
+        </div>
+      </Modal>
+
+      <Modal
+        show={showExportPDFModal}
+        onHide={() => setShowExportPDFModal(false)}
+        centered
+      >
+        <div className="soft-card border-0 p-0 overflow-hidden">
+          <Modal.Header
+            closeButton
+            className="border-bottom"
+            style={{ borderColor: "var(--border-color)" }}
+          >
+            <Modal.Title className="fw-bold h5">Export PDF</Modal.Title>
+          </Modal.Header>
+          <Modal.Body className="p-4 text-start">
+            <Form.Check
+              type="switch"
+              id="include-phone-export-switch-main"
+              label="Include phone numbers in the export"
+              checked={includePhoneInPDF}
+              onChange={(e) => setIncludePhoneInPDF(e.target.checked)}
+            />
+          </Modal.Body>
+          <Modal.Footer className="border-0 p-3 pt-0 d-flex gap-2">
+            <Button
+              variant="outline-secondary"
+              onClick={() => setShowExportPDFModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={handleConfirmExportPDF}>
+              Export
             </Button>
           </Modal.Footer>
         </div>
