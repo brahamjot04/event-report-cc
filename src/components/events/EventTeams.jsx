@@ -437,6 +437,9 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
             m.designation?.toLowerCase().includes("co")),
       );
 
+      const { totalCoreMembers, totalTeamMembers, totalMembers } =
+        getOverallMemberStats(teams);
+
       const pdfDoc = new jsPDF();
       pdfDoc.setFont("helvetica", "bold");
       pdfDoc.setFontSize(18);
@@ -520,6 +523,7 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
               (m.designation || "").toLowerCase(),
             ),
         );
+        const teamTotalMembersCount = normalizedMembers.length;
 
         const rows = [];
 
@@ -576,11 +580,12 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
           });
         }
 
-        rows.push({
-          isSection: true,
-          cells: ["Team Members", "", "", "", ""],
-        });
         if (regularMembers.length > 0) {
+          rows.push({
+            isSection: true,
+            cells: ["Team Members", "", "", "", ""],
+          });
+
           regularMembers.forEach((m, i) => {
             rows.push({
               isSection: false,
@@ -592,11 +597,6 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
                 m.designation || "Member",
               ],
             });
-          });
-        } else {
-          rows.push({
-            isSection: false,
-            cells: ["-", "No Members", "-", "-", "-"],
           });
         }
 
@@ -621,9 +621,49 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
               }
             },
           });
-          finalY = pdfDoc.lastAutoTable.finalY + 8;
+          finalY = pdfDoc.lastAutoTable.finalY + 4;
+          pdfDoc.setFont("helvetica", "bold");
+          pdfDoc.setFontSize(10);
+          pdfDoc.setTextColor(33, 37, 41);
+          pdfDoc.text(
+            `Members in ${team.name}: ${teamTotalMembersCount}`,
+            14,
+            finalY,
+          );
+          finalY += 8;
+        } else {
+          pdfDoc.setFont("helvetica", "italic");
+          pdfDoc.setFontSize(10);
+          pdfDoc.setTextColor(0);
+          pdfDoc.text("No team data available.", 14, finalY + 3);
+          finalY += 8;
+          pdfDoc.setFont("helvetica", "bold");
+          pdfDoc.setFontSize(10);
+          pdfDoc.setTextColor(33, 37, 41);
+          pdfDoc.text(`Members in ${team.name}: 0`, 14, finalY);
+          finalY += 8;
         }
       });
+
+      if (finalY > 250) {
+        pdfDoc.addPage();
+        finalY = 20;
+      }
+
+      pdfDoc.setFont("helvetica", "bold");
+      pdfDoc.setFontSize(12);
+      pdfDoc.setTextColor(41, 128, 185);
+      pdfDoc.text("Team Data Summary", 14, finalY);
+      finalY += 7;
+
+      pdfDoc.setFont("helvetica", "normal");
+      pdfDoc.setFontSize(11);
+      pdfDoc.setTextColor(0);
+      pdfDoc.text(`Core Members: ${totalCoreMembers}`, 14, finalY);
+      finalY += 6;
+      pdfDoc.text(`Team Members: ${totalTeamMembers}`, 14, finalY);
+      finalY += 6;
+      pdfDoc.text(`Total Members: ${totalMembers}`, 14, finalY);
 
       pdfDoc.save(`Teams_Report.pdf`);
     } catch (error) {
@@ -657,6 +697,83 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
       const designation = (member.designation || "").toLowerCase();
       return !["head", "executive"].includes(designation);
     }).length;
+
+  const getMemberUniqueKey = (member) => {
+    const urn = String(member?.urn || "")
+      .trim()
+      .toLowerCase();
+    if (urn) return `urn:${urn}`;
+
+    const name = String(member?.name || "")
+      .trim()
+      .toLowerCase();
+    const phone = String(member?.phone || "")
+      .trim()
+      .toLowerCase();
+    const branch = String(member?.branch || "")
+      .trim()
+      .toLowerCase();
+
+    return `fallback:${name}|${phone}|${branch}`;
+  };
+
+  const getOverallMemberStats = (teamList = []) => {
+    const uniqueMembers = new Map();
+    const uniqueCoreMembers = new Map();
+    const uniqueTeamMembers = new Map();
+
+    teamList.forEach((team) => {
+      const normalizedMembers = Array.isArray(team?.members)
+        ? team.members
+        : [];
+
+      normalizedMembers.forEach((member) => {
+        if (!member?.name) return;
+
+        const key = getMemberUniqueKey(member);
+        if (!uniqueMembers.has(key)) {
+          uniqueMembers.set(key, member);
+        }
+
+        const designation = (member.designation || "").toLowerCase();
+        if (["head", "executive"].includes(designation)) {
+          if (!uniqueCoreMembers.has(key)) {
+            uniqueCoreMembers.set(key, member);
+          }
+        } else {
+          if (!uniqueTeamMembers.has(key)) {
+            uniqueTeamMembers.set(key, member);
+          }
+        }
+      });
+
+      if (team?.teamHead?.name) {
+        const fallbackHead = {
+          name: team.teamHead.name,
+          urn: team.teamHead.urn || "",
+          phone: team.teamHead.phone || "",
+          branch: team.teamHead.branch || "",
+          designation: "Head",
+        };
+        const key = getMemberUniqueKey(fallbackHead);
+
+        if (!uniqueMembers.has(key)) {
+          uniqueMembers.set(key, fallbackHead);
+        }
+        if (!uniqueCoreMembers.has(key)) {
+          uniqueCoreMembers.set(key, fallbackHead);
+        }
+      }
+    });
+
+    return {
+      totalCoreMembers: uniqueCoreMembers.size,
+      totalTeamMembers: uniqueTeamMembers.size,
+      totalMembers: uniqueMembers.size,
+    };
+  };
+
+  const overallStats = getOverallMemberStats(teams);
 
   const getHierarchicalRows = (team) => {
     const membersWithIndex = (team?.members || []).map((member, index) => ({
@@ -1411,7 +1528,10 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
         </Button>
         <div>
           <h3 className="fw-bold mb-0">Organizing Teams</h3>
-          <p className="text-muted small mb-0">Manage committees and members</p>
+          <p className="text-muted small mb-0">
+            Manage committees and members • {overallStats.totalCoreMembers} Core
+            Members • {overallStats.totalMembers} Total Members
+          </p>
         </div>
         <div className="ms-auto d-flex gap-2">
           <Button
