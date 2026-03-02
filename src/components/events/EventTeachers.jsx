@@ -116,12 +116,7 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([committee, members]) => ({
         committee,
-        members: [...members].sort((a, b) => {
-          const aIncharge = !!a.incharge;
-          const bIncharge = !!b.incharge;
-          if (aIncharge !== bIncharge) return aIncharge ? -1 : 1;
-          return (a.name || "").localeCompare(b.name || "");
-        }),
+        members,
       }));
   }, [teachers, committeeOptions]);
 
@@ -210,12 +205,22 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
     const querySnapshot = await getDocs(
       collection(db, "events", eventId, "teachers"),
     );
-    setTeachers(
-      querySnapshot.docs.map((docSnap) => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-      })),
-    );
+    const mappedTeachers = querySnapshot.docs.map((docSnap) => ({
+      id: docSnap.id,
+      ...docSnap.data(),
+    }));
+
+    mappedTeachers.sort((a, b) => {
+      const aCreated = typeof a.createdAt === "number" ? a.createdAt : null;
+      const bCreated = typeof b.createdAt === "number" ? b.createdAt : null;
+
+      if (aCreated === null && bCreated === null) return 0;
+      if (aCreated === null) return -1;
+      if (bCreated === null) return 1;
+      return aCreated - bCreated;
+    });
+
+    setTeachers(mappedTeachers);
   };
 
   const openAddTeacherModal = (committeeName = "") => {
@@ -271,6 +276,39 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
     setEditingCommitteeName(committeeName);
     setNewCommitteeName(committeeName);
     setShowCommitteeModal(true);
+  };
+
+  const handleDeleteCommittee = async (committeeName) => {
+    if (
+      !window.confirm(
+        `Delete committee "${committeeName}" and all its members?`,
+      )
+    ) {
+      return;
+    }
+
+    const targetGroup = groupedTeachers.find(
+      (group) => group.committee === committeeName,
+    );
+
+    if (targetGroup && targetGroup.members.length > 0) {
+      await Promise.all(
+        targetGroup.members.map((teacher) =>
+          deleteDoc(doc(db, "events", eventId, "teachers", teacher.id)),
+        ),
+      );
+    }
+
+    const updatedCatalog = committeeCatalog.filter(
+      (committee) => committee.toLowerCase() !== committeeName.toLowerCase(),
+    );
+    setCommitteeCatalog(updatedCatalog);
+    await persistCommitteeCatalog(updatedCatalog);
+
+    if (activeCommittee === committeeName) setActiveCommittee(null);
+    if (selectedFilter === committeeName) setSelectedFilter(null);
+
+    await fetchTeachers();
   };
 
   const handleSaveCommitteeName = async () => {
@@ -404,6 +442,7 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
         payload,
       );
     } else {
+      payload.createdAt = Date.now();
       await addDoc(collection(db, "events", eventId, "teachers"), payload);
     }
 
@@ -525,7 +564,7 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
 
     const docsToAdd = rows
       .slice(1)
-      .map((row) => {
+      .map((row, rowIndex) => {
         const record = {};
         fieldMap.forEach((fieldKey, index) => {
           if (!fieldKey) return;
@@ -549,6 +588,7 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
                 : "";
           }
         });
+        record.createdAt = Date.now() + rowIndex;
         return record;
       })
       .filter((entry) =>
@@ -583,10 +623,12 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
       align: "center",
     });
 
+    const exportTeachers = [...teachers];
+
     const head = [
       ["S.No", ...selectedFields.map((field) => getFieldLabel(field))],
     ];
-    const body = teachers.map((teacher, index) => [
+    const body = exportTeachers.map((teacher, index) => [
       index + 1,
       ...selectedFields.map((field) => {
         if (field === "incharge") return teacher[field] ? "Yes" : "No";
@@ -937,6 +979,15 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
                           }}
                         >
                           <i className="bi bi-pencil me-2"></i>Manage Committee
+                        </Dropdown.Item>
+                        <Dropdown.Item
+                          className="text-danger"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteCommittee(group.committee);
+                          }}
+                        >
+                          <i className="bi bi-trash me-2"></i>Delete Committee
                         </Dropdown.Item>
                       </Dropdown.Menu>
                     </Dropdown>

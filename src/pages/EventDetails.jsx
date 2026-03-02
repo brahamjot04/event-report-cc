@@ -242,6 +242,16 @@ export default function EventDetails() {
         renderSubTitle("Student Coordinators");
         const coordinatorRows = studentCoordinators
           .slice()
+          .filter((member) => {
+            const designation = (member.designation || "")
+              .toString()
+              .trim()
+              .toLowerCase();
+            return (
+              designation === "student coordinator" ||
+              designation === "student coordinators"
+            );
+          })
           .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
           .map((member, index) => [
             index + 1,
