@@ -6,6 +6,8 @@ export default function EventDashboard({
   setView,
   userRole,
   onDelete,
+  onExportReport,
+  exportingReport,
 }) {
   const navigate = useNavigate();
 
@@ -56,6 +58,17 @@ export default function EventDashboard({
             <i className="bi bi-calendar-check-fill text-primary me-1"></i>{" "}
             {formatDate(eventData.date)}
           </span>
+        </div>
+        <div className="ms-auto">
+          <Button
+            variant="primary"
+            className="rounded-pill px-4"
+            onClick={onExportReport}
+            disabled={!!exportingReport}
+          >
+            <i className="bi bi-download me-2"></i>
+            {exportingReport ? "Exporting..." : "Export Event Report"}
+          </Button>
         </div>
       </div>
 
