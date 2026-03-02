@@ -49,10 +49,19 @@ const toTitleCase = (value = "") =>
     .replace(/_/g, " ")
     .replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.slice(1));
 
+const normalizeSelectedFieldList = (fields = []) =>
+  fields
+    .map((field) => normalizeFieldKey(field))
+    .filter((field) => field !== "committee")
+    .filter(Boolean);
+
 export default function EventTeachers({ eventId, goBack, eventTitle }) {
   const [teachers, setTeachers] = useState([]);
   const [committeeCatalog, setCommitteeCatalog] = useState([]);
   const [selectedFields, setSelectedFields] = useState(DEFAULT_FIELDS);
+  const [selectedFieldsByCommittee, setSelectedFieldsByCommittee] = useState(
+    {},
+  );
   const [customFields, setCustomFields] = useState([]);
   const [customFieldLabels, setCustomFieldLabels] = useState({});
 
@@ -80,9 +89,18 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
     [customFields],
   );
 
+  const activeCommitteeFields = useMemo(() => {
+    if (!activeCommittee) return selectedFields;
+
+    const committeeFields = selectedFieldsByCommittee[activeCommittee];
+    return Array.isArray(committeeFields) && committeeFields.length > 0
+      ? committeeFields
+      : selectedFields;
+  }, [activeCommittee, selectedFieldsByCommittee, selectedFields]);
+
   const formFields = useMemo(
-    () => [...new Set([...selectedFields, ...MANDATORY_FORM_FIELDS])],
-    [selectedFields],
+    () => [...new Set([...activeCommitteeFields, ...MANDATORY_FORM_FIELDS])],
+    [activeCommitteeFields],
   );
 
   const committeeOptions = useMemo(
@@ -151,11 +169,13 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
     nextSelectedFields,
     nextCustomFields,
     nextCustomFieldLabels,
+    nextSelectedFieldsByCommittee = selectedFieldsByCommittee,
   ) => {
     await updateDoc(doc(db, "events", eventId), {
       teacherSelectedFields: nextSelectedFields,
       teacherCustomFields: nextCustomFields,
       teacherCustomFieldLabels: nextCustomFieldLabels,
+      teacherSelectedFieldsByCommittee: nextSelectedFieldsByCommittee,
     });
   };
 
@@ -172,10 +192,7 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
 
     const data = eventSnap.data();
     const savedSelected = Array.isArray(data.teacherSelectedFields)
-      ? data.teacherSelectedFields
-          .map((field) => normalizeFieldKey(field))
-          .filter((field) => field !== "committee")
-          .filter(Boolean)
+      ? normalizeSelectedFieldList(data.teacherSelectedFields)
       : [];
     const savedCustom = Array.isArray(data.teacherCustomFields)
       ? data.teacherCustomFields
@@ -192,10 +209,32 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
           .map((committee) => String(committee || "").trim())
           .filter(Boolean)
       : [];
+    const savedSelectedByCommittee =
+      data.teacherSelectedFieldsByCommittee &&
+      typeof data.teacherSelectedFieldsByCommittee === "object"
+        ? Object.entries(data.teacherSelectedFieldsByCommittee).reduce(
+            (acc, [committeeName, fields]) => {
+              const normalizedCommitteeName = String(
+                committeeName || "",
+              ).trim();
+              const normalizedFields = Array.isArray(fields)
+                ? normalizeSelectedFieldList(fields)
+                : [];
+
+              if (normalizedCommitteeName && normalizedFields.length > 0) {
+                acc[normalizedCommitteeName] = normalizedFields;
+              }
+
+              return acc;
+            },
+            {},
+          )
+        : {};
 
     setSelectedFields(
       savedSelected.length > 0 ? savedSelected : DEFAULT_FIELDS,
     );
+    setSelectedFieldsByCommittee(savedSelectedByCommittee);
     setCustomFields(savedCustom);
     setCustomFieldLabels(savedCustomLabels);
     setCommitteeCatalog(savedCommittees);
@@ -302,8 +341,23 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
     const updatedCatalog = committeeCatalog.filter(
       (committee) => committee.toLowerCase() !== committeeName.toLowerCase(),
     );
+
+    const nextSelectedFieldsByCommittee = Object.fromEntries(
+      Object.entries(selectedFieldsByCommittee).filter(
+        ([committee]) =>
+          committee.toLowerCase() !== committeeName.toLowerCase(),
+      ),
+    );
+
     setCommitteeCatalog(updatedCatalog);
+    setSelectedFieldsByCommittee(nextSelectedFieldsByCommittee);
     await persistCommitteeCatalog(updatedCatalog);
+    await persistFieldConfiguration(
+      selectedFields,
+      customFields,
+      customFieldLabels,
+      nextSelectedFieldsByCommittee,
+    );
 
     if (activeCommittee === committeeName) setActiveCommittee(null);
     if (selectedFilter === committeeName) setSelectedFilter(null);
@@ -361,8 +415,26 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
           ) === index,
       );
 
+    const matchedCommitteeKey = Object.keys(selectedFieldsByCommittee).find(
+      (committee) => committee.toLowerCase() === oldName.toLowerCase(),
+    );
+    const nextSelectedFieldsByCommittee = { ...selectedFieldsByCommittee };
+
+    if (matchedCommitteeKey) {
+      nextSelectedFieldsByCommittee[nextCommitteeName] =
+        nextSelectedFieldsByCommittee[matchedCommitteeKey];
+      delete nextSelectedFieldsByCommittee[matchedCommitteeKey];
+    }
+
     setCommitteeCatalog(updatedCatalog);
+    setSelectedFieldsByCommittee(nextSelectedFieldsByCommittee);
     await persistCommitteeCatalog(updatedCatalog);
+    await persistFieldConfiguration(
+      selectedFields,
+      customFields,
+      customFieldLabels,
+      nextSelectedFieldsByCommittee,
+    );
 
     if (activeCommittee === oldName) setActiveCommittee(nextCommitteeName);
     if (selectedFilter === oldName) setSelectedFilter(nextCommitteeName);
@@ -458,6 +530,28 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
 
   const handleToggleField = async (fieldKey) => {
     if (fieldKey === "committee") return;
+
+    if (activeCommittee) {
+      const currentCommitteeFields =
+        selectedFieldsByCommittee[activeCommittee] || selectedFields;
+      const nextCommitteeSelected = currentCommitteeFields.includes(fieldKey)
+        ? currentCommitteeFields.filter((field) => field !== fieldKey)
+        : [...currentCommitteeFields, fieldKey];
+      const nextSelectedFieldsByCommittee = {
+        ...selectedFieldsByCommittee,
+        [activeCommittee]: nextCommitteeSelected,
+      };
+
+      setSelectedFieldsByCommittee(nextSelectedFieldsByCommittee);
+      await persistFieldConfiguration(
+        selectedFields,
+        customFields,
+        customFieldLabels,
+        nextSelectedFieldsByCommittee,
+      );
+      return;
+    }
+
     const nextSelected = selectedFields.includes(fieldKey)
       ? selectedFields.filter((field) => field !== fieldKey)
       : [...selectedFields, fieldKey];
@@ -482,7 +576,20 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
     }
 
     const nextCustomFields = [...customFields, key];
-    const nextSelectedFields = [...selectedFields, key];
+    const nextSelectedFieldsByCommittee = { ...selectedFieldsByCommittee };
+    const nextSelectedFields = activeCommittee
+      ? selectedFields
+      : [...selectedFields, key];
+
+    if (activeCommittee) {
+      const currentCommitteeFields =
+        selectedFieldsByCommittee[activeCommittee] || selectedFields;
+      nextSelectedFieldsByCommittee[activeCommittee] = [
+        ...currentCommitteeFields,
+        key,
+      ];
+    }
+
     const nextCustomFieldLabels = {
       ...customFieldLabels,
       [key]: label,
@@ -490,6 +597,7 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
 
     setCustomFields(nextCustomFields);
     setSelectedFields(nextSelectedFields);
+    setSelectedFieldsByCommittee(nextSelectedFieldsByCommittee);
     setCustomFieldLabels(nextCustomFieldLabels);
     setNewCustomFieldLabel("");
 
@@ -497,6 +605,7 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
       nextSelectedFields,
       nextCustomFields,
       nextCustomFieldLabels,
+      nextSelectedFieldsByCommittee,
     );
   };
 
@@ -540,12 +649,27 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
         ...customFields,
         ...uniqueUnknown.map((item) => item.key),
       ];
-      const nextSelectedFields = [
-        ...selectedFields,
-        ...uniqueUnknown
-          .map((item) => item.key)
-          .filter((key) => !selectedFields.includes(key)),
-      ];
+      const nextSelectedFieldsByCommittee = { ...selectedFieldsByCommittee };
+      const nextSelectedFields = activeCommittee
+        ? selectedFields
+        : [
+            ...selectedFields,
+            ...uniqueUnknown
+              .map((item) => item.key)
+              .filter((key) => !selectedFields.includes(key)),
+          ];
+
+      if (activeCommittee) {
+        const currentCommitteeFields =
+          selectedFieldsByCommittee[activeCommittee] || selectedFields;
+        nextSelectedFieldsByCommittee[activeCommittee] = [
+          ...currentCommitteeFields,
+          ...uniqueUnknown
+            .map((item) => item.key)
+            .filter((key) => !currentCommitteeFields.includes(key)),
+        ];
+      }
+
       const nextCustomFieldLabels = { ...customFieldLabels };
       uniqueUnknown.forEach((item) => {
         nextCustomFieldLabels[item.key] = item.label || toTitleCase(item.key);
@@ -553,12 +677,14 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
 
       setCustomFields(nextCustomFields);
       setSelectedFields(nextSelectedFields);
+      setSelectedFieldsByCommittee(nextSelectedFieldsByCommittee);
       setCustomFieldLabels(nextCustomFieldLabels);
 
       await persistFieldConfiguration(
         nextSelectedFields,
         nextCustomFields,
         nextCustomFieldLabels,
+        nextSelectedFieldsByCommittee,
       );
     }
 
@@ -612,6 +738,23 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
     const pageWidth = docPDF.internal.pageSize.getWidth();
     const centerX = pageWidth / 2;
 
+    const exportCommittee = activeCommittee || selectedFilter || null;
+    const exportFields = exportCommittee
+      ? selectedFieldsByCommittee[exportCommittee] || selectedFields
+      : selectedFields;
+    const exportTeachers = exportCommittee
+      ? teachers.filter(
+          (teacher) =>
+            ((teacher.committee || "General").toString().trim() ||
+              "General") === exportCommittee,
+        )
+      : [...teachers];
+
+    if (exportTeachers.length === 0) {
+      alert("No teachers available for export.");
+      return;
+    }
+
     docPDF.setFont("helvetica", "bold");
     docPDF.setFontSize(14);
     docPDF.text("Guru Nanak Dev Engineering College", centerX, 15, {
@@ -619,18 +762,23 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
     });
     docPDF.setFontSize(12);
     docPDF.text("Cultural Committee", centerX, 22, { align: "center" });
-    docPDF.text(`Teachers Report - ${eventTitle || "Event"}`, centerX, 29, {
-      align: "center",
-    });
-
-    const exportTeachers = [...teachers];
+    docPDF.text(
+      `Teachers Report - ${eventTitle || "Event"}${
+        exportCommittee ? ` (${exportCommittee})` : ""
+      }`,
+      centerX,
+      29,
+      {
+        align: "center",
+      },
+    );
 
     const head = [
-      ["S.No", ...selectedFields.map((field) => getFieldLabel(field))],
+      ["S.No", ...exportFields.map((field) => getFieldLabel(field))],
     ];
     const body = exportTeachers.map((teacher, index) => [
       index + 1,
-      ...selectedFields.map((field) => {
+      ...exportFields.map((field) => {
         if (field === "incharge") return teacher[field] ? "Yes" : "No";
         return teacher[field] || "-";
       }),
@@ -694,7 +842,7 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
                       type="checkbox"
                       className="mb-2"
                       label={getFieldLabel(field)}
-                      checked={selectedFields.includes(field)}
+                      checked={activeCommitteeFields.includes(field)}
                       onChange={() => handleToggleField(field)}
                     />
                   ))}
@@ -745,7 +893,7 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
                   >
                     #
                   </th>
-                  {selectedFields.map((field) => (
+                  {activeCommitteeFields.map((field) => (
                     <th
                       key={field}
                       className="text-secondary text-uppercase small text-start"
@@ -762,7 +910,7 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
                 {activeCommitteeData.members.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={selectedFields.length + 2}
+                      colSpan={activeCommitteeFields.length + 2}
                       className="text-center py-4 text-muted border-0"
                     >
                       <i className="bi bi-person-vcard display-4 opacity-25 d-block mb-3 mt-2"></i>
@@ -778,7 +926,7 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
                       <td className="ps-4 text-muted text-start">
                         {index + 1}
                       </td>
-                      {selectedFields.map((field) => (
+                      {activeCommitteeFields.map((field) => (
                         <td key={field} className="text-start text-muted">
                           {field === "name" ? (
                             <>
