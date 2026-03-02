@@ -12,6 +12,7 @@ import EventParticipants from "../components/events/EventParticipants";
 import EventSponsorship from "../components/events/EventSponsorship";
 import EventMeetings from "../components/events/EventMeetings";
 import EventTeams from "../components/events/EventTeams";
+import EventTeachers from "../components/events/EventTeachers";
 
 export default function EventDetails() {
   const { id } = useParams();
@@ -97,6 +98,15 @@ export default function EventDetails() {
       case "teams":
         return (
           <EventTeams
+            eventId={id}
+            eventTitle={eventData.title}
+            goBack={() => setCurrentView("dashboard")}
+          />
+        );
+
+      case "teachers":
+        return (
+          <EventTeachers
             eventId={id}
             eventTitle={eventData.title}
             goBack={() => setCurrentView("dashboard")}

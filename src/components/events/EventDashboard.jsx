@@ -86,6 +86,14 @@ export default function EventDashboard({
         />
 
         <DashboardCard
+          title="Teachers"
+          subtitle="Manage teacher entries"
+          icon="bi-person-vcard-fill"
+          colorClass="secondary"
+          onClick={() => setView("teachers")}
+        />
+
+        <DashboardCard
           title="Sponsorship"
           subtitle="Manage sponsors & funds"
           icon="bi-briefcase-fill"
