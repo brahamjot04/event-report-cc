@@ -74,6 +74,7 @@ export default function EventParticipants({
     phone: "",
     position: "",
     teamName: "",
+    isCaptain: false,
   });
 
   // Filter State
@@ -89,6 +90,12 @@ export default function EventParticipants({
   const getParticipantTeamName = (participant = {}) =>
     (participant.teamName || participant.team || "No Team").toString().trim() ||
     "No Team";
+
+  const sortTeamParticipants = (participants = []) =>
+    [...participants].sort((a, b) => {
+      if (!!a.isCaptain !== !!b.isCaptain) return a.isCaptain ? -1 : 1;
+      return (a.name || "").localeCompare(b.name || "");
+    });
 
   const getTeamMeta = (item, teamName) => {
     const safeTeamName = (teamName || "No Team").toString().trim() || "No Team";
@@ -198,7 +205,10 @@ export default function EventParticipants({
   const handleSaveParticipant = async () => {
     if (!activeItem) return;
     let u = [...(activeItem.participants || [])];
-    const participantPayload = { ...partForm };
+    const participantPayload = {
+      ...partForm,
+      isCaptain: !!partForm.isCaptain,
+    };
 
     if (activeItem.isGroupEvent) {
       const teamName = getParticipantTeamName(participantPayload);
@@ -210,6 +220,19 @@ export default function EventParticipants({
       const teamPosition = getTeamMeta(activeItem, teamName).position;
       participantPayload.teamName = teamName;
       participantPayload.position = teamPosition;
+
+      if (participantPayload.isCaptain) {
+        u = u.map((participant, index) => {
+          if (editingIndex !== null && index === editingIndex)
+            return participant;
+          if (getParticipantTeamName(participant) !== teamName)
+            return participant;
+          return {
+            ...participant,
+            isCaptain: false,
+          };
+        });
+      }
     }
 
     if (editingIndex !== null) u[editingIndex] = participantPayload;
@@ -435,10 +458,14 @@ export default function EventParticipants({
       doc.text(`${item.name} (${item.category || "General"})`, 14, finalY);
       finalY += 3;
 
+      const participantsForPdf = item.isGroupEvent
+        ? sortTeamParticipants(item.participants || [])
+        : item.participants || [];
+
       // Phone is NOT included here
-      const rows = item.participants?.map((p, i) => [
+      const rows = participantsForPdf.map((p, i) => [
         i + 1,
-        p.name,
+        item.isGroupEvent && p.isCaptain ? `${p.name} (Captain)` : p.name,
         p.urn,
         p.crn,
         p.branch,
@@ -555,6 +582,7 @@ export default function EventParticipants({
                   phone: "",
                   position: "",
                   teamName: "",
+                  isCaptain: false,
                 });
                 setShowPartModal(true);
               }}
@@ -666,7 +694,7 @@ export default function EventParticipants({
                       </tr>
                     </thead>
                     <tbody>
-                      {list.map((p, idx) => (
+                      {sortTeamParticipants(list).map((p, idx) => (
                         <tr
                           key={idx}
                           style={{
@@ -681,6 +709,11 @@ export default function EventParticipants({
                             style={{ color: "var(--text-primary) !important" }}
                           >
                             {p.name}
+                            {p.isCaptain ? (
+                              <Badge bg="success" className="ms-2">
+                                Captain
+                              </Badge>
+                            ) : null}
                           </td>
                           <td className="text-muted text-start">
                             <code className="text-primary">{p.urn}</code>
@@ -712,7 +745,10 @@ export default function EventParticipants({
                                     (pp) => pp === p,
                                   );
                                   setEditingIndex(g);
-                                  setPartForm(p);
+                                  setPartForm({
+                                    ...p,
+                                    isCaptain: !!p.isCaptain,
+                                  });
                                   setShowPartModal(true);
                                 }}
                               >
@@ -825,7 +861,7 @@ export default function EventParticipants({
                             className="border-0 bg-transparent text-primary p-1"
                             onClick={() => {
                               setEditingIndex(idx);
-                              setPartForm(p);
+                              setPartForm({ ...p, isCaptain: !!p.isCaptain });
                               setShowPartModal(true);
                             }}
                           >
@@ -1421,6 +1457,24 @@ export default function EventParticipants({
                           setPartForm({
                             ...partForm,
                             teamName: e.target.value,
+                          })
+                        }
+                      />
+                    </Col>
+                  </Row>
+                )}
+                {activeItem?.isGroupEvent && (
+                  <Row>
+                    <Col>
+                      <Form.Check
+                        type="checkbox"
+                        id="captainCheck"
+                        label="Mark as Captain"
+                        checked={!!partForm.isCaptain}
+                        onChange={(e) =>
+                          setPartForm({
+                            ...partForm,
+                            isCaptain: e.target.checked,
                           })
                         }
                       />
