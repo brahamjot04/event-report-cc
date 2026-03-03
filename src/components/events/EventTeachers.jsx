@@ -739,18 +739,13 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
     const centerX = pageWidth / 2;
 
     const exportCommittee = activeCommittee || selectedFilter || null;
-    const exportFields = exportCommittee
-      ? selectedFieldsByCommittee[exportCommittee] || selectedFields
-      : selectedFields;
-    const exportTeachers = exportCommittee
-      ? teachers.filter(
-          (teacher) =>
-            ((teacher.committee || "General").toString().trim() ||
-              "General") === exportCommittee,
-        )
-      : [...teachers];
+    const normalizedTeachers = teachers.map((teacher) => ({
+      ...teacher,
+      committee:
+        (teacher.committee || "General").toString().trim() || "General",
+    }));
 
-    if (exportTeachers.length === 0) {
+    if (normalizedTeachers.length === 0) {
       alert("No teachers available for export.");
       return;
     }
@@ -773,28 +768,64 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
       },
     );
 
-    const head = [
-      ["S.No", ...exportFields.map((field) => getFieldLabel(field))],
-    ];
-    const body = exportTeachers.map((teacher, index) => [
-      index + 1,
-      ...exportFields.map((field) => {
-        if (field === "incharge") return teacher[field] ? "Yes" : "No";
-        return teacher[field] || "-";
-      }),
-    ]);
+    const groupedByCommittee = normalizedTeachers.reduce((acc, teacher) => {
+      if (!acc[teacher.committee]) acc[teacher.committee] = [];
+      acc[teacher.committee].push(teacher);
+      return acc;
+    }, {});
 
-    autoTable(docPDF, {
-      head,
-      body,
-      startY: 38,
-      theme: "grid",
-      headStyles: {
-        fillColor: [41, 128, 185],
-        textColor: 255,
-        fontStyle: "bold",
-      },
-      styles: { fontSize: 10, cellPadding: 2 },
+    const committeesToRender = exportCommittee
+      ? [exportCommittee]
+      : Object.keys(groupedByCommittee).sort((a, b) => a.localeCompare(b));
+
+    let currentY = 38;
+
+    committeesToRender.forEach((committee, committeeIndex) => {
+      const committeeTeachers = groupedByCommittee[committee] || [];
+      if (committeeTeachers.length === 0) return;
+
+      const committeeFields =
+        selectedFieldsByCommittee[committee] || selectedFields;
+
+      if (committeeIndex > 0) {
+        const nextStartY = (docPDF.lastAutoTable?.finalY || currentY) + 14;
+        if (nextStartY > 185) {
+          docPDF.addPage();
+          currentY = 20;
+        } else {
+          currentY = nextStartY;
+        }
+      }
+
+      docPDF.setFont("helvetica", "bold");
+      docPDF.setFontSize(11);
+      docPDF.text(committee, 14, currentY);
+
+      const head = [
+        ["S.No", ...committeeFields.map((field) => getFieldLabel(field))],
+      ];
+      const body = committeeTeachers.map((teacher, index) => [
+        index + 1,
+        ...committeeFields.map((field) => {
+          if (field === "incharge") return teacher[field] ? "Yes" : "No";
+          return teacher[field] || "-";
+        }),
+      ]);
+
+      autoTable(docPDF, {
+        head,
+        body,
+        startY: currentY + 4,
+        theme: "grid",
+        headStyles: {
+          fillColor: [41, 128, 185],
+          textColor: 255,
+          fontStyle: "bold",
+        },
+        styles: { fontSize: 10, cellPadding: 2 },
+      });
+
+      currentY = (docPDF.lastAutoTable?.finalY || currentY) + 2;
     });
 
     docPDF.save(`${eventTitle || "Event"}_Teachers_Report.pdf`);
