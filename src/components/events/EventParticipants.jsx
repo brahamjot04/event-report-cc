@@ -46,8 +46,15 @@ export default function EventParticipants({
   const [showPartModal, setShowPartModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showProofModal, setShowProofModal] = useState(false);
+  const [showIdCardsModal, setShowIdCardsModal] = useState(false);
 
   const [uploadingProof, setUploadingProof] = useState(false);
+  const [uploadingIdCard, setUploadingIdCard] = useState(false);
+  const [idCardsContext, setIdCardsContext] = useState({
+    type: "event",
+    teamName: null,
+  });
+  const [teamPositionDrafts, setTeamPositionDrafts] = useState({});
 
   // Forms State
   const [newItemName, setNewItemName] = useState("");
@@ -72,10 +79,58 @@ export default function EventParticipants({
   // Filter State
   const [selectedCategory, setSelectedCategory] = useState(null);
 
+  const toSafePathSegment = (value = "") =>
+    String(value)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-_]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "general";
+
+  const getParticipantTeamName = (participant = {}) =>
+    (participant.teamName || participant.team || "No Team").toString().trim() ||
+    "No Team";
+
+  const getTeamMeta = (item, teamName) => {
+    const safeTeamName = (teamName || "No Team").toString().trim() || "No Team";
+    const teamMeta = item?.teamMeta || {};
+    const existing = teamMeta[safeTeamName] || {};
+
+    return {
+      position: existing.position || "",
+      idCards: Array.isArray(existing.idCards) ? existing.idCards : [],
+    };
+  };
+
   useEffect(() => {
     fetchItems();
     fetchCategories();
   }, [eventId]);
+
+  useEffect(() => {
+    if (!activeItem?.isGroupEvent) {
+      setTeamPositionDrafts({});
+      return;
+    }
+
+    const groupedParticipants = (activeItem.participants || []).reduce(
+      (acc, participant) => {
+        const teamName = getParticipantTeamName(participant);
+        acc[teamName] = true;
+        return acc;
+      },
+      {},
+    );
+
+    const draftEntries = Object.keys(groupedParticipants).reduce(
+      (acc, teamName) => {
+        acc[teamName] = getTeamMeta(activeItem, teamName).position;
+        return acc;
+      },
+      {},
+    );
+
+    setTeamPositionDrafts(draftEntries);
+  }, [activeItem]);
 
   const fetchCategories = async () => {
     const eventRef = doc(db, "events", eventId);
@@ -144,6 +199,19 @@ export default function EventParticipants({
     if (!activeItem) return;
     let u = [...(activeItem.participants || [])];
     const participantPayload = { ...partForm };
+
+    if (activeItem.isGroupEvent) {
+      const teamName = getParticipantTeamName(participantPayload);
+      if (!teamName || teamName === "No Team") {
+        alert("Please enter a team name for group events.");
+        return;
+      }
+
+      const teamPosition = getTeamMeta(activeItem, teamName).position;
+      participantPayload.teamName = teamName;
+      participantPayload.position = teamPosition;
+    }
+
     if (editingIndex !== null) u[editingIndex] = participantPayload;
     else u.push(participantPayload);
 
@@ -154,6 +222,130 @@ export default function EventParticipants({
     setActiveItem({ ...activeItem, participants: u });
     fetchItems(); // Background sync
     setShowPartModal(false);
+  };
+
+  const handleSaveTeamPosition = async (teamName) => {
+    if (!activeItem) return;
+    const safeTeamName = (teamName || "No Team").toString().trim() || "No Team";
+    const nextPosition = (teamPositionDrafts[safeTeamName] || "")
+      .toString()
+      .trim();
+
+    const teamMeta = { ...(activeItem.teamMeta || {}) };
+    const existingMeta = getTeamMeta(activeItem, safeTeamName);
+
+    teamMeta[safeTeamName] = {
+      ...existingMeta,
+      position: nextPosition,
+    };
+
+    const participants = (activeItem.participants || []).map((participant) => {
+      if (getParticipantTeamName(participant) !== safeTeamName)
+        return participant;
+      return {
+        ...participant,
+        teamName: safeTeamName,
+        position: nextPosition,
+      };
+    });
+
+    await updateDoc(doc(db, "events", eventId, "items", activeItem.id), {
+      teamMeta,
+      participants,
+    });
+
+    setActiveItem({ ...activeItem, teamMeta, participants });
+    fetchItems();
+  };
+
+  const handleUploadIdCard = async (file) => {
+    if (!file || !activeItem) return;
+
+    try {
+      setUploadingIdCard(true);
+
+      const basePath = `id-cards/${eventId}/${activeItem.id}`;
+      const uploadPath =
+        idCardsContext.type === "team"
+          ? `${basePath}/${toSafePathSegment(idCardsContext.teamName || "No Team")}`
+          : basePath;
+
+      const fileName = `${initialEventData?.title || eventId}_${activeItem.name || activeItem.id}_${Date.now()}_${file.name}`;
+      const url = await uploadToGitHub(file, fileName, uploadPath);
+      if (!url) return;
+
+      const uploadedFile = {
+        name: file.name,
+        url,
+        uploadedAt: Date.now(),
+      };
+
+      if (idCardsContext.type === "team") {
+        const teamName =
+          (idCardsContext.teamName || "No Team").toString().trim() || "No Team";
+        const teamMeta = { ...(activeItem.teamMeta || {}) };
+        const existingMeta = getTeamMeta(activeItem, teamName);
+
+        teamMeta[teamName] = {
+          ...existingMeta,
+          idCards: [...existingMeta.idCards, uploadedFile],
+        };
+
+        await updateDoc(doc(db, "events", eventId, "items", activeItem.id), {
+          teamMeta,
+        });
+        setActiveItem({ ...activeItem, teamMeta });
+      } else {
+        const idCards = [...(activeItem.idCards || []), uploadedFile];
+
+        await updateDoc(doc(db, "events", eventId, "items", activeItem.id), {
+          idCards,
+        });
+        setActiveItem({ ...activeItem, idCards });
+      }
+
+      fetchItems();
+      alert("ID card uploaded successfully.");
+    } catch (err) {
+      alert("Upload failed: " + err.message);
+    } finally {
+      setUploadingIdCard(false);
+    }
+  };
+
+  const handleDeleteIdCard = async (index, teamName = null) => {
+    if (!activeItem) return;
+    if (!window.confirm("Delete this uploaded file entry?")) return;
+
+    if (teamName) {
+      const safeTeamName =
+        (teamName || "No Team").toString().trim() || "No Team";
+      const teamMeta = { ...(activeItem.teamMeta || {}) };
+      const existingMeta = getTeamMeta(activeItem, safeTeamName);
+
+      teamMeta[safeTeamName] = {
+        ...existingMeta,
+        idCards: existingMeta.idCards.filter(
+          (_, fileIndex) => fileIndex !== index,
+        ),
+      };
+
+      await updateDoc(doc(db, "events", eventId, "items", activeItem.id), {
+        teamMeta,
+      });
+      setActiveItem({ ...activeItem, teamMeta });
+    } else {
+      const idCards = (activeItem.idCards || []).filter(
+        (_, fileIndex) => fileIndex !== index,
+      );
+
+      await updateDoc(doc(db, "events", eventId, "items", activeItem.id), {
+        idCards,
+      });
+      setActiveItem({ ...activeItem, idCards });
+    }
+
+    fetchItems();
   };
 
   const handleDeleteParticipant = async (idx) => {
@@ -324,6 +516,32 @@ export default function EventParticipants({
             </span>
           </div>
           <div className="ms-auto d-flex gap-2">
+            {activeItem.isGroupEvent ? (
+              <Button
+                variant="outline-secondary"
+                className="d-flex align-items-center gap-2"
+                onClick={() => {
+                  setIdCardsContext({ type: "event", teamName: null });
+                  setShowIdCardsModal(true);
+                }}
+              >
+                <i className="bi bi-folder2-open"></i>
+                <span className="d-none d-md-inline">View Event Files</span>
+              </Button>
+            ) : (
+              <Button
+                variant="outline-secondary"
+                className="d-flex align-items-center gap-2"
+                onClick={() => {
+                  setIdCardsContext({ type: "event", teamName: null });
+                  setShowIdCardsModal(true);
+                }}
+              >
+                <i className="bi bi-card-image"></i>
+                <span className="d-none d-md-inline">ID Cards</span>
+              </Button>
+            )}
+
             <Button
               variant="primary"
               className="d-flex align-items-center gap-2"
@@ -379,7 +597,40 @@ export default function EventParticipants({
             ) : (
               Object.entries(groupedParticipants).map(([team, list]) => (
                 <div key={team} className="p-3">
-                  <h6 className="fw-bold mb-2 text-start">{team}</h6>
+                  <div className="d-flex justify-content-between align-items-center mb-2 gap-2 flex-wrap">
+                    <h6 className="fw-bold mb-0 text-start">{team}</h6>
+                    <div className="d-flex gap-2 align-items-center flex-wrap">
+                      <Form.Control
+                        size="sm"
+                        style={{ maxWidth: "220px" }}
+                        placeholder="Team Position"
+                        value={teamPositionDrafts[team] ?? ""}
+                        onChange={(e) =>
+                          setTeamPositionDrafts((prev) => ({
+                            ...prev,
+                            [team]: e.target.value,
+                          }))
+                        }
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline-primary"
+                        onClick={() => handleSaveTeamPosition(team)}
+                      >
+                        Save Position
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline-secondary"
+                        onClick={() => {
+                          setIdCardsContext({ type: "team", teamName: team });
+                          setShowIdCardsModal(true);
+                        }}
+                      >
+                        ID Cards
+                      </Button>
+                    </div>
+                  </div>
                   <Table
                     hover
                     responsive
@@ -845,6 +1096,26 @@ export default function EventParticipants({
   );
 
   function renderModals() {
+    const isTeamContext = idCardsContext.type === "team";
+    const selectedTeamName =
+      (idCardsContext.teamName || "No Team").toString().trim() || "No Team";
+    const teamFiles = isTeamContext
+      ? getTeamMeta(activeItem, selectedTeamName).idCards
+      : [];
+    const eventFiles = Array.isArray(activeItem?.idCards)
+      ? activeItem.idCards
+      : [];
+    const groupedTeamFiles = Object.entries(activeItem?.teamMeta || {}).reduce(
+      (acc, [teamName, meta]) => {
+        const idCards = Array.isArray(meta?.idCards) ? meta.idCards : [];
+        if (idCards.length > 0) {
+          acc.push({ teamName, idCards });
+        }
+        return acc;
+      },
+      [],
+    );
+
     return (
       <>
         {/* CATEGORY MODAL */}
@@ -1110,24 +1381,26 @@ export default function EventParticipants({
                       }
                     />
                   </Col>
-                  <Col>
-                    <Form.Label className="small fw-bold text-muted">
-                      POSITION
-                    </Form.Label>
-                    <Form.Control
-                      placeholder="Position (Optional)"
-                      className="form-control"
-                      style={{
-                        backgroundColor: "var(--bg-main)",
-                        color: "var(--text-primary)",
-                        borderColor: "var(--border-color)",
-                      }}
-                      value={partForm.position || ""}
-                      onChange={(e) =>
-                        setPartForm({ ...partForm, position: e.target.value })
-                      }
-                    />
-                  </Col>
+                  {!activeItem?.isGroupEvent && (
+                    <Col>
+                      <Form.Label className="small fw-bold text-muted">
+                        POSITION
+                      </Form.Label>
+                      <Form.Control
+                        placeholder="Position (Optional)"
+                        className="form-control"
+                        style={{
+                          backgroundColor: "var(--bg-main)",
+                          color: "var(--text-primary)",
+                          borderColor: "var(--border-color)",
+                        }}
+                        value={partForm.position || ""}
+                        onChange={(e) =>
+                          setPartForm({ ...partForm, position: e.target.value })
+                        }
+                      />
+                    </Col>
+                  )}
                 </Row>
                 {activeItem?.isGroupEvent && (
                   <Row>
@@ -1154,6 +1427,16 @@ export default function EventParticipants({
                     </Col>
                   </Row>
                 )}
+                {activeItem?.isGroupEvent ? (
+                  <Row>
+                    <Col>
+                      <Form.Text className="text-muted">
+                        Position is managed at team level and will be the same
+                        for all members in that team.
+                      </Form.Text>
+                    </Col>
+                  </Row>
+                ) : null}
               </Form>
             </Modal.Body>
             <Modal.Footer className="border-0 p-3 pt-0">
@@ -1169,6 +1452,150 @@ export default function EventParticipants({
         </Modal>
 
         {/* PROOF MODAL */}
+        <Modal
+          show={showIdCardsModal}
+          onHide={() => setShowIdCardsModal(false)}
+          centered
+          size="lg"
+        >
+          <div
+            className="soft-card border-0 p-0 overflow-hidden"
+            style={{ height: "auto" }}
+          >
+            <Modal.Header
+              closeButton
+              className="border-bottom"
+              style={{ borderColor: "var(--border-color)" }}
+            >
+              <Modal.Title className="fw-bold h5">
+                {isTeamContext
+                  ? `Team ID Cards • ${selectedTeamName}`
+                  : "Event ID Cards"}
+              </Modal.Title>
+            </Modal.Header>
+            <Modal.Body className="p-4 text-start">
+              {(isTeamContext || !activeItem?.isGroupEvent) && (
+                <Form.Group className="mb-3">
+                  <Form.Label className="small fw-bold text-muted">
+                    Upload (PDF/Image)
+                  </Form.Label>
+                  <input
+                    type="file"
+                    className="form-control"
+                    accept="application/pdf,image/*"
+                    onChange={async (e) => {
+                      const selectedFile = e.target.files[0];
+                      if (!selectedFile) return;
+                      await handleUploadIdCard(selectedFile);
+                      e.target.value = null;
+                    }}
+                    disabled={uploadingIdCard}
+                  />
+                  {uploadingIdCard && (
+                    <div className="small text-muted mt-2">Uploading...</div>
+                  )}
+                </Form.Group>
+              )}
+
+              {isTeamContext ? (
+                teamFiles.length === 0 ? (
+                  <p className="text-muted mb-0">
+                    No files uploaded for this team.
+                  </p>
+                ) : (
+                  <ListGroup>
+                    {teamFiles.map((file, index) => (
+                      <ListGroup.Item
+                        key={`${file.url}-${index}`}
+                        className="d-flex justify-content-between align-items-center"
+                      >
+                        <a href={file.url} target="_blank" rel="noreferrer">
+                          {file.name || `File ${index + 1}`}
+                        </a>
+                        <Button
+                          variant="outline-danger"
+                          size="sm"
+                          onClick={() =>
+                            handleDeleteIdCard(index, selectedTeamName)
+                          }
+                        >
+                          Delete
+                        </Button>
+                      </ListGroup.Item>
+                    ))}
+                  </ListGroup>
+                )
+              ) : activeItem?.isGroupEvent ? (
+                groupedTeamFiles.length === 0 ? (
+                  <p className="text-muted mb-0">
+                    No team files uploaded for this event yet.
+                  </p>
+                ) : (
+                  groupedTeamFiles.map((group) => (
+                    <div key={group.teamName} className="mb-3">
+                      <h6 className="fw-bold mb-2">{group.teamName}</h6>
+                      <ListGroup>
+                        {group.idCards.map((file, index) => (
+                          <ListGroup.Item
+                            key={`${group.teamName}-${file.url}-${index}`}
+                            className="d-flex justify-content-between align-items-center"
+                          >
+                            <a href={file.url} target="_blank" rel="noreferrer">
+                              {file.name || `File ${index + 1}`}
+                            </a>
+                            <Button
+                              variant="outline-danger"
+                              size="sm"
+                              onClick={() =>
+                                handleDeleteIdCard(index, group.teamName)
+                              }
+                            >
+                              Delete
+                            </Button>
+                          </ListGroup.Item>
+                        ))}
+                      </ListGroup>
+                    </div>
+                  ))
+                )
+              ) : eventFiles.length === 0 ? (
+                <p className="text-muted mb-0">
+                  No files uploaded for this event.
+                </p>
+              ) : (
+                <ListGroup>
+                  {eventFiles.map((file, index) => (
+                    <ListGroup.Item
+                      key={`${file.url}-${index}`}
+                      className="d-flex justify-content-between align-items-center"
+                    >
+                      <a href={file.url} target="_blank" rel="noreferrer">
+                        {file.name || `File ${index + 1}`}
+                      </a>
+                      <Button
+                        variant="outline-danger"
+                        size="sm"
+                        onClick={() => handleDeleteIdCard(index)}
+                      >
+                        Delete
+                      </Button>
+                    </ListGroup.Item>
+                  ))}
+                </ListGroup>
+              )}
+            </Modal.Body>
+            <Modal.Footer className="border-0 p-3 pt-0">
+              <Button
+                variant="secondary"
+                onClick={() => setShowIdCardsModal(false)}
+                className="w-100"
+              >
+                Close
+              </Button>
+            </Modal.Footer>
+          </div>
+        </Modal>
+
         <Modal
           show={showProofModal}
           onHide={() => setShowProofModal(false)}
