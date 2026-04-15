@@ -4,12 +4,13 @@ import {
   doc,
   getDoc,
   deleteDoc,
+  updateDoc,
   collection,
   getDocs,
 } from "firebase/firestore";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { db } from "../firebase";
-import { Spinner } from "react-bootstrap";
+import { Spinner, Modal, Form, Button } from "react-bootstrap";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import Layout from "../components/Layout";
@@ -32,6 +33,24 @@ export default function EventDetails() {
   const [eventData, setEventData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [exportingReport, setExportingReport] = useState(false);
+  const [showProofModal, setShowProofModal] = useState(false);
+  const [proofLinkDraft, setProofLinkDraft] = useState("");
+  const [savingProofLink, setSavingProofLink] = useState(false);
+
+  const normalizeProofUrl = (value = "") => {
+    const trimmed = String(value).trim();
+    if (!trimmed) return "";
+    return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  };
+
+  const isValidHttpUrl = (value = "") => {
+    try {
+      const parsed = new URL(value);
+      return parsed.protocol === "http:" || parsed.protocol === "https:";
+    } catch {
+      return false;
+    }
+  };
 
   // --- INITIAL DATA FETCHING ---
   useEffect(() => {
@@ -64,6 +83,35 @@ export default function EventDetails() {
     if (window.confirm("Delete EVENT? This cannot be undone.")) {
       await deleteDoc(doc(db, "events", id));
       navigate("/");
+    }
+  };
+
+  const handleOpenProofModal = () => {
+    setProofLinkDraft(eventData?.proofUrl || "");
+    setShowProofModal(true);
+  };
+
+  const handleSaveProofLink = async () => {
+    if (savingProofLink) return;
+
+    const normalizedProofUrl = normalizeProofUrl(proofLinkDraft);
+    if (normalizedProofUrl && !isValidHttpUrl(normalizedProofUrl)) {
+      window.alert("Please enter a valid proof URL.");
+      return;
+    }
+
+    setSavingProofLink(true);
+    try {
+      await updateDoc(doc(db, "events", id), { proofUrl: normalizedProofUrl });
+      setEventData((prev) =>
+        prev ? { ...prev, proofUrl: normalizedProofUrl } : prev,
+      );
+      setShowProofModal(false);
+    } catch (error) {
+      console.error("Error saving proof link:", error);
+      window.alert("Could not save proof link. Please try again.");
+    } finally {
+      setSavingProofLink(false);
     }
   };
 
@@ -142,7 +190,17 @@ export default function EventDetails() {
         align: "center",
       });
 
-      let currentY = 40;
+      const proofUrl = normalizeProofUrl(eventData?.proofUrl || "");
+      if (proofUrl) {
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(10);
+        pdf.text("Upload Proof:", 14, 36);
+        pdf.setTextColor(0, 0, 255);
+        pdf.textWithLink(proofUrl, 36, 36, { url: proofUrl });
+        pdf.setTextColor(0, 0, 0);
+      }
+
+      let currentY = proofUrl ? 46 : 40;
       const ensureSpace = (spacing = 10) => {
         const lastTableY = pdf.lastAutoTable?.finalY || 0;
         const baselineY = Math.max(currentY, lastTableY);
@@ -516,6 +574,8 @@ export default function EventDetails() {
             setView={setCurrentView}
             userRole={userRole}
             onDelete={handleDeleteEvent}
+            onManageProofLink={handleOpenProofModal}
+            hasProofLink={!!String(eventData?.proofUrl || "").trim()}
             onExportReport={handleExportEventReport}
             exportingReport={exportingReport}
           />
@@ -524,5 +584,45 @@ export default function EventDetails() {
   };
 
   // Wrap everything in Layout so Sidebar persists even during loading
-  return <Layout>{renderView()}</Layout>;
+  return (
+    <Layout>
+      {renderView()}
+
+      <Modal show={showProofModal} onHide={() => setShowProofModal(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Upload Proof Link</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form.Group>
+            <Form.Label>Proof URL (link only)</Form.Label>
+            <Form.Control
+              type="url"
+              placeholder="https://drive.google.com/..."
+              value={proofLinkDraft}
+              onChange={(e) => setProofLinkDraft(e.target.value)}
+            />
+            <Form.Text className="text-muted">
+              This link will appear at the top of the exported Event Report PDF.
+            </Form.Text>
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button
+            variant="outline-secondary"
+            onClick={() => setShowProofModal(false)}
+            disabled={savingProofLink}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSaveProofLink}
+            disabled={savingProofLink}
+          >
+            {savingProofLink ? "Saving..." : "Save Link"}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+    </Layout>
+  );
 }

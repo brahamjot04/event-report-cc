@@ -6,6 +6,8 @@ export default function EventDashboard({
   setView,
   userRole,
   onDelete,
+  onManageProofLink,
+  hasProofLink,
   onExportReport,
   exportingReport,
 }) {
@@ -59,7 +61,15 @@ export default function EventDashboard({
             {formatDate(eventData.date)}
           </span>
         </div>
-        <div className="ms-auto">
+        <div className="ms-auto d-flex align-items-center gap-2">
+          <Button
+            variant={hasProofLink ? "outline-success" : "outline-secondary"}
+            className="rounded-pill px-4"
+            onClick={onManageProofLink}
+          >
+            <i className="bi bi-link-45deg me-2"></i>
+            {hasProofLink ? "Edit Proof Link" : "Upload Proof Link"}
+          </Button>
           <Button
             variant="primary"
             className="rounded-pill px-4"
