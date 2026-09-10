@@ -4,14 +4,11 @@ import {
   getDocs,
   doc,
   updateDoc,
-  getDoc,
   setDoc,
 } from "firebase/firestore";
 import { createUserWithEmailAndPassword, getAuth } from "firebase/auth";
 import { initializeApp, deleteApp } from "firebase/app";
-import { auth, db } from "../firebase";
-import { onAuthStateChanged } from "firebase/auth";
-import { useNavigate } from "react-router-dom";
+import { db } from "../firebase";
 import {
   Table,
   Button,
@@ -25,14 +22,15 @@ import {
 import Layout from "../components/Layout";
 import emailjs from "@emailjs/browser";
 import { logAction } from "../utils/logger";
+import { useToast } from "../context/ToastContext";
 
 const secondaryFirebaseConfig = {
-  apiKey: "AIzaSyCF_-t-uGCwdX8ee_01T5qHv9nQX3HfxQw",
-  authDomain: "event-report-cc.firebaseapp.com",
-  projectId: "event-report-cc",
-  storageBucket: "event-report-cc.firebasestorage.app",
-  messagingSenderId: "1069208650480",
-  appId: "1:1069208650480:web:0e2765c0804db227b3f835",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCF_-t-uGCwdX8ee_01T5qHv9nQX3HfxQw",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "event-report-cc.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "event-report-cc",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "event-report-cc.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "1069208650480",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:1069208650480:web:0e2765c0804db227b3f835",
 };
 
 export default function Users() {
@@ -46,28 +44,14 @@ export default function Users() {
   const [selectedRoleFilter, setSelectedRoleFilter] = useState(null);
   const [selectedStatusFilter, setSelectedStatusFilter] = useState(null);
 
-  const navigate = useNavigate();
+  const { showSuccess, showError, confirm } = useToast();
 
-  const EMAILJS_SERVICE_ID = "service_og3ze6m";
-  const EMAILJS_TEMPLATE_ID = "template_xbboh6j";
-  const EMAILJS_PUBLIC_KEY = "PzNJuoItwBZtKTwOG";
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        navigate("/login");
-        return;
-      }
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-      if (userDoc.exists()) {
-        const role = userDoc.data().role;
-        if (role !== "super_admin" && role !== "admin") {
-          navigate("/");
-        }
-      }
-    });
-    return () => unsubscribe();
-  }, [navigate]);
+  const EMAILJS_SERVICE_ID =
+    import.meta.env.VITE_EMAILJS_SERVICE_ID || "service_og3ze6m";
+  const EMAILJS_TEMPLATE_ID =
+    import.meta.env.VITE_EMAILJS_TEMPLATE_USER_CREDENTIALS || "template_xbboh6j";
+  const EMAILJS_PUBLIC_KEY =
+    import.meta.env.VITE_EMAILJS_PUBLIC_KEY || "PzNJuoItwBZtKTwOG";
 
   const fetchUsers = async () => {
     try {
@@ -86,28 +70,52 @@ export default function Users() {
 
   const updateStatus = async (userId, newStatus, currentRole) => {
     const user = users.find((u) => u.id === userId);
-    await updateDoc(doc(db, "users", userId), {
-      status: newStatus,
-      role: currentRole,
-    });
-    fetchUsers();
     const action = newStatus === "approved" ? "APPROVE" : "SUSPEND";
-    const message = `${action} user: ${user?.name} (${user?.email}) - Role: ${currentRole}`;
-    await logAction(action, message);
+    const confirmed = await confirm({
+      title: `${action === "APPROVE" ? "Approve" : "Suspend"} User`,
+      message: `Are you sure you want to ${action.toLowerCase()} ${user?.name || user?.email || "this user"}?`,
+      variant: action === "APPROVE" ? "success" : "danger",
+      confirmText: action === "APPROVE" ? "Approve" : "Suspend",
+    });
+    if (!confirmed) return;
+
+    try {
+      await updateDoc(doc(db, "users", userId), {
+        status: newStatus,
+        role: currentRole,
+      });
+      showSuccess(`User marked as ${newStatus}.`);
+      fetchUsers();
+      const message = `${action} user: ${user?.name} (${user?.email}) - Role: ${currentRole}`;
+      await logAction(action, message);
+    } catch (error) {
+      console.error(error);
+      showError("Failed to update status: " + error.message);
+    }
   };
 
-  // NEW FUNCTION: specifically for toggling user vs admin roles
+  // Specifically for toggling user vs admin roles
   const updateRole = async (userId, newRole) => {
-    if (
-      window.confirm(`Are you sure you want to make this person an ${newRole}?`)
-    ) {
-      const user = users.find((u) => u.id === userId);
+    const user = users.find((u) => u.id === userId);
+    const confirmed = await confirm({
+      title: "Update User Role",
+      message: `Are you sure you want to make ${user?.name || user?.email || "this user"} a ${newRole}?`,
+      variant: "warning",
+      confirmText: "Change Role",
+    });
+    if (!confirmed) return;
+
+    try {
       await updateDoc(doc(db, "users", userId), {
         role: newRole,
       });
+      showSuccess(`Role updated to ${newRole}.`);
       fetchUsers();
       const message = `Changed role for ${user?.name} (${user?.email}) to ${newRole}`;
       await logAction("UPDATE_ROLE", message);
+    } catch (error) {
+      console.error(error);
+      showError("Failed to update role: " + error.message);
     }
   };
 
@@ -156,7 +164,7 @@ export default function Users() {
       );
     } catch (error) {
       console.error(error);
-      alert("Error: " + error.message);
+      showError("Error: " + error.message);
     } finally {
       setCreating(false);
     }

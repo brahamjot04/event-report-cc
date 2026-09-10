@@ -5,11 +5,7 @@ import {
   query,
   orderBy,
   limit,
-  doc,
-  getDoc,
 } from "firebase/firestore";
-import { onAuthStateChanged, getAuth } from "firebase/auth"; // <--- Import Auth
-import { useNavigate } from "react-router-dom"; // <--- Import Router
 import { db } from "../firebase";
 import { Table, Card, Badge, Spinner, Form, InputGroup } from "react-bootstrap";
 import Layout from "../components/Layout";
@@ -19,40 +15,9 @@ export default function Logs() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const navigate = useNavigate();
-  const auth = getAuth();
-
   useEffect(() => {
-    // 1. CHECK PERMISSIONS
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        navigate("/login");
-        return;
-      }
-
-      try {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          const role = userDoc.data().role;
-          // Only allow 'admin' or 'super_admin'
-          if (role !== "admin" && role !== "super_admin") {
-            alert("Access Denied: Admins Only");
-            navigate("/"); // Kick them out
-            return;
-          }
-          // If allowed, fetch data
-          fetchLogs();
-        } else {
-          navigate("/login");
-        }
-      } catch (error) {
-        console.error("Auth Error:", error);
-        navigate("/");
-      }
-    });
-
-    return () => unsubscribe();
-  }, [navigate, auth]);
+    fetchLogs();
+  }, []);
 
   const fetchLogs = async () => {
     try {

@@ -1,9 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   signInWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
-  onAuthStateChanged,
 } from "firebase/auth";
 import { auth } from "../firebase";
 import { useNavigate, Link } from "react-router-dom";
@@ -15,20 +14,8 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [checkingAuth, setCheckingAuth] = useState(true);
 
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        navigate("/");
-      } else {
-        setCheckingAuth(false);
-      }
-    });
-    return () => unsubscribe();
-  }, [navigate]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -36,7 +23,9 @@ export default function Login() {
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      navigate("/");
     } catch (err) {
+      console.error(err);
       setError("Failed to sign in. Check your email/password.");
       setLoading(false);
     }
@@ -48,27 +37,13 @@ export default function Login() {
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
+      navigate("/");
     } catch (err) {
       console.error(err);
       setError("Google Sign-In failed. Please try again.");
       setLoading(false);
     }
   };
-
-  if (checkingAuth) {
-    return (
-      <div
-        className="d-flex vh-100 align-items-center justify-content-center"
-        style={{ backgroundColor: "var(--bg-main)" }}
-      >
-        <Spinner
-          animation="border"
-          variant="primary"
-          style={{ width: "3rem", height: "3rem" }}
-        />
-      </div>
-    );
-  }
 
   return (
     <div

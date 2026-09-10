@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import {
   collection,
   getDocs,
@@ -22,6 +22,8 @@ import {
 import readXlsxFile from "read-excel-file";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import TeacherModal from "./teachers/TeacherModal";
+import { useToast } from "../../context/ToastContext";
 
 const DEFAULT_FIELDS = ["name", "designation", "department"];
 const MANDATORY_FORM_FIELDS = ["incharge"];
@@ -56,6 +58,7 @@ const normalizeSelectedFieldList = (fields = []) =>
     .filter(Boolean);
 
 export default function EventTeachers({ eventId, goBack, eventTitle }) {
+  const { showSuccess, showWarning, confirm } = useToast();
   const [teachers, setTeachers] = useState([]);
   const [committeeCatalog, setCommitteeCatalog] = useState([]);
   const [selectedFields, setSelectedFields] = useState(DEFAULT_FIELDS);
@@ -78,11 +81,7 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
 
   const [activeCommittee, setActiveCommittee] = useState(null);
   const [selectedFilter, setSelectedFilter] = useState(null);
-
-  useEffect(() => {
-    fetchTeachers();
-    fetchFieldConfiguration();
-  }, [eventId]);
+  const fileInputRef = useRef(null);
 
   const availableFields = useMemo(
     () => [...new Set([...Object.keys(BASE_FIELD_LABELS), ...customFields])],
@@ -185,7 +184,7 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
     });
   };
 
-  const fetchFieldConfiguration = async () => {
+  const fetchFieldConfiguration = useCallback(async () => {
     const eventRef = doc(db, "events", eventId);
     const eventSnap = await getDoc(eventRef);
     if (!eventSnap.exists()) return;
@@ -238,9 +237,9 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
     setCustomFields(savedCustom);
     setCustomFieldLabels(savedCustomLabels);
     setCommitteeCatalog(savedCommittees);
-  };
+  }, [eventId]);
 
-  const fetchTeachers = async () => {
+  const fetchTeachers = useCallback(async () => {
     const querySnapshot = await getDocs(
       collection(db, "events", eventId, "teachers"),
     );
@@ -260,7 +259,12 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
     });
 
     setTeachers(mappedTeachers);
-  };
+  }, [eventId]);
+
+  useEffect(() => {
+    fetchTeachers();
+    fetchFieldConfiguration();
+  }, [fetchTeachers, fetchFieldConfiguration]);
 
   const openAddTeacherModal = (committeeName = "") => {
     const initialForm = {};
@@ -318,13 +322,13 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
   };
 
   const handleDeleteCommittee = async (committeeName) => {
-    if (
-      !window.confirm(
-        `Delete committee "${committeeName}" and all its members?`,
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: "Delete Committee",
+      message: `Delete committee "${committeeName}" and all its members?`,
+      confirmText: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
 
     const targetGroup = groupedTeachers.find(
       (group) => group.committee === committeeName,
@@ -382,7 +386,7 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
     );
 
     if (exists) {
-      alert("A committee with this name already exists.");
+      showWarning("A committee with this name already exists.");
       return;
     }
 
@@ -449,7 +453,7 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
     if (committeeMode === "customOnly") {
       const createdCommitteeName = customCommitteeName.trim();
       if (!createdCommitteeName) {
-        alert("Please enter a committee name.");
+        showWarning("Please enter a committee name.");
         return;
       }
 
@@ -458,7 +462,7 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
           committee.toLowerCase() === createdCommitteeName.toLowerCase(),
       );
       if (exists) {
-        alert("A committee with this name already exists.");
+        showWarning("A committee with this name already exists.");
         return;
       }
 
@@ -484,7 +488,7 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
         : (teacherForm.committee || "").toString().trim();
 
     if (!resolvedCommittee) {
-      alert("Please select or add a committee name.");
+      showWarning("Please select or add a committee name.");
       return;
     }
 
@@ -523,8 +527,15 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
   };
 
   const handleDeleteTeacher = async (teacherId) => {
-    if (!window.confirm("Remove this teacher entry?")) return;
+    const ok = await confirm({
+      title: "Remove Teacher",
+      message: "Are you sure you want to remove this teacher entry?",
+      confirmText: "Remove",
+      variant: "danger",
+    });
+    if (!ok) return;
     await deleteDoc(doc(db, "events", eventId, "teachers", teacherId));
+    showSuccess("Teacher entry removed.");
     await fetchTeachers();
   };
 
@@ -571,7 +582,7 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
     const key = normalizeFieldKey(label);
     if (!key) return;
     if (availableFields.includes(key)) {
-      alert("Field already exists.");
+      showWarning("Field already exists.");
       return;
     }
 
@@ -730,7 +741,7 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
     );
 
     await fetchTeachers();
-    alert("Teachers imported successfully.");
+    showSuccess("Teachers imported successfully.");
   };
 
   const handleExportPDF = () => {
@@ -746,7 +757,7 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
     }));
 
     if (normalizedTeachers.length === 0) {
-      alert("No teachers available for export.");
+      showWarning("No teachers available for export.");
       return;
     }
 
@@ -1035,6 +1046,21 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
               </p>
             </div>
             <div className="ms-auto d-flex gap-2">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                accept=".xlsx, .xls"
+                style={{ display: "none" }}
+              />
+              <Button
+                variant="outline-success"
+                onClick={() => fileInputRef.current?.click()}
+                size="sm"
+                className="d-flex align-items-center"
+              >
+                <i className="bi bi-file-earmark-excel me-2"></i>Import Excel
+              </Button>
               <Button
                 variant="outline-danger"
                 onClick={handleExportPDF}
@@ -1264,113 +1290,21 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
         </>
       )}
 
-      <Modal
+      <TeacherModal
         show={showTeacherModal}
         onHide={() => setShowTeacherModal(false)}
-        centered
-      >
-        <Modal.Header closeButton>
-          <Modal.Title>
-            {committeeMode === "customOnly"
-              ? "Add New Committee"
-              : editingTeacherId
-                ? "Edit Teacher"
-                : "Add Teacher"}
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Form>
-            {committeeMode !== "customOnly" ? (
-              <Form.Group className="mb-3">
-                <Form.Label>Committee Name</Form.Label>
-                <Form.Select
-                  value={teacherForm.committee || ""}
-                  onChange={(e) => {
-                    if (e.target.value === "__custom__") {
-                      setCommitteeMode("customWithTeacher");
-                      setTeacherForm((prev) => ({ ...prev, committee: "" }));
-                      return;
-                    }
-
-                    setCommitteeMode("existing");
-                    setTeacherForm((prev) => ({
-                      ...prev,
-                      committee: e.target.value,
-                    }));
-                  }}
-                >
-                  <option value="">Select committee</option>
-                  {committeeOptions.map((committee) => (
-                    <option key={committee} value={committee}>
-                      {committee}
-                    </option>
-                  ))}
-                  <option value="__custom__">+ Add New Committee</option>
-                </Form.Select>
-              </Form.Group>
-            ) : (
-              <></>
-            )}
-
-            {(committeeMode === "customWithTeacher" ||
-              committeeMode === "customOnly") && (
-              <Form.Group className="mb-3">
-                <Form.Label>New Committee Name</Form.Label>
-                <Form.Control
-                  type="text"
-                  placeholder="Enter new committee name"
-                  value={customCommitteeName}
-                  onChange={(e) => setCustomCommitteeName(e.target.value)}
-                />
-              </Form.Group>
-            )}
-
-            {committeeMode !== "customOnly" &&
-              formFields.map((field) => (
-                <Form.Group key={field} className="mb-3">
-                  {field === "incharge" ? (
-                    <Form.Check
-                      type="checkbox"
-                      label={getFieldLabel(field)}
-                      checked={!!teacherForm[field]}
-                      onChange={(e) =>
-                        setTeacherForm((prev) => ({
-                          ...prev,
-                          [field]: e.target.checked,
-                        }))
-                      }
-                    />
-                  ) : (
-                    <>
-                      <Form.Label>{getFieldLabel(field)}</Form.Label>
-                      <Form.Control
-                        type={field === "email" ? "email" : "text"}
-                        value={teacherForm[field] || ""}
-                        onChange={(e) =>
-                          setTeacherForm((prev) => ({
-                            ...prev,
-                            [field]: e.target.value,
-                          }))
-                        }
-                      />
-                    </>
-                  )}
-                </Form.Group>
-              ))}
-          </Form>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button
-            variant="secondary"
-            onClick={() => setShowTeacherModal(false)}
-          >
-            Cancel
-          </Button>
-          <Button variant="primary" onClick={handleSaveTeacher}>
-            {committeeMode === "customOnly" ? "Create Committee" : "Save"}
-          </Button>
-        </Modal.Footer>
-      </Modal>
+        committeeMode={committeeMode}
+        setCommitteeMode={setCommitteeMode}
+        editingTeacherId={editingTeacherId}
+        teacherForm={teacherForm}
+        setTeacherForm={setTeacherForm}
+        committeeOptions={committeeOptions}
+        customCommitteeName={customCommitteeName}
+        setCustomCommitteeName={setCustomCommitteeName}
+        formFields={formFields}
+        getFieldLabel={getFieldLabel}
+        handleSaveTeacher={handleSaveTeacher}
+      />
 
       <Modal
         show={showCommitteeModal}

@@ -1,7 +1,8 @@
-const GITHUB_TOKEN = "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"; 
-const USERNAME = "brahamjot04";
-const REPO_NAME = "event-report-cc-app-data"; 
-const BRANCH = "main"; 
+const GITHUB_TOKEN =
+  import.meta.env.VITE_GITHUB_TOKEN || "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";
+const USERNAME = import.meta.env.VITE_GITHUB_USERNAME || "brahamjot04";
+const REPO_NAME = import.meta.env.VITE_GITHUB_REPO || "event-report-cc-app-data";
+const BRANCH = import.meta.env.VITE_GITHUB_BRANCH || "main"; 
 
 // Cache for loaded images to avoid repeated API calls
 const imageCache = new Map();

@@ -5,6 +5,8 @@ import 'bootstrap/dist/css/bootstrap.min.css'; // <--- THIS IS CRITICAL
 import "bootstrap-icons/font/bootstrap-icons.css"; // <--- THIS IS CRITICAL
 import App from './App.jsx'
 import './App.css'
+import { AuthProvider } from './context/AuthContext'
+import { ToastProvider } from './context/ToastContext'
 
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator) {
@@ -22,7 +24,11 @@ if ('serviceWorker' in navigator) {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
-      <App />
+      <AuthProvider>
+        <ToastProvider>
+          <App />
+        </ToastProvider>
+      </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,
 )

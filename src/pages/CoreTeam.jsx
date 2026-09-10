@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   collection,
   getDocs,
@@ -19,7 +19,8 @@ import {
   Image,
 } from "react-bootstrap";
 import Layout from "../components/Layout";
-import { uploadToGitHub, fetchImageFromGitHub } from "../utils/github"; // Import both functions
+import { uploadToGitHub, fetchImageFromGitHub } from "../utils/github";
+import { useToast } from "../context/ToastContext";
 
 // Custom Toggle for the Three-Dot Menu
 const CustomToggle = ({ children, onClick }) => (
@@ -39,13 +40,15 @@ export default function CoreTeam() {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
-  const [imageDataUrls, setImageDataUrls] = useState({}); // Store loaded image data URLs
+  const [imageDataUrls, setImageDataUrls] = useState({});
+
+  const { showSuccess, showError, confirm } = useToast();
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentId, setCurrentId] = useState(null);
-  const [selectedImage, setSelectedImage] = useState(null); // State for file input
+  const [selectedImage, setSelectedImage] = useState(null);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -53,45 +56,15 @@ export default function CoreTeam() {
     phone: "",
     branch: "",
     designation: "",
-    imageUrl: "", // Add imageUrl to form data
+    imageUrl: "",
   });
 
-  useEffect(() => {
-    fetchMembers();
-  }, []);
-
-  const fetchMembers = async () => {
-    try {
-      const querySnapshot = await getDocs(collection(db, "global_core_team"));
-      const teamList = querySnapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          initial: data.name ? data.name.charAt(0).toUpperCase() : "?",
-        };
-      });
-      console.log("Fetched members:", teamList);
-      setMembers(teamList);
-
-      // Load images for members that have imageUrl (path)
-      loadMemberImages(teamList);
-    } catch (error) {
-      console.error("Error fetching members:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadMemberImages = async (membersList) => {
+  const loadMemberImages = useCallback(async (membersList) => {
     const newImageDataUrls = {};
 
-    // Load all images in parallel with a timeout
     const imagePromises = membersList.map(async (member) => {
       if (member.imageUrl) {
-        console.log(`Loading image for ${member.name}:`, member.imageUrl);
         try {
-          // Add a timeout to prevent infinite loading
           const timeoutPromise = new Promise((_, reject) =>
             setTimeout(() => reject(new Error("Timeout")), 10000),
           );
@@ -103,8 +76,6 @@ export default function CoreTeam() {
 
           if (dataUrl) {
             newImageDataUrls[member.id] = dataUrl;
-          } else {
-            console.warn(`Failed to load image for ${member.name}`);
           }
         } catch (error) {
           console.error(
@@ -117,11 +88,31 @@ export default function CoreTeam() {
 
     await Promise.all(imagePromises);
     setImageDataUrls(newImageDataUrls);
-    console.log(
-      "All images loaded. Total:",
-      Object.keys(newImageDataUrls).length,
-    );
-  };
+  }, []);
+
+  const fetchMembers = useCallback(async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, "global_core_team"));
+      const teamList = querySnapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          initial: data.name ? data.name.charAt(0).toUpperCase() : "?",
+        };
+      });
+      setMembers(teamList);
+      loadMemberImages(teamList);
+    } catch (error) {
+      console.error("Error fetching members:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [loadMemberImages]);
+
+  useEffect(() => {
+    fetchMembers();
+  }, [fetchMembers]);
 
   const handleImageChange = (e) => {
     if (e.target.files[0]) {
@@ -148,7 +139,7 @@ export default function CoreTeam() {
           "core-team",
         );
         if (!uploadedImageUrl) {
-          alert("Image upload failed. Please try again.");
+          showError("Image upload failed. Please try again.");
           setLoading(false);
           setIsUploading(false);
           return;
@@ -165,17 +156,20 @@ export default function CoreTeam() {
         await updateDoc(doc(db, "global_core_team", currentId), {
           ...memberData,
         });
+        showSuccess("Core team member updated.");
       } else {
         // Create new
         await addDoc(collection(db, "global_core_team"), {
           ...memberData,
           createdAt: new Date(),
         });
+        showSuccess("Core team member added.");
       }
       handleCloseModal();
       await fetchMembers(); // Refetch members and load images
     } catch (error) {
       console.error("Error saving member:", error);
+      showError("Failed to save member: " + error.message);
     } finally {
       setLoading(false);
       setIsUploading(false);
@@ -183,12 +177,20 @@ export default function CoreTeam() {
   };
 
   const handleDeleteMember = async (id) => {
-    if (window.confirm("Are you sure you want to remove this member?")) {
+    const confirmed = await confirm({
+      title: "Remove Core Team Member",
+      message: "Are you sure you want to remove this member?",
+      variant: "danger",
+      confirmText: "Remove",
+    });
+    if (confirmed) {
       try {
         await deleteDoc(doc(db, "global_core_team", id));
-        await fetchMembers(); // Refetch members and reload images
+        showSuccess("Member removed.");
+        await fetchMembers();
       } catch (error) {
         console.error("Error deleting member:", error);
+        showError("Failed to remove member.");
       }
     }
   };

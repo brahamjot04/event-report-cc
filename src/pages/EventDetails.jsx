@@ -8,12 +8,13 @@ import {
   collection,
   getDocs,
 } from "firebase/firestore";
-import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { db } from "../firebase";
 import { Spinner, Modal, Form, Button } from "react-bootstrap";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import Layout from "../components/Layout";
+import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 
 // Import Sub-Components
 import EventDashboard from "../components/events/EventDashboard";
@@ -23,12 +24,18 @@ import EventMeetings from "../components/events/EventMeetings";
 import EventTeams from "../components/events/EventTeams";
 import EventTeachers from "../components/events/EventTeachers";
 
+// Youth Festival Sub-Components
+import YouthFestivalHost from "../components/events/youthFestival/YouthFestivalHost";
+import YouthFestivalAccommodation from "../components/events/youthFestival/YouthFestivalAccommodation";
+import YouthFestivalContingent from "../components/events/youthFestival/YouthFestivalContingent";
+import EventYouthFestivalVenues from "../components/events/youthFestival/EventYouthFestivalVenues";
+
 export default function EventDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const auth = getAuth();
+  const { role: userRole } = useAuth();
+  const { showSuccess, showError, confirm } = useToast();
 
-  const [userRole, setUserRole] = useState("user");
   const [currentView, setCurrentView] = useState("dashboard");
   const [eventData, setEventData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -54,13 +61,6 @@ export default function EventDetails() {
 
   // --- INITIAL DATA FETCHING ---
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-        if (userDoc.exists()) setUserRole(userDoc.data().role);
-      }
-    });
-
     const fetchEvent = async () => {
       try {
         const eventSnap = await getDoc(doc(db, "events", id));
@@ -76,13 +76,24 @@ export default function EventDetails() {
       }
     };
     fetchEvent();
-    return () => unsubscribe();
-  }, [id, navigate, auth]);
+  }, [id, navigate]);
 
   const handleDeleteEvent = async () => {
-    if (window.confirm("Delete EVENT? This cannot be undone.")) {
-      await deleteDoc(doc(db, "events", id));
-      navigate("/");
+    const confirmed = await confirm({
+      title: "Delete Event",
+      message: "Are you sure you want to delete this event? This cannot be undone.",
+      variant: "danger",
+      confirmText: "Delete Event",
+    });
+    if (confirmed) {
+      try {
+        await deleteDoc(doc(db, "events", id));
+        showSuccess("Event deleted successfully.");
+        navigate("/");
+      } catch (err) {
+        console.error(err);
+        showError("Failed to delete event.");
+      }
     }
   };
 
@@ -96,7 +107,7 @@ export default function EventDetails() {
 
     const normalizedProofUrl = normalizeProofUrl(proofLinkDraft);
     if (normalizedProofUrl && !isValidHttpUrl(normalizedProofUrl)) {
-      window.alert("Please enter a valid proof URL.");
+      showError("Please enter a valid proof URL.");
       return;
     }
 
@@ -106,10 +117,11 @@ export default function EventDetails() {
       setEventData((prev) =>
         prev ? { ...prev, proofUrl: normalizedProofUrl } : prev,
       );
+      showSuccess("Proof link saved.");
       setShowProofModal(false);
     } catch (error) {
       console.error("Error saving proof link:", error);
-      window.alert("Could not save proof link. Please try again.");
+      showError("Could not save proof link. Please try again.");
     } finally {
       setSavingProofLink(false);
     }
@@ -505,7 +517,7 @@ export default function EventDetails() {
       pdf.save(`${safeName || "Event"}_Report.pdf`);
     } catch (error) {
       console.error("Error exporting event report:", error);
-      window.alert("Could not export event report. Please try again.");
+      showError("Could not export event report. Please try again.");
     } finally {
       setExportingReport(false);
     }
@@ -521,6 +533,38 @@ export default function EventDetails() {
       );
 
     switch (currentView) {
+      case "yf_host":
+        return (
+          <YouthFestivalHost
+            eventId={id}
+            goBack={() => setCurrentView("dashboard")}
+          />
+        );
+
+      case "yf_venues":
+        return (
+          <EventYouthFestivalVenues
+            eventId={id}
+            goBack={() => setCurrentView("dashboard")}
+          />
+        );
+
+      case "yf_accommodation":
+        return (
+          <YouthFestivalAccommodation
+            eventId={id}
+            goBack={() => setCurrentView("dashboard")}
+          />
+        );
+
+      case "yf_contingent":
+        return (
+          <YouthFestivalContingent
+            eventId={id}
+            goBack={() => setCurrentView("dashboard")}
+          />
+        );
+
       case "participants":
         return (
           <EventParticipants

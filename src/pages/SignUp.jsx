@@ -52,7 +52,7 @@ export default function Signup() {
         name: formData.name,
         email: formData.email,
         role: "user",
-        isAproved: false,
+        status: "pending",
         createdAt: new Date(),
       });
 

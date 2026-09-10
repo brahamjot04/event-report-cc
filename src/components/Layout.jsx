@@ -1,17 +1,21 @@
 import { useState, useEffect, useRef } from "react";
 import { Container, Row, Col } from "react-bootstrap";
 import { useNavigate, useLocation } from "react-router-dom";
-import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../firebase";
+import { useAuth } from "../context/AuthContext";
 import ThemeToggle from "./ThemeToggle";
 import "../assets/DashboardStyles.css";
 
 export default function Layout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [userName, setUserName] = useState("Loading...");
-  const [userInitial, setUserInitial] = useState("?");
+  const { user, userProfile, isAdmin } = useAuth();
+
+  const userName =
+    user?.displayName || userProfile?.name || user?.email?.split("@")[0] || "Guest";
+  const userInitial = userName.charAt(0).toUpperCase();
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarAnimatingOut, setSidebarAnimatingOut] = useState(false);
   const closeTimerRef = useRef(null);
@@ -26,28 +30,15 @@ export default function Layout({ children }) {
     localStorage.setItem("sidebarCollapsed", JSON.stringify(sidebarCollapsed));
   }, [sidebarCollapsed]);
 
-  useEffect(() => {
-    const auth = getAuth();
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        const name = user.displayName || user.email.split("@")[0];
-        setUserName(name);
-        setUserInitial(name.charAt(0).toUpperCase());
-      } else {
-        setUserName("Guest");
-      }
-    });
-    return () => unsubscribe();
-  }, []);
-
   // Real-time listener for pending users count
   useEffect(() => {
+    if (!isAdmin) return;
     const q = query(collection(db, "users"), where("status", "==", "pending"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setPendingCount(snapshot.size);
     });
     return () => unsubscribe();
-  }, []);
+  }, [isAdmin]);
 
   const openSidebar = () => {
     if (closeTimerRef.current) {
@@ -75,7 +66,8 @@ export default function Layout({ children }) {
 
   // Close mobile sidebar when route changes (but keep collapsed state)
   useEffect(() => {
-    closeSidebar();
+    setSidebarOpen(false);
+    setSidebarAnimatingOut(false);
   }, [location.pathname]);
 
   useEffect(

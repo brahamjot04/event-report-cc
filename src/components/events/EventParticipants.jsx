@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   doc,
   updateDoc,
@@ -27,12 +27,16 @@ import { uploadToGitHub } from "../../utils/github";
 import readXlsxFile from "read-excel-file";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { useToast } from "../../context/ToastContext";
+import ItemModal from "./participants/ItemModal";
+import ParticipantModal from "./participants/ParticipantModal";
 
 export default function EventParticipants({
   eventId,
   initialEventData,
   goBack,
 }) {
+  const { showSuccess, showError, showWarning, confirm } = useToast();
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState(
     initialEventData?.categories || [],
@@ -108,10 +112,23 @@ export default function EventParticipants({
     };
   };
 
+  const fetchCategories = useCallback(async () => {
+    const eventRef = doc(db, "events", eventId);
+    const eventSnap = await getDoc(eventRef);
+    if (eventSnap.exists()) {
+      setCategories(eventSnap.data().categories || []);
+    }
+  }, [eventId]);
+
+  const fetchItems = useCallback(async () => {
+    const snap = await getDocs(collection(db, "events", eventId, "items"));
+    setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, [eventId]);
+
   useEffect(() => {
     fetchItems();
     fetchCategories();
-  }, [eventId]);
+  }, [fetchItems, fetchCategories]);
 
   useEffect(() => {
     if (!activeItem?.isGroupEvent) {
@@ -139,19 +156,6 @@ export default function EventParticipants({
     setTeamPositionDrafts(draftEntries);
   }, [activeItem]);
 
-  const fetchCategories = async () => {
-    const eventRef = doc(db, "events", eventId);
-    const eventSnap = await getDoc(eventRef);
-    if (eventSnap.exists()) {
-      setCategories(eventSnap.data().categories || []);
-    }
-  };
-
-  const fetchItems = async () => {
-    const snap = await getDocs(collection(db, "events", eventId, "items"));
-    setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-  };
-
   const handleAddCategory = async () => {
     if (!newCategoryInput) return;
     await updateDoc(doc(db, "events", eventId), {
@@ -162,11 +166,18 @@ export default function EventParticipants({
   };
 
   const handleDeleteCategory = async (cat) => {
-    if (!window.confirm(`Delete ${cat}?`)) return;
+    const ok = await confirm({
+      title: "Delete Category",
+      message: `Are you sure you want to delete category "${cat}"?`,
+      confirmText: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
     await updateDoc(doc(db, "events", eventId), {
       categories: arrayRemove(cat),
     });
     setCategories(categories.filter((c) => c !== cat));
+    showSuccess(`Category "${cat}" deleted.`);
   };
 
   const handleAddItem = async () => {
@@ -196,8 +207,15 @@ export default function EventParticipants({
 
   const handleDeleteItem = async (e, itemId) => {
     e.stopPropagation();
-    if (window.confirm("Delete Sub-Event?")) {
+    const ok = await confirm({
+      title: "Delete Sub-Event",
+      message: "Are you sure you want to delete this sub-event and all its participants?",
+      confirmText: "Delete",
+      variant: "danger",
+    });
+    if (ok) {
       await deleteDoc(doc(db, "events", eventId, "items", itemId));
+      showSuccess("Sub-event deleted.");
       fetchItems();
     }
   };
@@ -213,7 +231,7 @@ export default function EventParticipants({
     if (activeItem.isGroupEvent) {
       const teamName = getParticipantTeamName(participantPayload);
       if (!teamName || teamName === "No Team") {
-        alert("Please enter a team name for group events.");
+        showWarning("Please enter a team name for group events.");
         return;
       }
 
@@ -328,9 +346,9 @@ export default function EventParticipants({
       }
 
       fetchItems();
-      alert("ID card uploaded successfully.");
+      showSuccess("ID card uploaded successfully.");
     } catch (err) {
-      alert("Upload failed: " + err.message);
+      showError("Upload failed: " + err.message);
     } finally {
       setUploadingIdCard(false);
     }
@@ -338,7 +356,13 @@ export default function EventParticipants({
 
   const handleDeleteIdCard = async (index, teamName = null) => {
     if (!activeItem) return;
-    if (!window.confirm("Delete this uploaded file entry?")) return;
+    const ok = await confirm({
+      title: "Delete File",
+      message: "Are you sure you want to delete this uploaded file entry?",
+      confirmText: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
 
     if (teamName) {
       const safeTeamName =
@@ -368,16 +392,24 @@ export default function EventParticipants({
       setActiveItem({ ...activeItem, idCards });
     }
 
+    showSuccess("Uploaded file entry deleted.");
     fetchItems();
   };
 
   const handleDeleteParticipant = async (idx) => {
-    if (!window.confirm("Remove Student?")) return;
+    const ok = await confirm({
+      title: "Remove Student",
+      message: "Are you sure you want to remove this student?",
+      confirmText: "Remove",
+      variant: "danger",
+    });
+    if (!ok) return;
     const p = activeItem.participants.filter((_, i) => i !== idx);
     await updateDoc(doc(db, "events", eventId, "items", activeItem.id), {
       participants: p,
     });
     setActiveItem({ ...activeItem, participants: p });
+    showSuccess("Student removed.");
     fetchItems();
   };
 
@@ -416,7 +448,7 @@ export default function EventParticipants({
       });
       setActiveItem({ ...activeItem, participants: u });
       fetchItems();
-      alert("Imported!");
+      showSuccess("Participants imported successfully!");
     });
   };
 
@@ -1213,297 +1245,33 @@ export default function EventParticipants({
         </Modal>
 
         {/* ITEM MODAL */}
-        <Modal
+        <ItemModal
           show={showItemModal}
-          onHide={() => setShowItemModal(false)}
-          centered
-        >
-          <div
-            className="soft-card border-0 p-0 overflow-hidden"
-            style={{ height: "auto" }}
-          >
-            <Modal.Header
-              closeButton
-              className="border-bottom"
-              style={{ borderColor: "var(--border-color)" }}
-            >
-              <Modal.Title className="fw-bold h5 text-start">
-                New Sub-Event
-              </Modal.Title>
-            </Modal.Header>
-            <Modal.Body className="p-4 text-start">
-              <Form.Group className="mb-3">
-                <Form.Label className="small fw-bold text-muted">
-                  NAME
-                </Form.Label>
-                <Form.Control
-                  className="form-control"
-                  style={{
-                    backgroundColor: "var(--bg-main)",
-                    color: "var(--text-primary)",
-                    borderColor: "var(--border-color)",
-                  }}
-                  value={newItemName}
-                  onChange={(e) => setNewItemName(e.target.value)}
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Check
-                  type="switch"
-                  id="isGroupSwitch"
-                  label="Group Event (teams)"
-                  checked={newItemIsGroup}
-                  onChange={(e) => setNewItemIsGroup(e.target.checked)}
-                />
-              </Form.Group>
-              <Form.Group>
-                <Form.Label className="small fw-bold text-muted">
-                  CATEGORY
-                </Form.Label>
-                <Form.Select
-                  className="form-select"
-                  style={{
-                    backgroundColor: "var(--bg-main)",
-                    color: "var(--text-primary)",
-                    borderColor: "var(--border-color)",
-                  }}
-                  value={newItemCategory}
-                  onChange={(e) => setNewItemCategory(e.target.value)}
-                >
-                  <option value="">Select...</option>
-                  {categories.map((c, i) => (
-                    <option key={i} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </Form.Select>
-              </Form.Group>
-            </Modal.Body>
-            <Modal.Footer className="border-0 p-3 pt-0">
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setShowItemModal(false);
-                  setEditingItemId(null);
-                  setNewItemIsGroup(false);
-                }}
-                className="me-2"
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleAddItem}
-                className="w-100"
-              >
-                {editingItemId ? "Save Changes" : "Create Sub-Event"}
-              </Button>
-            </Modal.Footer>
-          </div>
-        </Modal>
+          onHide={() => {
+            setShowItemModal(false);
+            setEditingItemId(null);
+            setNewItemIsGroup(false);
+          }}
+          editingItemId={editingItemId}
+          newItemName={newItemName}
+          setNewItemName={setNewItemName}
+          newItemIsGroup={newItemIsGroup}
+          setNewItemIsGroup={setNewItemIsGroup}
+          newItemCategory={newItemCategory}
+          setNewItemCategory={setNewItemCategory}
+          categories={categories}
+          onSave={handleAddItem}
+        />
 
         {/* PARTICIPANT MODAL */}
-        <Modal
+        <ParticipantModal
           show={showPartModal}
           onHide={() => setShowPartModal(false)}
-          centered
-          size="lg"
-        >
-          <div
-            className="soft-card border-0 p-0 overflow-hidden"
-            style={{ height: "auto" }}
-          >
-            <Modal.Header
-              closeButton
-              className="border-bottom"
-              style={{ borderColor: "var(--border-color)" }}
-            >
-              <Modal.Title className="fw-bold h5">Student Details</Modal.Title>
-            </Modal.Header>
-            <Modal.Body className="p-4 text-start">
-              <Form className="d-grid gap-3">
-                <Row>
-                  <Col>
-                    <Form.Label className="small fw-bold text-muted">
-                      NAME
-                    </Form.Label>
-                    <Form.Control
-                      placeholder="Name"
-                      className="form-control"
-                      style={{
-                        backgroundColor: "var(--bg-main)",
-                        color: "var(--text-primary)",
-                        borderColor: "var(--border-color)",
-                      }}
-                      value={partForm.name || ""}
-                      onChange={(e) =>
-                        setPartForm({ ...partForm, name: e.target.value })
-                      }
-                    />
-                  </Col>
-                  <Col>
-                    <Form.Label className="small fw-bold text-muted">
-                      PHONE
-                    </Form.Label>
-                    <Form.Control
-                      placeholder="Phone"
-                      className="form-control"
-                      style={{
-                        backgroundColor: "var(--bg-main)",
-                        color: "var(--text-primary)",
-                        borderColor: "var(--border-color)",
-                      }}
-                      value={partForm.phone || ""}
-                      onChange={(e) =>
-                        setPartForm({ ...partForm, phone: e.target.value })
-                      }
-                    />
-                  </Col>
-                </Row>
-                <Row>
-                  <Col>
-                    <Form.Label className="small fw-bold text-muted">
-                      CRN
-                    </Form.Label>
-                    <Form.Control
-                      placeholder="CRN"
-                      className="form-control"
-                      style={{
-                        backgroundColor: "var(--bg-main)",
-                        color: "var(--text-primary)",
-                        borderColor: "var(--border-color)",
-                      }}
-                      value={partForm.crn || ""}
-                      onChange={(e) =>
-                        setPartForm({ ...partForm, crn: e.target.value })
-                      }
-                    />
-                  </Col>
-                  <Col>
-                    <Form.Label className="small fw-bold text-muted">
-                      URN
-                    </Form.Label>
-                    <Form.Control
-                      placeholder="URN"
-                      className="form-control"
-                      style={{
-                        backgroundColor: "var(--bg-main)",
-                        color: "var(--text-primary)",
-                        borderColor: "var(--border-color)",
-                      }}
-                      value={partForm.urn || ""}
-                      onChange={(e) =>
-                        setPartForm({ ...partForm, urn: e.target.value })
-                      }
-                    />
-                  </Col>
-                </Row>
-                <Row>
-                  <Col>
-                    <Form.Label className="small fw-bold text-muted">
-                      BRANCH
-                    </Form.Label>
-                    <Form.Control
-                      placeholder="Branch"
-                      className="form-control"
-                      style={{
-                        backgroundColor: "var(--bg-main)",
-                        color: "var(--text-primary)",
-                        borderColor: "var(--border-color)",
-                      }}
-                      value={partForm.branch || ""}
-                      onChange={(e) =>
-                        setPartForm({ ...partForm, branch: e.target.value })
-                      }
-                    />
-                  </Col>
-                  {!activeItem?.isGroupEvent && (
-                    <Col>
-                      <Form.Label className="small fw-bold text-muted">
-                        POSITION
-                      </Form.Label>
-                      <Form.Control
-                        placeholder="Position (Optional)"
-                        className="form-control"
-                        style={{
-                          backgroundColor: "var(--bg-main)",
-                          color: "var(--text-primary)",
-                          borderColor: "var(--border-color)",
-                        }}
-                        value={partForm.position || ""}
-                        onChange={(e) =>
-                          setPartForm({ ...partForm, position: e.target.value })
-                        }
-                      />
-                    </Col>
-                  )}
-                </Row>
-                {activeItem?.isGroupEvent && (
-                  <Row>
-                    <Col>
-                      <Form.Label className="small fw-bold text-muted">
-                        TEAM NAME
-                      </Form.Label>
-                      <Form.Control
-                        placeholder="Team Name"
-                        className="form-control"
-                        style={{
-                          backgroundColor: "var(--bg-main)",
-                          color: "var(--text-primary)",
-                          borderColor: "var(--border-color)",
-                        }}
-                        value={partForm.teamName || ""}
-                        onChange={(e) =>
-                          setPartForm({
-                            ...partForm,
-                            teamName: e.target.value,
-                          })
-                        }
-                      />
-                    </Col>
-                  </Row>
-                )}
-                {activeItem?.isGroupEvent && (
-                  <Row>
-                    <Col>
-                      <Form.Check
-                        type="checkbox"
-                        id="captainCheck"
-                        label="Mark as Captain"
-                        checked={!!partForm.isCaptain}
-                        onChange={(e) =>
-                          setPartForm({
-                            ...partForm,
-                            isCaptain: e.target.checked,
-                          })
-                        }
-                      />
-                    </Col>
-                  </Row>
-                )}
-                {activeItem?.isGroupEvent ? (
-                  <Row>
-                    <Col>
-                      <Form.Text className="text-muted">
-                        Position is managed at team level and will be the same
-                        for all members in that team.
-                      </Form.Text>
-                    </Col>
-                  </Row>
-                ) : null}
-              </Form>
-            </Modal.Body>
-            <Modal.Footer className="border-0 p-3 pt-0">
-              <Button
-                onClick={handleSaveParticipant}
-                variant="primary"
-                className="w-100"
-              >
-                Save Student
-              </Button>
-            </Modal.Footer>
-          </div>
-        </Modal>
+          partForm={partForm}
+          setPartForm={setPartForm}
+          activeItem={activeItem}
+          onSave={handleSaveParticipant}
+        />
 
         {/* PROOF MODAL */}
         <Modal
@@ -1711,10 +1479,10 @@ export default function EventParticipants({
                           });
                           setEventProofUrl(url);
                           setShowProofModal(false);
-                          alert("Proof uploaded successfully.");
+                          showSuccess("Proof uploaded successfully.");
                         }
                       } catch (err) {
-                        alert("Upload failed: " + err.message);
+                        showError("Upload failed: " + err.message);
                       } finally {
                         setUploadingProof(false);
                         e.target.value = null;

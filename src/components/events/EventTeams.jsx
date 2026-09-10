@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   collection,
   getDocs,
@@ -22,8 +22,12 @@ import {
 import readXlsxFile from "read-excel-file";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import TeamModal from "./teams/TeamModal";
+import ExportPdfModal from "./teams/ExportPdfModal";
+import { useToast } from "../../context/ToastContext";
 
 export default function EventTeams({ eventId, eventTitle, goBack }) {
+  const { showSuccess, showError, confirm } = useToast();
   const [teams, setTeams] = useState([]);
   const [coreTeamMembers, setCoreTeamMembers] = useState([]);
 
@@ -64,31 +68,26 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
     branch: "",
   });
 
-  useEffect(() => {
-    fetchTeams();
-    fetchCoreTeam();
-  }, [eventId]);
-
-  const fetchCoreTeam = async () => {
+  const fetchCoreTeam = useCallback(async () => {
     try {
       const querySnapshot = await getDocs(collection(db, "global_core_team"));
-      const coreTeam = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
+      const coreTeam = querySnapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
       }));
       setCoreTeamMembers(coreTeam);
     } catch (error) {
       console.error("Error fetching core team:", error);
     }
-  };
+  }, []);
 
-  const fetchTeams = async () => {
+  const fetchTeams = useCallback(async () => {
     const querySnapshot = await getDocs(
       collection(db, "events", eventId, "teams"),
     );
-    const teamList = querySnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
+    const teamList = querySnapshot.docs.map((d) => ({
+      id: d.id,
+      ...d.data(),
     }));
 
     const coreTeam = teamList.find(
@@ -103,7 +102,12 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
     } else {
       setTeams(teamList);
     }
-  };
+  }, [eventId]);
+
+  useEffect(() => {
+    fetchTeams();
+    fetchCoreTeam();
+  }, [fetchTeams, fetchCoreTeam]);
 
   // --- TEAM MANAGEMENT ---
   const buildHeadFromInputs = () => {
@@ -265,8 +269,15 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
 
   const handleDeleteTeam = async (e, teamId) => {
     e.stopPropagation();
-    if (window.confirm("Delete this team and all its members?")) {
+    const ok = await confirm({
+      title: "Delete Team",
+      message: "Are you sure you want to delete this team and all its members?",
+      confirmText: "Delete",
+      variant: "danger",
+    });
+    if (ok) {
       await deleteDoc(doc(db, "events", eventId, "teams", teamId));
+      showSuccess("Team deleted successfully.");
       fetchTeams();
       if (activeTeam?.id === teamId) setActiveTeam(null);
     }
@@ -298,13 +309,20 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
   };
 
   const handleDeleteMember = async (memberIndex) => {
-    if (window.confirm("Remove this member?")) {
+    const ok = await confirm({
+      title: "Remove Member",
+      message: "Are you sure you want to remove this member?",
+      confirmText: "Remove",
+      variant: "danger",
+    });
+    if (ok) {
       const updatedMembers = activeTeam.members.filter(
         (_, idx) => idx !== memberIndex,
       );
       await updateDoc(doc(db, "events", eventId, "teams", activeTeam.id), {
         members: updatedMembers,
       });
+      showSuccess("Member removed.");
       setActiveTeam({ ...activeTeam, members: updatedMembers });
       fetchTeams();
     }
@@ -414,7 +432,7 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
 
       setActiveTeam({ ...activeTeam, members: updatedMembers });
       fetchTeams();
-      alert(`Imported ${newMembers.length} members!`);
+      showSuccess(`Imported ${newMembers.length} members!`);
       e.target.value = "";
     });
   };
@@ -688,7 +706,7 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
       pdfDoc.save(`Teams_Report.pdf`);
     } catch (error) {
       console.error("Error generating PDF:", error);
-      alert("Error generating PDF. Please try again.");
+      showError("Error generating PDF. Please try again.");
     }
   };
 
@@ -1788,229 +1806,34 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
       {/* --- MODALS --- */}
 
       {/* 1. CREATE/EDIT TEAM MODAL */}
-      <Modal
+      <TeamModal
         show={showTeamModal}
         onHide={() => {
           setShowTeamModal(false);
           resetTeamForm();
         }}
-        centered
-      >
-        <div
-          className="soft-card border-0 p-0 overflow-hidden"
-          style={{ height: "auto" }}
-        >
-          <Modal.Header
-            closeButton
-            className="border-bottom"
-            style={{ borderColor: "var(--border-color)" }}
-          >
-            <Modal.Title className="fw-bold h5 text-start">
-              {isEditingTeam ? "Edit Team" : "Create New Team"}
-            </Modal.Title>
-          </Modal.Header>
-          <Modal.Body className="p-4 text-start d-grid gap-3">
-            <Form.Group>
-              <Form.Label className="small fw-bold text-muted">
-                TEAM NAME
-              </Form.Label>
-              <Form.Control
-                placeholder="e.g. Discipline Committee"
-                className="form-control"
-                style={{
-                  backgroundColor: "var(--bg-main)",
-                  color: "var(--text-primary)",
-                  borderColor: "var(--border-color)",
-                }}
-                value={newTeamName}
-                onChange={(e) => setNewTeamName(e.target.value)}
-              />
-            </Form.Group>
+        isEditingTeam={isEditingTeam}
+        newTeamName={newTeamName}
+        setNewTeamName={setNewTeamName}
+        selectedTeamHead={selectedTeamHead}
+        setSelectedTeamHead={setSelectedTeamHead}
+        manualTeamHead={manualTeamHead}
+        setManualTeamHead={setManualTeamHead}
+        coreTeamMembers={coreTeamMembers}
+        handleAddHeadToList={handleAddHeadToList}
+        pendingTeamHeads={pendingTeamHeads}
+        removePendingHead={removePendingHead}
+        handleCreateTeam={handleCreateTeam}
+      />
 
-            <Form.Group>
-              <Form.Label className="small fw-bold text-muted">
-                TEAM HEAD (FROM CORE TEAM) - Optional
-              </Form.Label>
-              <div className="d-flex gap-2 align-items-center">
-                <Form.Select
-                  style={{
-                    backgroundColor: "var(--bg-main)",
-                    color: "var(--text-primary)",
-                    borderColor: "var(--border-color)",
-                  }}
-                  value={selectedTeamHead || ""}
-                  onChange={(e) => {
-                    setSelectedTeamHead(e.target.value || null);
-                    if (e.target.value) {
-                      setManualTeamHead("");
-                    }
-                  }}
-                >
-                  <option value="">-- Select from Core Team --</option>
-                  {coreTeamMembers.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {member.name} ({member.designation || "Member"})
-                    </option>
-                  ))}
-                </Form.Select>
-                <Button
-                  type="button"
-                  variant="outline-primary"
-                  onClick={handleAddHeadToList}
-                  title="Add Team Head"
-                  className="d-flex align-items-center justify-content-center"
-                  style={{ width: "38px", height: "38px", padding: 0 }}
-                >
-                  <i className="bi bi-plus-lg"></i>
-                </Button>
-              </div>
-            </Form.Group>
-
-            {!selectedTeamHead && (
-              <Form.Group>
-                <Form.Label className="small fw-bold text-muted">
-                  ADD EVENT-WISE TEAM HEAD - Optional
-                </Form.Label>
-                <div className="d-flex gap-2 align-items-center">
-                  <Form.Control
-                    placeholder="e.g. Student Name"
-                    className="form-control"
-                    style={{
-                      backgroundColor: "var(--bg-main)",
-                      color: "var(--text-primary)",
-                      borderColor: "var(--border-color)",
-                    }}
-                    value={manualTeamHead}
-                    onChange={(e) => setManualTeamHead(e.target.value)}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline-primary"
-                    onClick={handleAddHeadToList}
-                    title="Add Team Head"
-                    className="d-flex align-items-center justify-content-center"
-                    style={{ width: "38px", height: "38px", padding: 0 }}
-                  >
-                    <i className="bi bi-plus-lg"></i>
-                  </Button>
-                </div>
-                <small className="text-muted d-block mt-1">
-                  Use this if Team Head is not in Core Team
-                </small>
-              </Form.Group>
-            )}
-
-            {pendingTeamHeads.length > 0 && (
-              <div>
-                <Form.Label className="small fw-bold text-muted mb-2 d-block">
-                  SELECTED TEAM HEADS
-                </Form.Label>
-                <div className="d-flex flex-wrap gap-2">
-                  {pendingTeamHeads.map((head, idx) => (
-                    <Badge
-                      key={`${head.name}-${idx}`}
-                      bg="primary"
-                      className="d-flex align-items-center gap-2"
-                    >
-                      <span>{head.name}</span>
-                      <Button
-                        type="button"
-                        variant="link"
-                        className="p-0 text-white text-decoration-none"
-                        onClick={() => removePendingHead(idx)}
-                        style={{ lineHeight: 1 }}
-                      >
-                        <i className="bi bi-x-lg"></i>
-                      </Button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-          </Modal.Body>
-          <Modal.Footer className="border-0 p-3 pt-0">
-            <Button
-              variant="primary"
-              onClick={handleCreateTeam}
-              className="w-100"
-            >
-              {isEditingTeam ? "Update Team" : "Create Team"}
-            </Button>
-          </Modal.Footer>
-        </div>
-      </Modal>
-
-      <Modal
+      {/* 2. EXPORT PDF MODAL */}
+      <ExportPdfModal
         show={showExportPDFModal}
         onHide={() => setShowExportPDFModal(false)}
-        centered
-      >
-        <div className="soft-card border-0 p-0 overflow-hidden">
-          <Modal.Header
-            closeButton
-            className="border-bottom"
-            style={{ borderColor: "var(--border-color)" }}
-          >
-            <Modal.Title className="fw-bold h5">Export PDF</Modal.Title>
-          </Modal.Header>
-          <Modal.Body className="p-4 text-start">
-            <Form.Check
-              type="switch"
-              id="include-phone-export-switch"
-              label="Include phone numbers in the export"
-              checked={includePhoneInPDF}
-              onChange={(e) => setIncludePhoneInPDF(e.target.checked)}
-            />
-          </Modal.Body>
-          <Modal.Footer className="border-0 p-3 pt-0 d-flex gap-2">
-            <Button
-              variant="outline-secondary"
-              onClick={() => setShowExportPDFModal(false)}
-            >
-              Cancel
-            </Button>
-            <Button variant="danger" onClick={handleConfirmExportPDF}>
-              Export
-            </Button>
-          </Modal.Footer>
-        </div>
-      </Modal>
-
-      <Modal
-        show={showExportPDFModal}
-        onHide={() => setShowExportPDFModal(false)}
-        centered
-      >
-        <div className="soft-card border-0 p-0 overflow-hidden">
-          <Modal.Header
-            closeButton
-            className="border-bottom"
-            style={{ borderColor: "var(--border-color)" }}
-          >
-            <Modal.Title className="fw-bold h5">Export PDF</Modal.Title>
-          </Modal.Header>
-          <Modal.Body className="p-4 text-start">
-            <Form.Check
-              type="switch"
-              id="include-phone-export-switch-main"
-              label="Include phone numbers in the export"
-              checked={includePhoneInPDF}
-              onChange={(e) => setIncludePhoneInPDF(e.target.checked)}
-            />
-          </Modal.Body>
-          <Modal.Footer className="border-0 p-3 pt-0 d-flex gap-2">
-            <Button
-              variant="outline-secondary"
-              onClick={() => setShowExportPDFModal(false)}
-            >
-              Cancel
-            </Button>
-            <Button variant="danger" onClick={handleConfirmExportPDF}>
-              Export
-            </Button>
-          </Modal.Footer>
-        </div>
-      </Modal>
+        includePhoneInPDF={includePhoneInPDF}
+        setIncludePhoneInPDF={setIncludePhoneInPDF}
+        onExport={handleConfirmExportPDF}
+      />
     </>
   );
 }

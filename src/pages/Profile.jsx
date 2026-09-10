@@ -1,67 +1,46 @@
 import { useState, useEffect } from "react";
-import { updateProfile, updatePassword, getAuth, signOut } from "firebase/auth";
-import { doc, updateDoc, getDoc } from "firebase/firestore";
+import { updateProfile, updatePassword } from "firebase/auth";
+import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
+import { useAuth } from "../context/AuthContext";
 import { Row, Col, Form, Button, Alert, Spinner, Badge } from "react-bootstrap";
 import Layout from "../components/Layout";
 import { useNavigate } from "react-router-dom";
 
 export default function Profile() {
-  const auth = getAuth();
+  const { user, userProfile, role: currentRole, loading, logout } = useAuth();
   const navigate = useNavigate();
 
   // --- STATE ---
-  const [user, setUser] = useState(null);
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState("Member"); // Default role
-
-  // Password State
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const [loading, setLoading] = useState(true);
-  const [isUpdating, setIsUpdating] = useState(false); // Local loading for buttons
+  const [isUpdating, setIsUpdating] = useState(false);
   const [msg, setMsg] = useState({ type: "", text: "" });
 
-  // --- FETCH DATA ---
-  useEffect(() => {
-    const fetchUser = async () => {
-      if (auth.currentUser) {
-        setUser(auth.currentUser);
-        setEmail(auth.currentUser.email);
-        setName(auth.currentUser.displayName || "");
+  const email = user?.email || "";
+  const role = currentRole || "Member";
 
-        // Fetch extra details from Firestore (like role)
-        try {
-          const docSnap = await getDoc(doc(db, "users", auth.currentUser.uid));
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            if (data.name) setName(data.name);
-            if (data.role) setRole(data.role);
-          }
-        } catch (err) {
-          console.error("Error fetching user doc:", err);
-        }
-      }
-      setLoading(false);
-    };
-    fetchUser();
-  }, [auth.currentUser]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setName(user?.displayName || userProfile?.name || "");
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [user, userProfile]);
 
   // --- HANDLERS ---
   const handleUpdateName = async (e) => {
     e.preventDefault();
+    if (!user) return;
     setIsUpdating(true);
     setMsg({ type: "", text: "" });
 
     try {
-      await updateProfile(auth.currentUser, { displayName: name });
-      // Ensure the 'users' collection document exists or update it
-      await updateDoc(doc(db, "users", auth.currentUser.uid), { name: name });
+      await updateProfile(user, { displayName: name });
+      await updateDoc(doc(db, "users", user.uid), { name: name });
       setMsg({ type: "success", text: "Profile updated successfully!" });
     } catch (error) {
-      // If doc doesn't exist, updateDoc might fail. You might need setDoc with merge:true in a real app if users aren't pre-created.
       setMsg({ type: "danger", text: error.message });
     }
     setIsUpdating(false);
@@ -69,6 +48,7 @@ export default function Profile() {
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
+    if (!user) return;
     setIsUpdating(true);
     setMsg({ type: "", text: "" });
 
@@ -87,7 +67,7 @@ export default function Profile() {
     }
 
     try {
-      await updatePassword(auth.currentUser, newPassword);
+      await updatePassword(user, newPassword);
       setMsg({ type: "success", text: "Password changed successfully!" });
       setNewPassword("");
       setConfirmPassword("");
@@ -105,8 +85,12 @@ export default function Profile() {
   };
 
   const handleLogout = async () => {
-    await signOut(auth);
-    navigate("/"); // Redirect to login/home
+    try {
+      await logout();
+      navigate("/login");
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   if (loading)

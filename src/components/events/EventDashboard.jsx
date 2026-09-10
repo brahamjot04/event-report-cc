@@ -1,6 +1,24 @@
 import { Button, Row, Col } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
 
+// Helper Component for consistent Soft UI cards
+const DashboardCard = ({ title, subtitle, icon, colorClass, onClick }) => (
+  <Col md={4}>
+    <div
+      className="soft-card h-100 d-flex flex-column align-items-center justify-content-center p-4"
+      onClick={onClick}
+    >
+      <div
+        className={`avatar-circle bg-${colorClass}-subtle text-${colorClass} mb-3`}
+      >
+        <i className={`bi ${icon}`} style={{ fontSize: "2rem" }}></i>
+      </div>
+      <h5 className="fw-bold mb-1">{title}</h5>
+      <small className="text-muted">{subtitle}</small>
+    </div>
+  </Col>
+);
+
 export default function EventDashboard({
   eventData,
   setView,
@@ -20,24 +38,6 @@ export default function EventDashboard({
       ? `${parts[2]}-${parts[1]}-${parts[0]}`
       : dateString;
   };
-
-  // Helper Component for consistent Soft UI cards
-  const DashboardCard = ({ title, subtitle, icon, colorClass, onClick }) => (
-    <Col md={4}>
-      <div
-        className="soft-card h-100 d-flex flex-column align-items-center justify-content-center p-4"
-        onClick={onClick}
-      >
-        <div
-          className={`avatar-circle bg-${colorClass}-subtle text-${colorClass} mb-3`}
-        >
-          <i className={`bi ${icon}`} style={{ fontSize: "2rem" }}></i>
-        </div>
-        <h5 className="fw-bold mb-1">{title}</h5>
-        <small className="text-muted">{subtitle}</small>
-      </div>
-    </Col>
-  );
 
   return (
     <>
@@ -84,14 +84,45 @@ export default function EventDashboard({
 
       {/* DASHBOARD GRID */}
       <Row className="g-4">
-        <DashboardCard
-          title="Participants"
-          subtitle="Manage items, students & categories"
-          icon="bi-people-fill"
-          colorClass="primary"
-          onClick={() => setView("participants")}
-        />
+        {/* Youth Festival–specific cards (host mode) */}
+        {eventData.isYouthFestival && eventData.isHostCollege && (
+          <>
+            <DashboardCard
+              title="Colleges & Participants"
+              subtitle="Manage colleges, participants & search"
+              icon="bi-building"
+              colorClass="warning"
+              onClick={() => setView("yf_host")}
+            />
+            <DashboardCard
+              title="Venue Mapping"
+              subtitle="Assign venues, days & times to events"
+              icon="bi-geo-alt-fill"
+              colorClass="success"
+              onClick={() => setView("yf_venues")}
+            />
+            <DashboardCard
+              title="Accommodation"
+              subtitle="Room allotment & check-in tracking"
+              icon="bi-house-fill"
+              colorClass="primary"
+              onClick={() => setView("yf_accommodation")}
+            />
+          </>
+        )}
 
+        {/* Youth Festival non-host (GNDEC contingent) */}
+        {eventData.isYouthFestival && !eventData.isHostCollege && (
+          <DashboardCard
+            title="GNDEC Contingent"
+            subtitle="Manage our participation roster"
+            icon="bi-people-fill"
+            colorClass="warning"
+            onClick={() => setView("yf_contingent")}
+          />
+        )}
+
+        {/* Standard cards (always shown) */}
         <DashboardCard
           title="Meetings"
           subtitle="Track committee attendance"
@@ -123,6 +154,17 @@ export default function EventDashboard({
           colorClass="warning"
           onClick={() => setView("sponsorship")}
         />
+
+        {/* Participants card only for non-YF events */}
+        {!eventData.isYouthFestival && (
+          <DashboardCard
+            title="Participants"
+            subtitle="Manage items, students & categories"
+            icon="bi-people-fill"
+            colorClass="primary"
+            onClick={() => setView("participants")}
+          />
+        )}
       </Row>
 
       {/* ADMIN ACTIONS */}

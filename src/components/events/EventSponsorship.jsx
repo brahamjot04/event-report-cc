@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   collection,
   query,
@@ -26,6 +26,7 @@ import {
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import readXlsxFile from "read-excel-file";
+import { useToast } from "../../context/ToastContext";
 
 export default function EventSponsorship({
   eventId,
@@ -33,6 +34,7 @@ export default function EventSponsorship({
   eventTitle,
   goBack,
 }) {
+  const { showSuccess, showError, showWarning, confirm } = useToast();
   const [sponsors, setSponsors] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({});
@@ -49,11 +51,7 @@ export default function EventSponsorship({
     phone: true,
   });
 
-  useEffect(() => {
-    fetchSponsors();
-  }, [eventId]);
-
-  const fetchSponsors = async () => {
+  const fetchSponsors = useCallback(async () => {
     const q = query(
       collection(db, "events", eventId, "sponsorship_records"),
       orderBy("date", "asc"),
@@ -61,7 +59,11 @@ export default function EventSponsorship({
     );
     const snap = await getDocs(q);
     setSponsors(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-  };
+  }, [eventId]);
+
+  useEffect(() => {
+    fetchSponsors();
+  }, [fetchSponsors]);
 
   const handleSave = async () => {
     if (!form.name) return;
@@ -81,8 +83,15 @@ export default function EventSponsorship({
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm("Delete this record?")) {
+    const ok = await confirm({
+      title: "Delete Record",
+      message: "Are you sure you want to delete this sponsorship record?",
+      confirmText: "Delete",
+      variant: "danger",
+    });
+    if (ok) {
       await deleteDoc(doc(db, "events", eventId, "sponsorship_records", id));
+      showSuccess("Record deleted.");
       fetchSponsors();
     }
   };
@@ -98,7 +107,10 @@ export default function EventSponsorship({
     const file = e.target.files[0];
     if (!file) return;
     readXlsxFile(file).then(async (rows) => {
-      if (rows.length < 2) return alert("File empty");
+      if (rows.length < 2) {
+        showWarning("File empty");
+        return;
+      }
 
       const headers = rows[0].map((h) => String(h).toLowerCase().trim());
       const getIdx = (k) =>
@@ -135,7 +147,7 @@ export default function EventSponsorship({
         ),
       );
 
-      alert(`Imported ${newRecs.length} records!`);
+      showSuccess(`Imported ${newRecs.length} records!`);
       fetchSponsors();
       e.target.value = "";
     });
@@ -233,7 +245,7 @@ export default function EventSponsorship({
       doc.save(`Sponsorship_Report.pdf`);
     } catch (err) {
       console.error(err);
-      alert("Error generating PDF");
+      showError("Error generating PDF. Please try again.");
     }
   };
 

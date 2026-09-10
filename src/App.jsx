@@ -83,7 +83,7 @@ function App() {
       <Route
         path="/activity-logs"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute adminOnly={true}>
             <Logs />
           </ProtectedRoute>
         }

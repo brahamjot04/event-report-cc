@@ -5,12 +5,12 @@ import { getAuth, GoogleAuthProvider } from "firebase/auth";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyCF_-t-uGCwdX8ee_01T5qHv9nQX3HfxQw",
-  authDomain: "event-report-cc.firebaseapp.com",
-  projectId: "event-report-cc",
-  storageBucket: "event-report-cc.firebasestorage.app",
-  messagingSenderId: "1069208650480",
-  appId: "1:1069208650480:web:0e2765c0804db227b3f835"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCF_-t-uGCwdX8ee_01T5qHv9nQX3HfxQw",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "event-report-cc.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "event-report-cc",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "event-report-cc.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "1069208650480",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:1069208650480:web:0e2765c0804db227b3f835"
 };
 
 // Initialize Firebase

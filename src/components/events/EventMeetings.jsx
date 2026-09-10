@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   collection,
   query,
@@ -26,8 +26,10 @@ import {
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import readXlsxFile from "read-excel-file";
+import { useToast } from "../../context/ToastContext";
 
 export default function EventMeetings({ eventId, eventTitle, goBack }) {
+  const { showSuccess, confirm } = useToast();
   const [sessions, setSessions] = useState([]);
   const [activeSession, setActiveSession] = useState(null);
   const [sessionStudents, setSessionStudents] = useState([]);
@@ -58,11 +60,7 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
   const [showCalendar, setShowCalendar] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  useEffect(() => {
-    fetchSessions();
-  }, [eventId]);
-
-  const fetchSessions = async () => {
+  const fetchSessions = useCallback(async () => {
     const q = query(
       collection(db, "events", eventId, "attendance_sessions"),
       orderBy("date", "desc"),
@@ -75,7 +73,11 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
       .sort()
       .reverse();
     setUniqueDates(dates);
-  };
+  }, [eventId]);
+
+  useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions]);
 
   const fetchSessionStudents = async (sid) => {
     const snap = await getDocs(
@@ -108,8 +110,15 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
 
   const handleDeleteSession = async (e, sid) => {
     e.stopPropagation(); // Prevent card click
-    if (window.confirm("Delete Meeting?")) {
+    const ok = await confirm({
+      title: "Delete Meeting",
+      message: "Are you sure you want to delete this meeting session?",
+      confirmText: "Delete",
+      variant: "danger",
+    });
+    if (ok) {
       await deleteDoc(doc(db, "events", eventId, "attendance_sessions", sid));
+      showSuccess("Meeting deleted.");
       fetchSessions();
     }
   };
@@ -141,7 +150,13 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
   };
 
   const handleDeleteStudent = async (sid) => {
-    if (window.confirm("Remove?")) {
+    const ok = await confirm({
+      title: "Remove Student",
+      message: "Are you sure you want to remove this student?",
+      confirmText: "Remove",
+      variant: "danger",
+    });
+    if (ok) {
       await deleteDoc(
         doc(
           db,
@@ -153,6 +168,7 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
           sid,
         ),
       );
+      showSuccess("Student removed.");
       fetchSessionStudents(activeSession.id);
     }
   };
@@ -193,7 +209,7 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
           ),
         ),
       );
-      alert("Imported!");
+      showSuccess("Imported students successfully!");
       fetchSessionStudents(activeSession.id);
     });
   };
