@@ -1,12 +1,16 @@
 {
-  "name": "Cultural Committee Event Portal",
-  "short_name": "CC Events",
-  "description": "Event management and reporting portal for Cultural Committee",
+  "id": "/",
+  "name": "Event Management Portal - CCGNDEC",
+  "short_name": "Event Management Portal - CCGNDEC",
+  "description": "Event management, reporting and youth festival portal for Cultural Committee GNDEC",
   "start_url": "/",
-  "display": "standalone",
   "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
   "background_color": "#ffffff",
   "theme_color": "#1f2937",
+  "categories": ["education", "productivity", "events"],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -31,6 +35,36 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Event Calendar",
+      "short_name": "Calendar",
+      "description": "View upcoming and past committee events",
+      "url": "/calendar",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Youth Festival Check-In",
+      "short_name": "Check-In",
+      "description": "Youth Festival reception desk check-in",
+      "url": "/",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Broadcast Email",
+      "short_name": "Email",
+      "description": "Send announcements and notices",
+      "url": "/email",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Core Team",
+      "short_name": "Core Team",
+      "description": "View committee core team members",
+      "url": "/core-team",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ],
   "screenshots": [

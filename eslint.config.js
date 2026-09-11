@@ -7,7 +7,7 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 export default defineConfig([
   globalIgnores(['dist']),
   {
-    files: ['generate-icons.js'],
+    files: ['generate-icons.js', 'generate-screenshots.js'],
     languageOptions: {
       globals: globals.node,
     },

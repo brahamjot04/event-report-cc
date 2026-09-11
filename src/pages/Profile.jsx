@@ -6,6 +6,8 @@ import { useAuth } from "../context/AuthContext";
 import { Row, Col, Form, Button, Alert, Spinner, Badge } from "react-bootstrap";
 import Layout from "../components/Layout";
 import { useNavigate } from "react-router-dom";
+import { invalidateCache } from "../utils/dataCache";
+import { logAction } from "../utils/logger";
 
 export default function Profile() {
   const { user, userProfile, role: currentRole, loading, logout } = useAuth();
@@ -39,6 +41,8 @@ export default function Profile() {
     try {
       await updateProfile(user, { displayName: name });
       await updateDoc(doc(db, "users", user.uid), { name: name });
+      invalidateCache("all_users_list");
+      await logAction("UPDATE_PROFILE", `Updated profile name to ${name}`, user);
       setMsg({ type: "success", text: "Profile updated successfully!" });
     } catch (error) {
       setMsg({ type: "danger", text: error.message });
@@ -68,6 +72,7 @@ export default function Profile() {
 
     try {
       await updatePassword(user, newPassword);
+      await logAction("UPDATE_PASSWORD", "User updated account password", user);
       setMsg({ type: "success", text: "Password changed successfully!" });
       setNewPassword("");
       setConfirmPassword("");

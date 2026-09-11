@@ -1087,7 +1087,6 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
               variant={
                 selectedFilter === null ? "primary" : "outline-secondary"
               }
-              className="rounded-pill"
               onClick={() => setSelectedFilter(null)}
             >
               All Committees
@@ -1101,7 +1100,6 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
                     ? "primary"
                     : "outline-secondary"
                 }
-                className="rounded-pill"
                 onClick={() => setSelectedFilter(group.committee)}
               >
                 {group.committee}
@@ -1258,7 +1256,7 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
                     </div>
                     <Button
                       size="sm"
-                      className="soft-open-btn rounded-pill px-3"
+                      className="soft-open-btn px-3"
                     >
                       Manage <i className="bi bi-arrow-right ms-1"></i>
                     </Button>

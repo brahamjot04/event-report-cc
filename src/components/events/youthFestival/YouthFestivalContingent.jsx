@@ -5,6 +5,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { db } from "../../../firebase";
+import { loadWithCache } from "../../../utils/dataCache";
 import {
   Button,
   Form,
@@ -40,18 +41,19 @@ export default function YouthFestivalContingent({ eventId, goBack }) {
 
   // ── Fetch ─────────────────────────────────────────────────
   const fetchRoster = useCallback(async () => {
-    setLoading(true);
-    try {
-      const snap = await getDoc(
-        doc(db, "events", eventId, "meta", "yf_contingent_roster")
-      );
-      if (snap.exists()) setRoster(snap.data().roster || {});
-    } catch (e) {
-      console.error(e);
-      showError("Failed to load contingent roster.");
-    } finally {
-      setLoading(false);
-    }
+    loadWithCache(
+      `yf_contingent_${eventId}`,
+      async () => {
+        const snap = await getDoc(doc(db, "events", eventId, "meta", "yf_contingent_roster"));
+        return snap.exists() ? snap.data().roster || {} : {};
+      },
+      (data, isCached) => {
+        setRoster(data);
+        if (isCached) setLoading(false);
+      },
+      () => showError("Failed to load contingent roster.")
+    );
+    setLoading(false);
   }, [eventId, showError]);
 
   useEffect(() => {
@@ -138,7 +140,7 @@ export default function YouthFestivalContingent({ eventId, goBack }) {
           <Badge bg="primary">{totalRegistered} students entered</Badge>
           <Button
             variant="primary"
-            className="rounded-pill px-4"
+            className="px-4"
             onClick={handleSave}
             disabled={saving}
           >
@@ -308,7 +310,7 @@ export default function YouthFestivalContingent({ eventId, goBack }) {
       <div className="d-flex justify-content-end mt-3">
         <Button
           variant="primary"
-          className="rounded-pill px-4"
+          className="px-4"
           onClick={handleSave}
           disabled={saving}
         >

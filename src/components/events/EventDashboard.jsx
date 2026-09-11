@@ -64,7 +64,7 @@ export default function EventDashboard({
         <div className="ms-auto d-flex align-items-center gap-2">
           <Button
             variant={hasProofLink ? "outline-success" : "outline-secondary"}
-            className="rounded-pill px-4"
+            className="px-4"
             onClick={onManageProofLink}
           >
             <i className="bi bi-link-45deg me-2"></i>
@@ -72,7 +72,7 @@ export default function EventDashboard({
           </Button>
           <Button
             variant="primary"
-            className="rounded-pill px-4"
+            className="px-4"
             onClick={onExportReport}
             disabled={!!exportingReport}
           >
@@ -95,6 +95,13 @@ export default function EventDashboard({
               onClick={() => setView("yf_host")}
             />
             <DashboardCard
+              title="Desk Check-in & Arrivals"
+              subtitle="Gate reception, arrival status & CSV rosters"
+              icon="bi-person-check-fill"
+              colorClass="info"
+              onClick={() => setView("yf_checkin")}
+            />
+            <DashboardCard
               title="Venue Mapping"
               subtitle="Assign venues, days & times to events"
               icon="bi-geo-alt-fill"
@@ -107,6 +114,13 @@ export default function EventDashboard({
               icon="bi-house-fill"
               colorClass="primary"
               onClick={() => setView("yf_accommodation")}
+            />
+            <DashboardCard
+              title="Results & Trophies"
+              subtitle="Positions, point scoring & overall trophies"
+              icon="bi-trophy-fill"
+              colorClass="danger"
+              onClick={() => setView("yf_results")}
             />
           </>
         )}

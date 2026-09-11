@@ -2,8 +2,29 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="./src/assets/cc.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/cc.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- Immediate zero-flicker theme initialization -->
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem("theme");
+          var isDark =
+            saved === "dark" ||
+            (!saved &&
+              window.matchMedia &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (isDark) {
+            document.documentElement.setAttribute("data-theme", "dark");
+            document.documentElement.setAttribute("data-bs-theme", "dark");
+          } else {
+            document.documentElement.removeAttribute("data-theme");
+            document.documentElement.removeAttribute("data-bs-theme");
+          }
+        } catch (e) {}
+      })();
+    </script>
 
     <!-- PWA Meta Tags -->
     <meta
@@ -23,14 +44,14 @@
     <meta name="color-scheme" content="light dark" />
     <meta name="mobile-web-app-capable" content="yes" />
     <link rel="manifest" href="/manifest.json" />
-    <link rel="apple-touch-icon" href="/cc.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta
       name="apple-mobile-web-app-status-bar-style"
       content="black-translucent"
     />
-    <meta name="apple-mobile-web-app-title" content="CC Events" />
+    <meta name="apple-mobile-web-app-title" content="Event Management Portal - CCGNDEC" />
 
-    <title>Cultural Committee | Event Portal</title>
+    <title>Event Management Portal - CCGNDEC</title>
   </head>
   <body>
     <div id="root"></div>

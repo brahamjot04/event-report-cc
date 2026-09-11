@@ -8,6 +8,7 @@ import {
   doc,
 } from "firebase/firestore";
 import { db } from "../../../firebase";
+import { loadCollegesWithCache, setCachedColleges } from "../../../utils/yfDataCache";
 import {
   Button,
   Form,
@@ -19,9 +20,12 @@ import {
   Accordion,
 } from "react-bootstrap";
 import { useToast } from "../../../context/ToastContext";
+import { useAuth } from "../../../context/AuthContext";
+import { logAction } from "../../../utils/logger";
 import { YF_EVENTS, YF_EVENTS_BY_ID, YF_CATEGORIES } from "../../../constants/youthFestivalEvents";
 import CollegeModal from "./CollegeModal";
 import ParticipantCard from "./ParticipantCard";
+import ExportPdfModal from "./ExportPdfModal";
 
 const inputStyle = {
   backgroundColor: "var(--bg-card)",
@@ -32,6 +36,7 @@ const inputStyle = {
 const EMPTY_P_FORM = { name: "", contact: "", role: "P", eventId: "" };
 
 export default function YouthFestivalHost({ eventId, goBack }) {
+  const { user } = useAuth();
   const { showSuccess, showError, confirm } = useToast();
 
   const [colleges, setColleges] = useState([]);
@@ -43,6 +48,7 @@ export default function YouthFestivalHost({ eventId, goBack }) {
   const selectedCollege = colleges.find((c) => c.id === selectedCollegeId) || null;
 
   const [showCollegeModal, setShowCollegeModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [editingCollege, setEditingCollege] = useState(null);
 
   const [activeFormEventId, setActiveFormEventId] = useState(null);
@@ -52,30 +58,18 @@ export default function YouthFestivalHost({ eventId, goBack }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [roomMap, setRoomMap] = useState({});
 
-  // ── Initial fetch (only once) ─────────────────────────────
+  // ── Initial fetch (with instant cache support) ─────────────────────────────
   const fetchColleges = useCallback(async () => {
-    setLoading(true);
-    try {
-      const snap = await getDocs(
-        collection(db, "events", eventId, "yf_colleges")
-      );
-      const list = await Promise.all(
-        snap.docs.map(async (d) => {
-          const participants = (
-            await getDocs(
-              collection(db, "events", eventId, "yf_colleges", d.id, "participants")
-            )
-          ).docs.map((p) => ({ id: p.id, ...p.data() }));
-          return { id: d.id, ...d.data(), participants };
-        })
-      );
-      setColleges(list);
-    } catch (e) {
-      console.error(e);
-      showError("Failed to load colleges.");
-    } finally {
-      setLoading(false);
-    }
+    loadCollegesWithCache(
+      eventId,
+      db,
+      (list, isCached) => {
+        setColleges(list);
+        if (isCached) setLoading(false);
+      },
+      () => showError("Failed to load colleges.")
+    );
+    setLoading(false);
   }, [eventId, showError]);
 
   const fetchRoomMap = useCallback(async () => {
@@ -94,10 +88,63 @@ export default function YouthFestivalHost({ eventId, goBack }) {
     }
   }, [eventId]);
 
+  const [tags, setTags] = useState([]);
+  const [newTagName, setNewTagName] = useState("");
+  const [addingTag, setAddingTag] = useState(false);
+
+  const fetchTags = useCallback(async () => {
+    try {
+      const snap = await getDocs(
+        collection(db, "events", eventId, "yf_tags")
+      );
+      setTags(snap.docs.map((d) => ({ id: d.id, name: d.data().name })));
+    } catch {
+      // non-fatal
+    }
+  }, [eventId]);
+
+  const handleAddTag = async () => {
+    const name = newTagName.trim();
+    if (!name) return;
+    if (tags.some((t) => t.name.toLowerCase() === name.toLowerCase())) {
+      showError("Tag already exists.");
+      return;
+    }
+    setAddingTag(true);
+    try {
+      const ref = await addDoc(
+        collection(db, "events", eventId, "yf_tags"),
+        { name }
+      );
+      setTags((prev) => [...prev, { id: ref.id, name }]);
+      setNewTagName("");
+      await logAction("ADD_TAG", `Added custom tag "${name}"`, user);
+      showSuccess(`Tag "${name}" created.`);
+    } catch {
+      showError("Failed to add tag.");
+    } finally {
+      setAddingTag(false);
+    }
+  };
+
+  const handleDeleteTag = async (tag) => {
+    const ok = await confirm(`Delete custom tag "${tag.name}"?`, { variant: "danger" });
+    if (!ok) return;
+    try {
+      await deleteDoc(doc(db, "events", eventId, "yf_tags", tag.id));
+      setTags((prev) => prev.filter((t) => t.id !== tag.id));
+      await logAction("DELETE_TAG", `Deleted custom tag "${tag.name}"`, user);
+      showSuccess("Tag deleted.");
+    } catch {
+      showError("Failed to delete tag.");
+    }
+  };
+
   useEffect(() => {
     fetchColleges();
     fetchRoomMap();
-  }, [fetchColleges, fetchRoomMap]);
+    fetchTags();
+  }, [fetchColleges, fetchRoomMap, fetchTags]);
 
   // ── College CRUD (local state updates, no refetch) ────────
   const handleSaveCollege = async (payload) => {
@@ -107,21 +154,25 @@ export default function YouthFestivalHost({ eventId, goBack }) {
           doc(db, "events", eventId, "yf_colleges", editingCollege.id),
           payload
         );
-        setColleges((prev) =>
-          prev.map((c) =>
-            c.id === editingCollege.id ? { ...c, ...payload } : c
-          )
+        const updatedList = colleges.map((c) =>
+          c.id === editingCollege.id ? { ...c, ...payload } : c
         );
+        setColleges(updatedList);
+        setCachedColleges(eventId, updatedList);
+        await logAction("EDIT_COLLEGE", `Updated college "${payload.name}"`, user);
         showSuccess("College updated.");
       } else {
         const ref = await addDoc(
           collection(db, "events", eventId, "yf_colleges"),
           payload
         );
-        setColleges((prev) => [
-          ...prev,
+        const updatedList = [
+          ...colleges,
           { id: ref.id, ...payload, participants: [] },
-        ]);
+        ];
+        setColleges(updatedList);
+        setCachedColleges(eventId, updatedList);
+        await logAction("REGISTER_COLLEGE", `Registered college "${payload.name}"`, user);
         showSuccess("College registered.");
       }
       setShowCollegeModal(false);
@@ -140,8 +191,11 @@ export default function YouthFestivalHost({ eventId, goBack }) {
     if (!ok) return;
     try {
       await deleteDoc(doc(db, "events", eventId, "yf_colleges", college.id));
-      setColleges((prev) => prev.filter((c) => c.id !== college.id));
+      const updatedList = colleges.filter((c) => c.id !== college.id);
+      setColleges(updatedList);
+      setCachedColleges(eventId, updatedList);
       if (selectedCollegeId === college.id) setSelectedCollegeId(null);
+      await logAction("DELETE_COLLEGE", `Deleted college "${college.name}"`, user);
       showSuccess("College deleted.");
     } catch {
       showError("Failed to delete college.");
@@ -162,13 +216,15 @@ export default function YouthFestivalHost({ eventId, goBack }) {
   };
 
   const updateCollegeParticipants = (collegeId, updater) => {
-    setColleges((prev) =>
-      prev.map((c) =>
+    setColleges((prev) => {
+      const next = prev.map((c) =>
         c.id === collegeId
           ? { ...c, participants: updater(c.participants || []) }
           : c
-      )
-    );
+      );
+      setCachedColleges(eventId, next);
+      return next;
+    });
   };
 
   const handleSaveParticipant = async () => {
@@ -189,6 +245,11 @@ export default function YouthFestivalHost({ eventId, goBack }) {
             p.id === editingParticipant.id ? { ...p, ...pForm } : p
           )
         );
+        await logAction(
+          "EDIT_PARTICIPANT",
+          `Updated participant "${pForm.name}" (${selectedCollege.name})`,
+          user
+        );
         showSuccess("Participant updated.");
       } else {
         const newRef = await addDoc(ref, pForm);
@@ -196,6 +257,11 @@ export default function YouthFestivalHost({ eventId, goBack }) {
           ...ps,
           { id: newRef.id, ...pForm },
         ]);
+        await logAction(
+          "ADD_PARTICIPANT",
+          `Added participant "${pForm.name}" (${selectedCollege.name})`,
+          user
+        );
         showSuccess("Participant added.");
       }
       resetPForm();
@@ -221,6 +287,11 @@ export default function YouthFestivalHost({ eventId, goBack }) {
       );
       updateCollegeParticipants(selectedCollege.id, (ps) =>
         ps.filter((p) => p.id !== participant.id)
+      );
+      await logAction(
+        "DELETE_PARTICIPANT",
+        `Removed participant "${participant.name}" (${selectedCollege.name})`,
+        user
       );
       showSuccess("Participant removed.");
     } catch {
@@ -353,7 +424,6 @@ export default function YouthFestivalHost({ eventId, goBack }) {
           <Button
             variant="outline-secondary"
             size="sm"
-            className="rounded-pill"
             onClick={() => setSelectedCollegeId(null)}
           >
             <i className="bi bi-arrow-left me-1" />
@@ -514,7 +584,7 @@ export default function YouthFestivalHost({ eventId, goBack }) {
                               <Button
                                 variant="outline-primary"
                                 size="sm"
-                                className="rounded-pill mt-1"
+                                className="mt-1"
                                 onClick={() => openFormForEvent(ev.id)}
                               >
                                 <i className="bi bi-plus me-1" />
@@ -542,20 +612,90 @@ export default function YouthFestivalHost({ eventId, goBack }) {
   // ── Colleges list ─────────────────────────────────────────
   const renderCollegesList = () => (
     <div>
+      {/* Manage Custom Tags Panel (Backend stored) */}
+      <div
+        className="p-3 rounded mb-4"
+        style={{
+          background: "var(--bg-card)",
+          border: "1px solid var(--border-color)",
+        }}
+      >
+        <p className="text-muted small fw-bold mb-2">
+          <i className="bi bi-tags-fill me-1 text-primary" />
+          MANAGE CUSTOM COLLEGE TAGS / LABELS
+        </p>
+        <InputGroup className="mb-2">
+          <Form.Control
+            placeholder="Create custom label (e.g. VIP Contingent, Late Arrival)"
+            value={newTagName}
+            onChange={(e) => setNewTagName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAddTag()}
+            style={inputStyle}
+          />
+          <Button
+            variant="primary"
+            onClick={handleAddTag}
+            disabled={!newTagName.trim() || addingTag}
+          >
+            <i className="bi bi-plus me-1" />
+            Add Tag
+          </Button>
+        </InputGroup>
+        {tags.length === 0 ? (
+          <small className="text-muted">
+            No custom tags created. Created tags will be saved in Firebase and can be assigned to colleges.
+          </small>
+        ) : (
+          <div className="d-flex flex-wrap gap-2 mt-2">
+            {tags.map((t) => (
+              <div
+                key={t.id}
+                className="d-flex align-items-center gap-1 px-2 py-1 rounded"
+                style={{
+                  background: "var(--bg-main)",
+                  border: "1px solid var(--border-color)",
+                }}
+              >
+                <i className="bi bi-tag text-primary small" />
+                <span className="small fw-medium">{t.name}</span>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="p-0 ms-1 text-danger text-decoration-none"
+                  onClick={() => handleDeleteTag(t)}
+                >
+                  <i className="bi bi-x" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="d-flex align-items-center justify-content-between mb-3">
         <h6 className="fw-bold mb-0">Participating Colleges ({colleges.length})</h6>
-        <Button
-          variant="primary"
-          size="sm"
-          className="rounded-pill"
-          onClick={() => {
-            setEditingCollege(null);
-            setShowCollegeModal(true);
-          }}
-        >
-          <i className="bi bi-plus me-1" />
-          Register College
-        </Button>
+        <div className="d-flex gap-2">
+          <Button
+            variant="outline-primary"
+            size="sm"
+            onClick={() => setShowExportModal(true)}
+            disabled={colleges.length === 0}
+          >
+            <i className="bi bi-file-earmark-pdf me-1" />
+            Export Reports
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => {
+              setEditingCollege(null);
+              setShowCollegeModal(true);
+            }}
+          >
+            <i className="bi bi-plus me-1" />
+            Register College
+          </Button>
+        </div>
       </div>
 
       {colleges.length === 0 ? (
@@ -577,12 +717,27 @@ export default function YouthFestivalHost({ eventId, goBack }) {
                 <div className="d-flex flex-wrap gap-1 mt-1">
                   <Badge bg="secondary">{c.selectedEvents?.length || 0} events</Badge>
                   <Badge bg="secondary">{c.participants?.length || 0} participants</Badge>
+                  {c.checkedIn ? (
+                    <Badge bg="success" className="bg-opacity-10 text-success">
+                      <i className="bi bi-check-circle-fill me-1" /> Arrived
+                    </Badge>
+                  ) : (
+                    <Badge bg="warning" className="bg-opacity-10 text-warning">
+                      <i className="bi bi-clock me-1" /> Pending Arrival
+                    </Badge>
+                  )}
                   {c.needsAccommodation && (
                     <Badge bg="primary">
                       <i className="bi bi-house-fill me-1" />
                       Accommodation
                     </Badge>
                   )}
+                  {c.selectedTags?.map((tag, idx) => (
+                    <Badge key={idx} bg="info" text="dark">
+                      <i className="bi bi-tag-fill me-1" />
+                      {tag}
+                    </Badge>
+                  ))}
                 </div>
                 {c.incharges?.filter((ic) => ic.name).map((ic, i) => (
                   <small key={i} className="text-muted d-block mt-1">
@@ -853,6 +1008,14 @@ export default function YouthFestivalHost({ eventId, goBack }) {
         }}
         onSave={handleSaveCollege}
         existingCollege={editingCollege}
+        availableTags={tags}
+      />
+
+      <ExportPdfModal
+        show={showExportModal}
+        onHide={() => setShowExportModal(false)}
+        colleges={colleges}
+        eventTitle={eventId}
       />
     </>
   );

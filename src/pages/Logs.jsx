@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   collection,
   getDocs,
@@ -7,6 +7,7 @@ import {
   limit,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { loadWithCache } from "../utils/dataCache";
 import { Table, Card, Badge, Spinner, Form, InputGroup } from "react-bootstrap";
 import Layout from "../components/Layout";
 
@@ -15,25 +16,30 @@ export default function Logs() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  useEffect(() => {
-    fetchLogs();
+  const fetchLogs = useCallback(async () => {
+    loadWithCache(
+      "system_activity_logs",
+      async () => {
+        const q = query(
+          collection(db, "logs"),
+          orderBy("timestamp", "desc"),
+          limit(100),
+        );
+        const snap = await getDocs(q);
+        return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      },
+      (data, isCached) => {
+        setLogs(data);
+        if (isCached) setLoading(false);
+      },
+      () => setLoading(false)
+    );
+    setLoading(false);
   }, []);
 
-  const fetchLogs = async () => {
-    try {
-      const q = query(
-        collection(db, "logs"),
-        orderBy("timestamp", "desc"),
-        limit(100),
-      );
-      const snap = await getDocs(q);
-      setLogs(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-    } catch (error) {
-      console.error("Error fetching logs:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
 
   const filteredLogs = logs.filter(
     (log) =>

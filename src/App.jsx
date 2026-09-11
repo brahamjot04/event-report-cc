@@ -11,6 +11,7 @@ import Logs from "./pages/Logs";
 import NotFound from "./pages/NotFound";
 import CoreTeam from "./pages/CoreTeam";
 import PendingApproval from "./pages/PendingApproval";
+import Notifications from "./pages/Notifications";
 import "bootstrap/dist/css/bootstrap.min.css";
 
 // Import the wrappers
@@ -93,6 +94,14 @@ function App() {
         element={
           <ProtectedRoute>
             <CoreTeam />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/notifications"
+        element={
+          <ProtectedRoute>
+            <Notifications />
           </ProtectedRoute>
         }
       />

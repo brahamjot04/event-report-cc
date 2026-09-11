@@ -1,6 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { collection, getDocs, addDoc } from "firebase/firestore";
 import { db } from "../firebase";
+import { loadWithCache, invalidateCache } from "../utils/dataCache";
+import { logAction } from "../utils/logger";
+import { useAuth } from "../context/AuthContext";
 import { Row, Col, Modal, Form, Button, Spinner } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
@@ -17,8 +20,13 @@ const BLANK_FORM = {
 };
 
 export default function Home() {
+  const { user } = useAuth();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Search & Filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all"); // 'all' | 'yf' | 'regular' | 'upcoming' | 'completed'
 
   // Modal States
   const [showEventModal, setShowEventModal] = useState(false);
@@ -26,21 +34,25 @@ export default function Home() {
 
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchData();
+  const fetchData = useCallback(async () => {
+    loadWithCache(
+      "all_events_list",
+      async () => {
+        const eventSnap = await getDocs(collection(db, "events"));
+        return eventSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      },
+      (data, isCached) => {
+        setEvents(data);
+        if (isCached) setLoading(false);
+      },
+      () => setLoading(false)
+    );
+    setLoading(false);
   }, []);
 
-  const fetchData = async () => {
-    try {
-      const eventSnap = await getDocs(collection(db, "events"));
-      const eventList = eventSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setEvents(eventList);
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const setField = (field, value) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -60,10 +72,31 @@ export default function Home() {
       payload.isHostCollege = form.isHostCollege;
     }
     await addDoc(collection(db, "events"), payload);
+    invalidateCache("all_events_list");
+    await logAction(
+      "CREATE_EVENT",
+      `Created event "${payload.title}"${payload.isYouthFestival ? " (Youth Festival)" : ""}`,
+      user
+    );
     setShowEventModal(false);
     setForm({ ...BLANK_FORM });
     fetchData();
   };
+
+  // Filtered Events
+  const filteredEvents = events.filter((ev) => {
+    const titleMatch = (ev.title || "").toLowerCase().includes(searchQuery.toLowerCase().trim());
+    const venueMatch = (ev.venue || "").toLowerCase().includes(searchQuery.toLowerCase().trim());
+    if (!titleMatch && !venueMatch) return false;
+
+    const isPast = new Date(ev.date || ev.startDate) < new Date();
+
+    if (filterStatus === "yf") return ev.isYouthFestival;
+    if (filterStatus === "regular") return !ev.isYouthFestival;
+    if (filterStatus === "upcoming") return !isPast;
+    if (filterStatus === "completed") return isPast;
+    return true;
+  });
 
   // Helper styles for dark-mode compatible form inputs
   const inputStyle = {
@@ -84,20 +117,69 @@ export default function Home() {
   return (
     <Layout>
       {/* PAGE TITLE */}
-      <div className="mb-5">
+      <div className="mb-4">
         <small className="text-muted text-uppercase fw-bold">Management</small>
         <h2 className="fw-bold mt-1">Dashboard</h2>
       </div>
 
       {/* --- EVENTS SECTION --- */}
       <div className="mb-5">
-        <h5 className="fw-bold mb-3">All Events</h5>
-        <p className="text-muted small mb-4">
-          Select an event to manage participants, sponsors, and meetings.
-        </p>
+        <div className="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
+          <div>
+            <h5 className="fw-bold mb-1">All Events</h5>
+            <p className="text-muted small mb-0">
+              Select an event to manage participants, sponsors, and meetings.
+            </p>
+          </div>
+        </div>
+
+        {/* Search & Filter Bar */}
+        <Row className="g-2 mb-4">
+          <Col md={6} lg={4}>
+            <div className="input-group shadow-sm">
+              <span className="input-group-text border-end-0" style={inputStyle}>
+                <i className="bi bi-search text-muted" />
+              </span>
+              <Form.Control
+                placeholder="Search event title or venue…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={inputStyle}
+              />
+              {searchQuery && (
+                <Button
+                  variant="outline-secondary"
+                  onClick={() => setSearchQuery("")}
+                >
+                  <i className="bi bi-x" />
+                </Button>
+              )}
+            </div>
+          </Col>
+          <Col md={12} lg={8} className="d-flex align-items-center gap-1 flex-wrap">
+            {[
+              { id: "all", label: "All Events" },
+              { id: "yf", label: "Youth Festivals", icon: "bi-trophy-fill" },
+              { id: "regular", label: "Regular Events" },
+              { id: "upcoming", label: "Upcoming" },
+              { id: "completed", label: "Completed" },
+            ].map((f) => (
+              <Button
+                key={f.id}
+                variant={filterStatus === f.id ? "primary" : "outline-secondary"}
+                size="sm"
+                className="rounded-pill px-3"
+                onClick={() => setFilterStatus(f.id)}
+              >
+                {f.icon && <i className={`bi ${f.icon} me-1`} />}
+                {f.label}
+              </Button>
+            ))}
+          </Col>
+        </Row>
 
         <Row className="g-3">
-          {events.map((ev) => (
+          {filteredEvents.map((ev) => (
             <Col key={ev.id} xs={12} sm={6} md={4} lg={3}>
               <div
                 className="soft-card"

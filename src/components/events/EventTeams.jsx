@@ -1598,7 +1598,6 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
           variant={
             selectedTeamFilter === null ? "primary" : "outline-secondary"
           }
-          className="rounded-pill"
           onClick={() => setSelectedTeamFilter(null)}
         >
           All Teams
@@ -1610,7 +1609,6 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
             variant={
               selectedTeamFilter === team.id ? "primary" : "outline-secondary"
             }
-            className="rounded-pill"
             onClick={() => setSelectedTeamFilter(team.id)}
           >
             {team.name}
@@ -1771,7 +1769,7 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
                     </div>
                   </div>
                   {/* FIX: Button is now just visual, action is on the card */}
-                  <Button size="sm" className="soft-open-btn rounded-pill px-3">
+                  <Button size="sm" className="soft-open-btn px-3">
                     Manage <i className="bi bi-arrow-right ms-1"></i>
                   </Button>
                 </div>

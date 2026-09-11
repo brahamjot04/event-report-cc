@@ -9,6 +9,8 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { loadWithCache, invalidateCache } from "../utils/dataCache";
+import { logAction } from "../utils/logger";
 import { Spinner, Modal, Form, Button } from "react-bootstrap";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -29,11 +31,13 @@ import YouthFestivalHost from "../components/events/youthFestival/YouthFestivalH
 import YouthFestivalAccommodation from "../components/events/youthFestival/YouthFestivalAccommodation";
 import YouthFestivalContingent from "../components/events/youthFestival/YouthFestivalContingent";
 import EventYouthFestivalVenues from "../components/events/youthFestival/EventYouthFestivalVenues";
+import YouthFestivalResults from "../components/events/youthFestival/YouthFestivalResults";
+import YouthFestivalCheckIn from "../components/events/youthFestival/YouthFestivalCheckIn";
 
 export default function EventDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { role: userRole } = useAuth();
+  const { role: userRole, user } = useAuth();
   const { showSuccess, showError, confirm } = useToast();
 
   const [currentView, setCurrentView] = useState("dashboard");
@@ -59,23 +63,28 @@ export default function EventDetails() {
     }
   };
 
-  // --- INITIAL DATA FETCHING ---
+  // --- INITIAL DATA FETCHING (INSTANT CACHE - NO LOADING SCREEN) ---
   useEffect(() => {
-    const fetchEvent = async () => {
-      try {
+    loadWithCache(
+      `event_details_${id}`,
+      async () => {
         const eventSnap = await getDoc(doc(db, "events", id));
         if (eventSnap.exists()) {
-          setEventData({ id: eventSnap.id, ...eventSnap.data() });
-        } else {
+          return { id: eventSnap.id, ...eventSnap.data() };
+        }
+        return null;
+      },
+      (data, isCached) => {
+        if (data) {
+          setEventData(data);
+          if (isCached) setLoading(false);
+        } else if (!isCached) {
           navigate("/");
         }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchEvent();
+      },
+      () => setLoading(false)
+    );
+    setLoading(false);
   }, [id, navigate]);
 
   const handleDeleteEvent = async () => {
@@ -88,6 +97,13 @@ export default function EventDetails() {
     if (confirmed) {
       try {
         await deleteDoc(doc(db, "events", id));
+        invalidateCache("all_events_list");
+        invalidateCache(`event_details_${id}`);
+        await logAction(
+          "DELETE_EVENT",
+          `Deleted event "${eventData?.title || id}"`,
+          user,
+        );
         showSuccess("Event deleted successfully.");
         navigate("/");
       } catch (err) {
@@ -114,6 +130,12 @@ export default function EventDetails() {
     setSavingProofLink(true);
     try {
       await updateDoc(doc(db, "events", id), { proofUrl: normalizedProofUrl });
+      invalidateCache(`event_details_${id}`);
+      await logAction(
+        "UPDATE_PROOF",
+        `Updated proof link for event "${eventData?.title || id}"`,
+        user,
+      );
       setEventData((prev) =>
         prev ? { ...prev, proofUrl: normalizedProofUrl } : prev,
       );
@@ -509,6 +531,67 @@ export default function EventDetails() {
         });
       }
 
+      // Youth Festival Additional Sections
+      if (eventData.isYouthFestival) {
+        // Fetch YF Colleges
+        const colSnap = await getDocs(collection(db, "events", id, "yf_colleges"));
+        const yfColleges = colSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+        renderSectionTitle("Youth Festival — Participating Colleges");
+        const colRows = yfColleges.map((c, i) => [
+          i + 1,
+          c.name || "-",
+          (c.incharges || []).filter((ic) => ic.name).map((ic) => ic.name).join(", ") || "-",
+          c.selectedEvents?.length || 0,
+          c.needsAccommodation ? "Yes" : "No",
+        ]);
+        renderGridTable(
+          ["S.No", "College Name", "Incharges", "Events Selected", "Accommodation"],
+          colRows.length > 0 ? colRows : [["-", "No colleges registered", "-", "-", "-"]]
+        );
+
+        // Fetch Venue Mapping
+        const vmSnap = await getDoc(doc(db, "events", id, "meta", "yf_venue_mapping"));
+        if (vmSnap.exists()) {
+          const mapping = vmSnap.data().mapping || {};
+          renderSectionTitle("Youth Festival — Venue Mapping");
+          const vmRows = Object.entries(mapping)
+            .filter(([, m]) => m.venueName)
+            .map(([evId, m], i) => [
+              i + 1,
+              evId,
+              m.venueName || "-",
+              m.day || "-",
+              m.time || "-",
+              m.notes || "-",
+            ]);
+          renderGridTable(
+            ["S.No", "Event ID", "Venue", "Day", "Time", "Notes"],
+            vmRows.length > 0 ? vmRows : [["-", "No venue mapping", "-", "-", "-", "-"]]
+          );
+        }
+
+        // Fetch Accommodation Allotments
+        const accSnap = await getDocs(collection(db, "events", id, "yf_accommodation_allotments"));
+        const yfAllotments = accSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        if (yfAllotments.length > 0) {
+          renderSectionTitle("Youth Festival — Accommodation Allotments");
+          const accRows = yfAllotments.map((a, i) => [
+            i + 1,
+            a.personName || "-",
+            a.collegeName || "-",
+            a.facility || "-",
+            a.room || "-",
+            a.checkInStatus || "Expected",
+            a.checkInTime || "-",
+          ]);
+          renderGridTable(
+            ["S.No", "Person", "College", "Facility", "Room", "Status", "Check-in Time"],
+            accRows
+          );
+        }
+      }
+
       const safeName = (eventData.title || "Event")
         .replace(/[^a-z0-9\-_.\s]/gi, "")
         .trim()
@@ -541,6 +624,14 @@ export default function EventDetails() {
           />
         );
 
+      case "yf_checkin":
+        return (
+          <YouthFestivalCheckIn
+            eventId={id}
+            goBack={() => setCurrentView("dashboard")}
+          />
+        );
+
       case "yf_venues":
         return (
           <EventYouthFestivalVenues
@@ -560,6 +651,14 @@ export default function EventDetails() {
       case "yf_contingent":
         return (
           <YouthFestivalContingent
+            eventId={id}
+            goBack={() => setCurrentView("dashboard")}
+          />
+        );
+
+      case "yf_results":
+        return (
+          <YouthFestivalResults
             eventId={id}
             goBack={() => setCurrentView("dashboard")}
           />

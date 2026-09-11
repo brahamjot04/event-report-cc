@@ -22,7 +22,10 @@ import {
 import Layout from "../components/Layout";
 import emailjs from "@emailjs/browser";
 import { logAction } from "../utils/logger";
+import { logSentEmail } from "../utils/emailLogger";
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import { loadWithCache, invalidateCache } from "../utils/dataCache";
 
 const secondaryFirebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCF_-t-uGCwdX8ee_01T5qHv9nQX3HfxQw",
@@ -34,6 +37,7 @@ const secondaryFirebaseConfig = {
 };
 
 export default function Users() {
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -53,15 +57,26 @@ export default function Users() {
   const EMAILJS_PUBLIC_KEY =
     import.meta.env.VITE_EMAILJS_PUBLIC_KEY || "PzNJuoItwBZtKTwOG";
 
-  const fetchUsers = async () => {
-    try {
-      const snap = await getDocs(collection(db, "users"));
-      setUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
+  const fetchUsers = async (forceFresh = false) => {
+    if (forceFresh) {
+      invalidateCache("all_users_list");
     }
+    await loadWithCache(
+      "all_users_list",
+      async () => {
+        const snap = await getDocs(collection(db, "users"));
+        return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      },
+      (data, isCached) => {
+        setUsers(data);
+        if (isCached) setLoading(false);
+      },
+      (error) => {
+        console.error(error);
+        setLoading(false);
+      }
+    );
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -84,10 +99,12 @@ export default function Users() {
         status: newStatus,
         role: currentRole,
       });
+      invalidateCache("all_users_list");
+      invalidateCache("email_recipients_approved_users");
       showSuccess(`User marked as ${newStatus}.`);
-      fetchUsers();
+      fetchUsers(true);
       const message = `${action} user: ${user?.name} (${user?.email}) - Role: ${currentRole}`;
-      await logAction(action, message);
+      await logAction(action, message, currentUser);
     } catch (error) {
       console.error(error);
       showError("Failed to update status: " + error.message);
@@ -109,10 +126,11 @@ export default function Users() {
       await updateDoc(doc(db, "users", userId), {
         role: newRole,
       });
+      invalidateCache("all_users_list");
       showSuccess(`Role updated to ${newRole}.`);
-      fetchUsers();
+      fetchUsers(true);
       const message = `Changed role for ${user?.name} (${user?.email}) to ${newRole}`;
-      await logAction("UPDATE_ROLE", message);
+      await logAction("UPDATE_ROLE", message, currentUser);
     } catch (error) {
       console.error(error);
       showError("Failed to update role: " + error.message);
@@ -155,12 +173,34 @@ export default function Users() {
         EMAILJS_PUBLIC_KEY,
       );
 
+      await logSentEmail({
+        type: "user_credentials",
+        subject: "Your GNDEC Cultural Committee Account Credentials",
+        message: `Account credentials generated for ${newUser.name} (${newUser.email}) with role: ${newUser.role}. Credentials dispatched via email.`,
+        audience: "new_user",
+        recipients: [
+          {
+            name: newUser.name,
+            email: newUser.email,
+            status: "sent",
+            sentAt: new Date().toISOString(),
+          },
+        ],
+        successfulCount: 1,
+        failedCount: 0,
+        status: "sent",
+        sender: currentUser,
+      });
+
+      invalidateCache("all_users_list");
+      invalidateCache("email_recipients_approved_users");
       setShowCreateModal(false);
       setShowSuccessModal(true);
-      fetchUsers();
+      fetchUsers(true);
       await logAction(
         "CREATE_USER",
         `Created user: ${newUser.email} as ${newUser.role}`,
+        currentUser,
       );
     } catch (error) {
       console.error(error);

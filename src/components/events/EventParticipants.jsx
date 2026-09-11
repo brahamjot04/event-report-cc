@@ -11,6 +11,7 @@ import {
   getDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import { loadWithCache } from "../../utils/dataCache";
 import {
   Table,
   Badge,
@@ -121,8 +122,14 @@ export default function EventParticipants({
   }, [eventId]);
 
   const fetchItems = useCallback(async () => {
-    const snap = await getDocs(collection(db, "events", eventId, "items"));
-    setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    loadWithCache(
+      `event_items_${eventId}`,
+      async () => {
+        const snap = await getDocs(collection(db, "events", eventId, "items"));
+        return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      },
+      (data) => setItems(data)
+    );
   }, [eventId]);
 
   useEffect(() => {
@@ -983,7 +990,6 @@ export default function EventParticipants({
         <Button
           size="sm"
           variant={selectedCategory === null ? "primary" : "outline-secondary"}
-          className="rounded-pill"
           onClick={() => setSelectedCategory(null)}
         >
           All Events
@@ -993,7 +999,6 @@ export default function EventParticipants({
             key={cat}
             size="sm"
             variant={selectedCategory === cat ? "primary" : "outline-secondary"}
-            className="rounded-pill"
             onClick={() => setSelectedCategory(cat)}
           >
             {cat}
@@ -1127,7 +1132,7 @@ export default function EventParticipants({
                     <i className="bi bi-people-fill me-2"></i>
                     {item.participants?.length || 0} Students
                   </div>
-                  <Button size="sm" className="soft-open-btn rounded-pill px-3">
+                  <Button size="sm" className="soft-open-btn px-3">
                     Open <i className="bi bi-arrow-right ms-1"></i>
                   </Button>
                 </div>

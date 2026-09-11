@@ -21,6 +21,9 @@ import {
 import Layout from "../components/Layout";
 import { uploadToGitHub, fetchImageFromGitHub } from "../utils/github";
 import { useToast } from "../context/ToastContext";
+import { useAuth } from "../context/AuthContext";
+import { loadWithCache, invalidateCache } from "../utils/dataCache";
+import { logAction } from "../utils/logger";
 
 // Custom Toggle for the Three-Dot Menu
 const CustomToggle = ({ children, onClick }) => (
@@ -37,6 +40,7 @@ const CustomToggle = ({ children, onClick }) => (
 );
 
 export default function CoreTeam() {
+  const { user } = useAuth();
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
@@ -90,24 +94,34 @@ export default function CoreTeam() {
     setImageDataUrls(newImageDataUrls);
   }, []);
 
-  const fetchMembers = useCallback(async () => {
-    try {
-      const querySnapshot = await getDocs(collection(db, "global_core_team"));
-      const teamList = querySnapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          initial: data.name ? data.name.charAt(0).toUpperCase() : "?",
-        };
-      });
-      setMembers(teamList);
-      loadMemberImages(teamList);
-    } catch (error) {
-      console.error("Error fetching members:", error);
-    } finally {
-      setLoading(false);
+  const fetchMembers = useCallback(async (forceFresh = false) => {
+    if (forceFresh) {
+      invalidateCache("global_core_team");
     }
+    await loadWithCache(
+      "global_core_team",
+      async () => {
+        const querySnapshot = await getDocs(collection(db, "global_core_team"));
+        return querySnapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            initial: data.name ? data.name.charAt(0).toUpperCase() : "?",
+          };
+        });
+      },
+      (teamList, isCached) => {
+        setMembers(teamList);
+        if (isCached) setLoading(false);
+        loadMemberImages(teamList);
+      },
+      (error) => {
+        console.error("Error fetching members:", error);
+        setLoading(false);
+      }
+    );
+    setLoading(false);
   }, [loadMemberImages]);
 
   useEffect(() => {
@@ -157,6 +171,11 @@ export default function CoreTeam() {
           ...memberData,
         });
         showSuccess("Core team member updated.");
+        await logAction(
+          "EDIT_CORE_TEAM",
+          `Updated core team member: ${formData.name} (${formData.designation})`,
+          user
+        );
       } else {
         // Create new
         await addDoc(collection(db, "global_core_team"), {
@@ -164,9 +183,16 @@ export default function CoreTeam() {
           createdAt: new Date(),
         });
         showSuccess("Core team member added.");
+        await logAction(
+          "ADD_CORE_TEAM",
+          `Added core team member: ${formData.name} (${formData.designation})`,
+          user
+        );
       }
+      invalidateCache("global_core_team");
+      invalidateCache("email_recipients_core_team");
       handleCloseModal();
-      await fetchMembers(); // Refetch members and load images
+      await fetchMembers(true); // Refetch members and load images
     } catch (error) {
       console.error("Error saving member:", error);
       showError("Failed to save member: " + error.message);
@@ -177,6 +203,7 @@ export default function CoreTeam() {
   };
 
   const handleDeleteMember = async (id) => {
+    const member = members.find((m) => m.id === id);
     const confirmed = await confirm({
       title: "Remove Core Team Member",
       message: "Are you sure you want to remove this member?",
@@ -186,8 +213,15 @@ export default function CoreTeam() {
     if (confirmed) {
       try {
         await deleteDoc(doc(db, "global_core_team", id));
+        invalidateCache("global_core_team");
+        invalidateCache("email_recipients_core_team");
         showSuccess("Member removed.");
-        await fetchMembers();
+        await logAction(
+          "DELETE_CORE_TEAM",
+          `Removed core team member: ${member?.name || id}`,
+          user
+        );
+        await fetchMembers(true);
       } catch (error) {
         console.error("Error deleting member:", error);
         showError("Failed to remove member.");

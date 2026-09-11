@@ -7,13 +7,38 @@ import App from './App.jsx'
 import './App.css'
 import { AuthProvider } from './context/AuthContext'
 import { ToastProvider } from './context/ToastContext'
+import { PwaProvider } from './context/PwaContext'
+import { NotificationProvider } from './context/NotificationContext'
 
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/service-worker.js')
       .then(registration => {
-        console.log('Service Worker registered:', registration);
+        // Check if there's already a waiting worker
+        if (registration.waiting) {
+          window.dispatchEvent(
+            new CustomEvent('pwa-update-available', {
+              detail: { waitingWorker: registration.waiting }
+            })
+          );
+        }
+
+        // Listen for future updates found
+        registration.addEventListener('updatefound', () => {
+          const newWorker = registration.installing;
+          if (newWorker) {
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                window.dispatchEvent(
+                  new CustomEvent('pwa-update-available', {
+                    detail: { waitingWorker: newWorker }
+                  })
+                );
+              }
+            });
+          }
+        });
       })
       .catch(error => {
         console.log('Service Worker registration failed:', error);
@@ -25,9 +50,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <ToastProvider>
-          <App />
-        </ToastProvider>
+        <PwaProvider>
+          <ToastProvider>
+            <NotificationProvider>
+              <App />
+            </NotificationProvider>
+          </ToastProvider>
+        </PwaProvider>
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,

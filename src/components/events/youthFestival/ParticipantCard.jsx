@@ -67,7 +67,7 @@ export default function ParticipantCard({ participant, college, allottedRoom }) 
             <div className="d-flex gap-2">
               <a
                 href={`tel:${participant.contact}`}
-                className="btn btn-outline-secondary btn-sm rounded-pill"
+                className="btn btn-outline-secondary btn-sm"
               >
                 <i className="bi bi-telephone me-1" />
                 {participant.contact}
@@ -76,7 +76,7 @@ export default function ParticipantCard({ participant, college, allottedRoom }) 
                 href={`https://wa.me/91${participant.contact.replace(/\D/g, "")}`}
                 target="_blank"
                 rel="noreferrer"
-                className="btn btn-outline-success btn-sm rounded-pill"
+                className="btn btn-outline-success btn-sm"
               >
                 <i className="bi bi-whatsapp me-1" />
                 WhatsApp

@@ -283,7 +283,7 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
           <div className="ms-auto">
             <Button
               variant="primary"
-              className="rounded-pill px-4"
+              className="px-4"
               onClick={() => {
                 setEditingSessionId(null);
                 setSessionForm({});
@@ -674,7 +674,7 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
                     <Button
                       variant="light"
                       size="sm"
-                      className="rounded-pill px-3 soft-open-btn"
+                      className="px-3 soft-open-btn"
                     >
                       Open <i className="bi bi-arrow-right ms-1"></i>
                     </Button>

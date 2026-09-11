@@ -68,11 +68,22 @@ body {
    ========================================= */
 
 .btn {
-    border-radius: 999px;
+    border-radius: 8px;
     font-weight: 600;
     letter-spacing: 0.2px;
     padding: 0.5rem 1rem;
     transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+/* Ensure seamless alignment inside InputGroups so right side matches left side */
+.input-group > .btn:last-child {
+    border-top-right-radius: 8px !important;
+    border-bottom-right-radius: 8px !important;
+}
+
+.input-group > .form-control:first-child {
+    border-top-left-radius: 8px !important;
+    border-bottom-left-radius: 8px !important;
 }
 
 .btn-sm {
@@ -785,3 +796,61 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 .soft-open-btn:hover {
     background-color: rgba(13,110,253,0.06) !important;
 }
+
+/* Command Palette modal & search trigger styling */
+.command-palette-backdrop {
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    background-color: rgba(0, 0, 0, 0.45) !important;
+}
+
+.search-trigger-btn {
+    background-color: var(--bg-card);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    transition: all 0.2s ease;
+}
+
+.search-trigger-btn:hover {
+    border-color: var(--bs-primary);
+    color: var(--text-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* =========================================
+   NOTIFICATION POPOVER & SCROLLBAR
+   ========================================= */
+.notification-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+
+.notification-scrollbar::-webkit-scrollbar {
+    width: 5px;
+}
+
+.notification-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.notification-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+.notification-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+.notification-item-hover:hover {
+    background-color: var(--soft-hover) !important;
+}
+
+.notification-text-btn {
+    width: auto !important;
+    height: auto !important;
+    padding: 0 !important;
+    white-space: nowrap !important;
+    display: inline-flex !important;
+    align-items: center !important;
+}

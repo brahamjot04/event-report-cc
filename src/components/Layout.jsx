@@ -1,16 +1,28 @@
 import { useState, useEffect, useRef } from "react";
 import { Container, Row, Col } from "react-bootstrap";
 import { useNavigate, useLocation } from "react-router-dom";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
-import { db } from "../firebase";
 import { useAuth } from "../context/AuthContext";
+import { usePwa } from "../context/PwaContext";
+import { useNotifications } from "../context/NotificationContext";
 import ThemeToggle from "./ThemeToggle";
+import CommandPalette from "./CommandPalette";
+import NotificationDropdown from "./NotificationDropdown";
+import IosInstallModal from "./IosInstallModal";
 import "../assets/DashboardStyles.css";
 
 export default function Layout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, userProfile, isAdmin } = useAuth();
+  const { user, userProfile } = useAuth();
+  const {
+    isInstallable,
+    isInstalled,
+    promptInstall,
+    isOnline,
+    updateAvailable,
+    applyUpdate,
+    dismissUpdate,
+  } = usePwa();
 
   const userName =
     user?.displayName || userProfile?.name || user?.email?.split("@")[0] || "Guest";
@@ -23,22 +35,43 @@ export default function Layout({ children }) {
     const saved = localStorage.getItem("sidebarCollapsed");
     return saved ? JSON.parse(saved) : false;
   });
-  const [pendingCount, setPendingCount] = useState(0);
+  const { unreadCount } = useNotifications();
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+
+  // Global hotkeys for Command Palette (Ctrl+K, Cmd+K, /)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const tag = document.activeElement?.tagName;
+      const isInputActive =
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        document.activeElement?.isContentEditable;
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+      } else if (
+        e.key === "/" &&
+        !isInputActive &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey
+      ) {
+        e.preventDefault();
+        setIsCommandPaletteOpen(true);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Persist sidebar collapsed state
   useEffect(() => {
     localStorage.setItem("sidebarCollapsed", JSON.stringify(sidebarCollapsed));
   }, [sidebarCollapsed]);
-
-  // Real-time listener for pending users count
-  useEffect(() => {
-    if (!isAdmin) return;
-    const q = query(collection(db, "users"), where("status", "==", "pending"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setPendingCount(snapshot.size);
-    });
-    return () => unsubscribe();
-  }, [isAdmin]);
 
   const openSidebar = () => {
     if (closeTimerRef.current) {
@@ -90,22 +123,55 @@ export default function Layout({ children }) {
 
   const isMobileOpen = sidebarOpen && !sidebarAnimatingOut;
 
+  const [footerHovered, setFooterHovered] = useState(false);
+
   return (
     <Container fluid className="p-0" style={{ minHeight: "100vh" }}>
-      <Row className="g-0">
+      <Row className="g-0" style={{ minHeight: "100vh" }}>
         {/* --- SIDEBAR --- */}
         <Col
           md={2}
           className={`sidebar-nav ${isMobileOpen ? "mobile-sidebar-open" : ""} ${sidebarAnimatingOut ? "mobile-sidebar-closing" : ""} d-md-block ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}
         >
           <div className="sidebar-header px-4 mb-5 d-flex justify-content-between align-items-center">
-            {!sidebarCollapsed && (
-              <h5
-                className="fw-bold text-primary cursor-pointer mb-0 flex-grow-1"
+            {!sidebarCollapsed ? (
+              <div
+                className="d-flex align-items-center gap-2 cursor-pointer flex-grow-1 overflow-hidden"
                 onClick={() => handleNavClick("/")}
+                title="Event Management Portal - CCGNDEC"
               >
-                Cultural Committee
-              </h5>
+                <img
+                  src="/cc.svg"
+                  alt="CCGNDEC Logo"
+                  style={{
+                    width: "30px",
+                    height: "30px",
+                    objectFit: "contain",
+                    borderRadius: "6px",
+                    flexShrink: 0,
+                  }}
+                />
+                <h6 className="fw-bold text-primary mb-0 text-truncate" style={{ fontSize: "0.95rem" }}>
+                  CC GNDEC
+                </h6>
+              </div>
+            ) : (
+              <div
+                className="cursor-pointer d-flex justify-content-center"
+                onClick={() => handleNavClick("/")}
+                title="Event Management Portal - CCGNDEC"
+              >
+                <img
+                  src="/cc.svg"
+                  alt="CCGNDEC Logo"
+                  style={{
+                    width: "28px",
+                    height: "28px",
+                    objectFit: "contain",
+                    borderRadius: "6px",
+                  }}
+                />
+              </div>
             )}
             <button
               className="btn btn-link d-none d-md-inline p-0 sidebar-toggle-btn"
@@ -192,6 +258,42 @@ export default function Layout({ children }) {
               <i className="bi bi-clock-history"></i>
               <span>Activity Logs</span>
             </div>
+            <div
+              className={isActive("/notifications")}
+              onClick={() => handleNavClick("/notifications")}
+              title="Notifications"
+            >
+              <i className="bi bi-bell-fill"></i>
+              <span>Notifications</span>
+              {unreadCount > 0 && (
+                <span
+                  className="badge rounded-pill bg-danger ms-auto"
+                  style={{ fontSize: "0.65rem" }}
+                >
+                  {unreadCount}
+                </span>
+              )}
+            </div>
+
+            {/* PWA Install Button in Sidebar */}
+            {!isInstalled && isInstallable && (
+              <div
+                className="nav-item-custom mt-3 fw-bold text-primary"
+                onClick={() => {
+                  promptInstall();
+                  closeSidebar();
+                }}
+                title="Install Event Management Portal - CCGNDEC"
+                style={{
+                  backgroundColor: "rgba(13, 110, 253, 0.08)",
+                  border: "1px dashed var(--bs-primary)",
+                  borderRadius: "8px",
+                }}
+              >
+                <i className="bi bi-download text-primary"></i>
+                <span>Install App</span>
+              </div>
+            )}
           </div>
         </Col>
 
@@ -206,50 +308,133 @@ export default function Layout({ children }) {
         {/* --- MAIN CONTENT --- */}
         <Col
           md={sidebarCollapsed ? 11 : 10}
-          className="p-4 p-lg-5"
+          className="p-4 p-lg-5 d-flex flex-column"
           style={{
             transition:
               "width 0.4s cubic-bezier(0.4, 0, 0.2, 1), flex 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+            minHeight: "100vh",
           }}
         >
           {/* Header */}
-          <div className="d-flex justify-content-between align-items-center mb-5">
-            <button
-              className="btn btn-link d-md-none p-0 hamburger-btn"
-              onClick={() => (isMobileOpen ? closeSidebar() : openSidebar())}
-              style={{ fontSize: "1.5rem", border: "none", cursor: "pointer" }}
-            >
-              <i className="bi bi-list"></i>
-            </button>
-            <div></div>
+          <div className="d-flex justify-content-between align-items-center mb-5 gap-3">
             <div className="d-flex align-items-center gap-3">
-              <div
-                className="bg-white p-2 rounded-circle shadow-sm cursor-pointer position-relative"
-                style={{
-                  width: 40,
-                  height: 40,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-                onClick={() => navigate("/users")}
-                title="Pending Approvals"
+              <button
+                className="btn btn-link d-md-none p-0 hamburger-btn"
+                onClick={() => (isMobileOpen ? closeSidebar() : openSidebar())}
+                style={{ fontSize: "1.5rem", border: "none", cursor: "pointer" }}
               >
-                <i className="bi bi-bell text-dark"></i>
-                {pendingCount > 0 && (
-                  <span
-                    className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-                    style={{
-                      fontSize: "0.65rem",
-                      padding: "0.25rem 0.4rem",
-                    }}
-                  >
-                    {pendingCount}
-                  </span>
-                )}
+                <i className="bi bi-list"></i>
+              </button>
+
+              {/* Quick Search Button (Desktop) */}
+              <div
+                className="search-trigger-btn d-none d-sm-flex align-items-center gap-2 px-3 py-2 rounded-pill shadow-sm cursor-pointer"
+                style={{
+                  minWidth: "220px",
+                }}
+                onClick={() => setIsCommandPaletteOpen(true)}
+                role="button"
+                tabIndex={0}
+              >
+                <i className="bi bi-search text-muted"></i>
+                <span className="flex-grow-1 text-muted small">Search anything...</span>
+                <kbd
+                  className="px-2 py-0.5 rounded text-muted"
+                  style={{
+                    fontSize: "10px",
+                    backgroundColor: "var(--soft-hover)",
+                    border: "1px solid var(--border-color)",
+                  }}
+                >
+                  Ctrl K
+                </kbd>
+              </div>
+
+              {/* Mobile Quick Search Button */}
+              <button
+                className="btn btn-link d-sm-none p-2 rounded-circle search-trigger-btn border-0 shadow-sm d-flex align-items-center justify-content-center"
+                onClick={() => setIsCommandPaletteOpen(true)}
+                title="Search (Ctrl+K)"
+                style={{ width: 40, height: 40 }}
+              >
+                <i className="bi bi-search text-muted"></i>
+              </button>
+            </div>
+
+            <div className="d-flex align-items-center gap-3">
+              {/* Offline Warning Pill */}
+              {!isOnline && (
+                <div
+                  className="d-flex align-items-center gap-1 px-2.5 py-1 rounded-pill small fw-semibold"
+                  style={{
+                    backgroundColor: "rgba(220, 53, 69, 0.12)",
+                    color: "var(--bs-danger)",
+                    fontSize: "12px",
+                    border: "1px solid rgba(220, 53, 69, 0.3)",
+                  }}
+                  title="You are offline. Changes are saved locally and will sync when reconnected."
+                >
+                  <i className="bi bi-wifi-off"></i>
+                  <span className="d-none d-sm-inline ms-1">Offline</span>
+                </div>
+              )}
+
+              {/* Header Install Button */}
+              {!isInstalled && isInstallable && (
+                <button
+                  className="btn btn-outline-primary btn-sm rounded-pill d-flex align-items-center gap-2 px-3 shadow-sm"
+                  onClick={promptInstall}
+                  title="Install Event Management Portal - CCGNDEC"
+                  style={{ fontSize: "12px", fontWeight: 600 }}
+                >
+                  <i className="bi bi-download me-1"></i>
+                  <span className="d-none d-md-inline">Install App</span>
+                </button>
+              )}
+
+              {/* Notification Bell with Dropdown Popover */}
+              <div className="position-relative">
+                <div
+                  className="notification-bell-btn p-2 rounded-circle shadow-sm cursor-pointer position-relative d-flex align-items-center justify-content-center"
+                  style={{
+                    width: 40,
+                    height: 40,
+                    backgroundColor: "var(--bg-card)",
+                    border: "1px solid var(--border-color)",
+                  }}
+                  onClick={() => setIsNotificationOpen((prev) => !prev)}
+                  title="Notifications & Alerts"
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Notifications"
+                >
+                  <i
+                    className={`bi ${unreadCount > 0 ? "bi-bell-fill text-primary" : "bi-bell"}`}
+                    style={{ color: unreadCount > 0 ? undefined : "var(--text-primary)" }}
+                  ></i>
+                  {unreadCount > 0 && (
+                    <span
+                      className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                      style={{
+                        fontSize: "0.65rem",
+                        padding: "0.25rem 0.4rem",
+                      }}
+                    >
+                      {unreadCount}
+                    </span>
+                  )}
+                </div>
+                <NotificationDropdown
+                  isOpen={isNotificationOpen}
+                  onClose={() => setIsNotificationOpen(false)}
+                />
               </div>
               <div
-                className="bg-white px-3 py-2 rounded-pill shadow-sm d-flex align-items-center gap-2 cursor-pointer"
+                className="px-3 py-2 rounded-pill shadow-sm d-flex align-items-center gap-2 cursor-pointer"
+                style={{
+                  backgroundColor: "var(--bg-card)",
+                  border: "1px solid var(--border-color)",
+                }}
                 onClick={() => navigate("/profile")}
               >
                 <div
@@ -262,15 +447,89 @@ export default function Layout({ children }) {
                   className="d-flex flex-column"
                   style={{ lineHeight: "1.1" }}
                 >
-                  <span className="fw-bold small text-dark">{userName}</span>
+                  <span className="fw-bold small" style={{ color: "var(--text-primary)" }}>{userName}</span>
                 </div>
               </div>
             </div>
           </div>
 
-          {children}
+          {/* New Version Update Banner */}
+          {updateAvailable && (
+            <div
+              className="alert alert-primary d-flex align-items-center justify-content-between p-3 rounded-3 shadow-sm mb-4"
+              style={{
+                backgroundColor: "var(--bg-card)",
+                borderColor: "var(--bs-primary)",
+                borderWidth: "1px",
+                color: "var(--text-primary)",
+              }}
+            >
+              <div className="d-flex align-items-center gap-3">
+                <i className="bi bi-arrow-repeat text-primary fs-4"></i>
+                <div>
+                  <div className="fw-bold small">New Update Available</div>
+                  <div className="text-muted small">
+                    A fresh version of Event Management Portal - CCGNDEC is ready to install.
+                  </div>
+                </div>
+              </div>
+              <div className="d-flex gap-2">
+                <button
+                  className="btn btn-primary btn-sm rounded-pill px-3"
+                  onClick={applyUpdate}
+                >
+                  Update Now
+                </button>
+                <button
+                  className="btn btn-outline-secondary btn-sm rounded-pill px-2"
+                  onClick={dismissUpdate}
+                  title="Dismiss"
+                >
+                  <i className="bi bi-x-lg"></i>
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="flex-grow-1">{children}</div>
+
+          {/* --- FOOTER --- */}
+          <footer
+            className="mt-5 pt-4 text-center text-muted small border-top"
+            style={{
+              borderColor: "var(--border-color)",
+              fontSize: "0.85rem",
+            }}
+            onMouseEnter={() => setFooterHovered(true)}
+            onMouseLeave={() => setFooterHovered(false)}
+          >
+            <span>
+              © -{" "}
+              <span
+                style={{
+                  fontWeight: 600,
+                  color: footerHovered ? "var(--bs-primary)" : "inherit",
+                  transition: "color 0.2s ease-in-out",
+                }}
+              >
+                {footerHovered
+                  ? "Designed by Brahamjot Singh (Batch 2026)"
+                  : "Managed by Record Keeping Team"}
+              </span>{" "}
+              - Cultural Committee GNDEC
+            </span>
+          </footer>
         </Col>
       </Row>
+
+      {/* COMMAND PALETTE */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+      />
+
+      {/* IOS INSTALLATION GUIDE MODAL */}
+      <IosInstallModal />
 
       {/* FLOATING DARK MODE BUTTON */}
       <ThemeToggle />

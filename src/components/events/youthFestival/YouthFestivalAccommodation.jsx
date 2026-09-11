@@ -8,6 +8,7 @@ import {
   doc,
 } from "firebase/firestore";
 import { db } from "../../../firebase";
+import { loadCollegesWithCache } from "../../../utils/yfDataCache";
 import {
   Button,
   Form,
@@ -69,28 +70,21 @@ export default function YouthFestivalAccommodation({ eventId, goBack }) {
   // Search
   const [searchQuery, setSearchQuery] = useState("");
 
-  // ── Initial Fetch (Only on mount) ─────────────────────────
+  // ── Initial Fetch (with instant cache support) ─────────────────────────
   const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      // 1. Fetch Colleges requiring accommodation
-      const collegeSnap = await getDocs(
-        collection(db, "events", eventId, "yf_colleges")
-      );
-      const accColleges = await Promise.all(
-        collegeSnap.docs
-          .filter((d) => d.data().needsAccommodation)
-          .map(async (d) => {
-            const participants = (
-              await getDocs(
-                collection(db, "events", eventId, "yf_colleges", d.id, "participants")
-              )
-            ).docs.map((p) => ({ id: p.id, ...p.data() }));
-            return { id: d.id, ...d.data(), participants };
-          })
-      );
-      setColleges(accColleges);
+    // 1. Fetch colleges with instant cache support
+    loadCollegesWithCache(
+      eventId,
+      db,
+      (colList, isCached) => {
+        const accColleges = colList.filter((c) => c.needsAccommodation);
+        setColleges(accColleges);
+        if (isCached) setLoading(false);
+      },
+      () => showError("Failed to load accommodation colleges.")
+    );
 
+    try {
       // 2. Fetch Facilities
       const facSnap = await getDocs(
         collection(db, "events", eventId, "yf_facilities")
@@ -172,10 +166,18 @@ export default function YouthFestivalAccommodation({ eventId, goBack }) {
   const handleSaveAllotment = async () => {
     if (!allotmentForm.personName.trim() || !allotmentForm.room.trim() || !selectedCollege)
       return;
+    const nowTime = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
     const payload = {
       ...allotmentForm,
       collegeId: selectedCollege.id,
       collegeName: selectedCollege.name,
+      checkInTime:
+        allotmentForm.checkInStatus === "Checked-in"
+          ? editingAllotment?.checkInTime || nowTime
+          : "",
     };
     try {
       if (editingAllotment) {
@@ -220,17 +222,25 @@ export default function YouthFestivalAccommodation({ eventId, goBack }) {
   };
 
   const handleStatusChange = async (a, status) => {
+    const nowTime = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const checkInTime = status === "Checked-in" ? a.checkInTime || nowTime : "";
+
     try {
       await updateDoc(
         doc(db, "events", eventId, "yf_accommodation_allotments", a.id),
-        { checkInStatus: status }
+        { checkInStatus: status, checkInTime }
       );
       setAllotments((prev) =>
         prev.map((item) =>
-          item.id === a.id ? { ...item, checkInStatus: status } : item
+          item.id === a.id
+            ? { ...item, checkInStatus: status, checkInTime }
+            : item
         )
       );
-      showSuccess(`Status set to ${status}.`);
+      showSuccess(`Status set to ${status}${status === "Checked-in" ? ` (${checkInTime})` : ""}.`);
     } catch {
       showError("Failed to update status.");
     }
@@ -359,7 +369,6 @@ export default function YouthFestivalAccommodation({ eventId, goBack }) {
           <Button
             variant="outline-secondary"
             size="sm"
-            className="rounded-pill"
             onClick={() => setSelectedCollegeId(null)}
           >
             <i className="bi bi-arrow-left me-1" />
@@ -426,7 +435,6 @@ export default function YouthFestivalAccommodation({ eventId, goBack }) {
           <Button
             variant="primary"
             size="sm"
-            className="rounded-pill"
             onClick={() => {
               resetForm();
               setShowForm(true);
@@ -585,6 +593,9 @@ export default function YouthFestivalAccommodation({ eventId, goBack }) {
                   </Form.Select>
                   <Badge bg={statusVariant(a.checkInStatus)}>
                     {a.checkInStatus}
+                    {a.checkInStatus === "Checked-in" && a.checkInTime
+                      ? ` @ ${a.checkInTime}`
+                      : ""}
                   </Badge>
                   <Button
                     variant="outline-secondary"
@@ -714,6 +725,51 @@ export default function YouthFestivalAccommodation({ eventId, goBack }) {
           </div>
         )}
       </div>
+
+      {/* Location Allotment Summary */}
+      {facilities.length > 0 && (
+        <div
+          className="p-3 rounded mb-4"
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}
+        >
+          <p className="text-muted small fw-bold mb-3">
+            <i className="bi bi-geo-fill me-1 text-success" />
+            ALLOTMENT SUMMARY BY LOCATION
+          </p>
+          <Row className="g-3">
+            {facilities.map((fac) => {
+              const facAllotments = allotments.filter((a) => a.facility === fac.name);
+              const checkedIn = facAllotments.filter((a) => a.checkInStatus === "Checked-in").length;
+              const expected = facAllotments.filter((a) => a.checkInStatus === "Expected").length;
+
+              return (
+                <Col key={fac.id} xs={12} sm={6} md={4}>
+                  <div
+                    className="p-3 rounded"
+                    style={{
+                      background: "var(--bg-main)",
+                      border: "1px solid var(--border-color)",
+                    }}
+                  >
+                    <div className="fw-bold mb-1">{fac.name}</div>
+                    <div className="d-flex justify-content-between align-items-center mt-2">
+                      <span className="small text-muted">
+                        Allotted: <strong>{facAllotments.length}</strong>
+                      </span>
+                      <Badge bg="success">{checkedIn} checked in</Badge>
+                    </div>
+                    {expected > 0 && (
+                      <small className="text-muted d-block mt-1">
+                        {expected} expected
+                      </small>
+                    )}
+                  </div>
+                </Col>
+              );
+            })}
+          </Row>
+        </div>
+      )}
 
       {/* Search bar */}
       <InputGroup className="mb-4 shadow-sm">

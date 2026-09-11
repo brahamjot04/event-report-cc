@@ -18,7 +18,13 @@ const inputStyle = {
 
 const EMPTY_INCHARGE = { name: "", contact: "" };
 
-export default function CollegeModal({ show, onHide, onSave, existingCollege }) {
+export default function CollegeModal({
+  show,
+  onHide,
+  onSave,
+  existingCollege,
+  availableTags = [],
+}) {
   const isEdit = !!existingCollege;
 
   const [collegeName, setCollegeName] = useState(existingCollege?.name || "");
@@ -29,6 +35,9 @@ export default function CollegeModal({ show, onHide, onSave, existingCollege }) 
   );
   const [selectedEvents, setSelectedEvents] = useState(
     existingCollege?.selectedEvents || []
+  );
+  const [selectedTags, setSelectedTags] = useState(
+    existingCollege?.selectedTags || []
   );
   const [needsAccommodation, setNeedsAccommodation] = useState(
     existingCollege?.needsAccommodation || false
@@ -89,6 +98,14 @@ export default function CollegeModal({ show, onHide, onSave, existingCollege }) 
     return catIds.some((id) => selectedEvents.includes(id)) && !isCatSelected(cat);
   };
 
+  const toggleTag = (tagName) => {
+    setSelectedTags((prev) =>
+      prev.includes(tagName)
+        ? prev.filter((t) => t !== tagName)
+        : [...prev, tagName]
+    );
+  };
+
   // ── Submit ───────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!collegeName.trim()) return;
@@ -97,6 +114,7 @@ export default function CollegeModal({ show, onHide, onSave, existingCollege }) 
       name: collegeName.trim(),
       incharges: incharges.filter((ic) => ic.name.trim()),
       selectedEvents,
+      selectedTags,
       needsAccommodation,
       accommodation: needsAccommodation
         ? {
@@ -127,261 +145,289 @@ export default function CollegeModal({ show, onHide, onSave, existingCollege }) 
       </Modal.Header>
 
       <Modal.Body className="d-grid gap-4" style={modalStyle}>
-          {/* College Name */}
-          <Form.Group>
-            <Form.Label className="text-muted small fw-bold">
-              COLLEGE NAME
-            </Form.Label>
-            <Form.Control
-              size="lg"
-              placeholder="e.g. LRIET Phagwara"
-              value={collegeName}
-              onChange={(e) => setCollegeName(e.target.value)}
-              style={inputStyle}
-            />
-          </Form.Group>
+        {/* College Name */}
+        <Form.Group>
+          <Form.Label className="text-muted small fw-bold">
+            COLLEGE NAME
+          </Form.Label>
+          <Form.Control
+            size="lg"
+            placeholder="e.g. LRIET Phagwara"
+            value={collegeName}
+            onChange={(e) => setCollegeName(e.target.value)}
+            style={inputStyle}
+          />
+        </Form.Group>
 
-          {/* Incharges */}
-          <div>
-            <div className="d-flex align-items-center justify-content-between mb-2">
-              <Form.Label className="text-muted small fw-bold mb-0">
-                INCHARGES (OPTIONAL)
-              </Form.Label>
-              <Button
-                variant="outline-primary"
-                size="sm"
-                className="rounded-pill"
-                onClick={addIncharge}
-              >
-                <i className="bi bi-plus me-1" />
-                Add Incharge
-              </Button>
-            </div>
-            <div className="d-grid gap-2">
-              {incharges.map((ic, idx) => (
-                <Row key={idx} className="g-2 align-items-center">
-                  <Col>
-                    <Form.Control
-                      placeholder="Name"
-                      value={ic.name}
-                      onChange={(e) => updateIncharge(idx, "name", e.target.value)}
-                      style={inputStyle}
-                    />
-                  </Col>
-                  <Col>
-                    <Form.Control
-                      placeholder="Contact / Phone"
-                      value={ic.contact}
-                      onChange={(e) =>
-                        updateIncharge(idx, "contact", e.target.value)
-                      }
-                      style={inputStyle}
-                    />
-                  </Col>
-                  <Col xs="auto">
-                    <Button
-                      variant="outline-danger"
-                      size="sm"
-                      onClick={() => removeIncharge(idx)}
-                      disabled={incharges.length === 1}
-                    >
-                      <i className="bi bi-trash3" />
-                    </Button>
-                  </Col>
-                </Row>
-              ))}
-            </div>
-          </div>
-
-          {/* Event Selection */}
-          <div>
-            <Form.Label className="text-muted small fw-bold mb-2">
-              EVENTS PARTICIPATING IN
-            </Form.Label>
-            <p className="text-muted small mb-2">
-              {selectedEvents.length} event{selectedEvents.length !== 1 ? "s" : ""}{" "}
-              selected
+        {/* Custom Tags / Labels (Backend-managed only) */}
+        <div>
+          <Form.Label className="text-muted small fw-bold mb-2">
+            CUSTOM COLLEGE TAGS / LABELS
+          </Form.Label>
+          {availableTags.length === 0 ? (
+            <p className="text-muted small mb-0">
+              No custom tags created yet. You can add tags in the &quot;Manage Tags&quot; panel.
             </p>
-            <Accordion flush>
-              {YF_CATEGORIES.map((cat) => {
-                const catEvents = YF_EVENTS.filter((e) => e.category === cat);
+          ) : (
+            <div className="d-flex flex-wrap gap-2">
+              {availableTags.map((tag) => {
+                const isSelected = selectedTags.includes(tag.name);
                 return (
-                  <Accordion.Item
-                    key={cat}
-                    eventKey={cat}
-                    style={{
-                      background: "var(--bg-card)",
-                      borderColor: "var(--border-color)",
-                    }}
+                  <Badge
+                    key={tag.id}
+                    bg={isSelected ? "primary" : "secondary"}
+                    style={{ cursor: "pointer", fontSize: "0.85rem", padding: "6px 12px" }}
+                    onClick={() => toggleTag(tag.name)}
                   >
-                    <Accordion.Header>
-                      <Form.Check
-                        type="checkbox"
-                        checked={isCatSelected(cat)}
-                        ref={(el) => {
-                          if (el) el.indeterminate = isCatPartial(cat);
-                        }}
-                        onChange={() => toggleCategory(cat)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="me-2"
-                      />
-                      <span className="fw-bold">{cat}</span>
-                      <Badge bg="secondary" className="ms-2">
-                        {catEvents.filter((e) => selectedEvents.includes(e.id)).length}
-                        /{catEvents.length}
-                      </Badge>
-                    </Accordion.Header>
-                    <Accordion.Body>
-                      <div className="d-grid gap-1">
-                        {catEvents.map((ev) => (
-                          <Form.Check
-                            key={ev.id}
-                            id={`ev-${ev.id}`}
-                            type="checkbox"
-                            label={
-                              <span>
-                                {ev.name}{" "}
-                                <small className="text-muted">
-                                  ({ev.maxP}P{ev.maxA > 0 ? ` + ${ev.maxA}A` : ""})
-                                </small>
-                              </span>
-                            }
-                            checked={selectedEvents.includes(ev.id)}
-                            onChange={() => toggleEvent(ev.id)}
-                          />
-                        ))}
-                      </div>
-                    </Accordion.Body>
-                  </Accordion.Item>
+                    <i className={`bi ${isSelected ? "bi-check-circle-fill" : "bi-tag"} me-1`} />
+                    {tag.name}
+                  </Badge>
                 );
               })}
-            </Accordion>
-          </div>
+            </div>
+          )}
+        </div>
 
-          {/* Accommodation toggle */}
-          <div
-            className="p-3 rounded"
-            style={{
-              background: "var(--bg-main)",
-              border: "1px solid var(--border-color)",
-            }}
-          >
-            <Form.Check
-              type="switch"
-              id="needs-accommodation"
-              label={
-                <span className="fw-bold">
-                  <i className="bi bi-house-fill me-2 text-primary" />
-                  Requires Accommodation
-                </span>
-              }
-              checked={needsAccommodation}
-              onChange={(e) => setNeedsAccommodation(e.target.checked)}
-            />
-
-            {needsAccommodation && (
-              <div className="mt-3 pt-3 border-top d-grid gap-3">
-                <p className="text-muted small mb-0 fw-bold">
-                  BOARDING PERFORMA DETAILS
-                </p>
-                <Row>
-                  <Col>
-                    <Form.Group>
-                      <Form.Label className="text-muted small">
-                        Arrival Date
-                      </Form.Label>
-                      <Form.Control
-                        type="date"
-                        value={arrivalDate}
-                        onChange={(e) => setArrivalDate(e.target.value)}
-                        style={inputStyle}
-                      />
-                    </Form.Group>
-                  </Col>
-                  <Col>
-                    <Form.Group>
-                      <Form.Label className="text-muted small">
-                        Arrival Time
-                      </Form.Label>
-                      <Form.Control
-                        type="time"
-                        value={arrivalTime}
-                        onChange={(e) => setArrivalTime(e.target.value)}
-                        style={inputStyle}
-                      />
-                    </Form.Group>
-                  </Col>
-                </Row>
-                <Row>
-                  <Col>
-                    <Form.Group>
-                      <Form.Label className="text-muted small">
-                        Departure Date
-                      </Form.Label>
-                      <Form.Control
-                        type="date"
-                        value={departureDate}
-                        onChange={(e) => setDepartureDate(e.target.value)}
-                        style={inputStyle}
-                      />
-                    </Form.Group>
-                  </Col>
-                </Row>
-                <Row className="g-2">
-                  <Col>
-                    <Form.Group>
-                      <Form.Label className="text-muted small">
-                        <i className="bi bi-gender-male me-1 text-primary" />
-                        Boys
-                      </Form.Label>
-                      <Form.Control
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        value={boysCount}
-                        onChange={(e) => setBoysCount(e.target.value)}
-                        style={inputStyle}
-                      />
-                    </Form.Group>
-                  </Col>
-                  <Col>
-                    <Form.Group>
-                      <Form.Label className="text-muted small">
-                        <i className="bi bi-gender-female me-1 text-danger" />
-                        Girls
-                      </Form.Label>
-                      <Form.Control
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        value={girlsCount}
-                        onChange={(e) => setGirlsCount(e.target.value)}
-                        style={inputStyle}
-                      />
-                    </Form.Group>
-                  </Col>
-                  <Col>
-                    <Form.Group>
-                      <Form.Label className="text-muted small fw-bold">
-                        Total
-                      </Form.Label>
-                      <Form.Control
-                        readOnly
-                        value={totalContingent || ""}
-                        placeholder="Auto"
-                        style={{
-                          ...inputStyle,
-                          backgroundColor: "var(--bg-main)",
-                          fontWeight: "bold",
-                          color: totalContingent > 0 ? "var(--text-primary)" : "var(--text-muted)",
-                        }}
-                      />
-                    </Form.Group>
-                  </Col>
-                </Row>
-              </div>
-            )}
+        {/* Incharges */}
+        <div>
+          <div className="d-flex align-items-center justify-content-between mb-2">
+            <Form.Label className="text-muted small fw-bold mb-0">
+              INCHARGES (OPTIONAL)
+            </Form.Label>
+            <Button
+              variant="outline-primary"
+              size="sm"
+              onClick={addIncharge}
+            >
+              <i className="bi bi-plus me-1" />
+              Add Incharge
+            </Button>
           </div>
+          <div className="d-grid gap-2">
+            {incharges.map((ic, idx) => (
+              <Row key={idx} className="g-2 align-items-center">
+                <Col>
+                  <Form.Control
+                    placeholder="Name"
+                    value={ic.name}
+                    onChange={(e) => updateIncharge(idx, "name", e.target.value)}
+                    style={inputStyle}
+                  />
+                </Col>
+                <Col>
+                  <Form.Control
+                    placeholder="Contact / Phone"
+                    value={ic.contact}
+                    onChange={(e) =>
+                      updateIncharge(idx, "contact", e.target.value)
+                    }
+                    style={inputStyle}
+                  />
+                </Col>
+                <Col xs="auto">
+                  <Button
+                    variant="outline-danger"
+                    size="sm"
+                    onClick={() => removeIncharge(idx)}
+                    disabled={incharges.length === 1}
+                  >
+                    <i className="bi bi-trash3" />
+                  </Button>
+                </Col>
+              </Row>
+            ))}
+          </div>
+        </div>
+
+        {/* Event Selection */}
+        <div>
+          <Form.Label className="text-muted small fw-bold mb-2">
+            EVENTS PARTICIPATING IN
+          </Form.Label>
+          <p className="text-muted small mb-2">
+            {selectedEvents.length} event{selectedEvents.length !== 1 ? "s" : ""}{" "}
+            selected
+          </p>
+          <Accordion flush>
+            {YF_CATEGORIES.map((cat) => {
+              const catEvents = YF_EVENTS.filter((e) => e.category === cat);
+              return (
+                <Accordion.Item
+                  key={cat}
+                  eventKey={cat}
+                  style={{
+                    background: "var(--bg-card)",
+                    borderColor: "var(--border-color)",
+                  }}
+                >
+                  <Accordion.Header>
+                    <Form.Check
+                      type="checkbox"
+                      checked={isCatSelected(cat)}
+                      ref={(el) => {
+                        if (el) el.indeterminate = isCatPartial(cat);
+                      }}
+                      onChange={() => toggleCategory(cat)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="me-2"
+                    />
+                    <span className="fw-bold">{cat}</span>
+                    <Badge bg="secondary" className="ms-2">
+                      {catEvents.filter((e) => selectedEvents.includes(e.id)).length}
+                      /{catEvents.length}
+                    </Badge>
+                  </Accordion.Header>
+                  <Accordion.Body>
+                    <div className="d-grid gap-1">
+                      {catEvents.map((ev) => (
+                        <Form.Check
+                          key={ev.id}
+                          id={`ev-${ev.id}`}
+                          type="checkbox"
+                          label={
+                            <span>
+                              {ev.name}{" "}
+                              <small className="text-muted">
+                                ({ev.maxP}P{ev.maxA > 0 ? ` + ${ev.maxA}A` : ""})
+                              </small>
+                            </span>
+                          }
+                          checked={selectedEvents.includes(ev.id)}
+                          onChange={() => toggleEvent(ev.id)}
+                        />
+                      ))}
+                    </div>
+                  </Accordion.Body>
+                </Accordion.Item>
+              );
+            })}
+          </Accordion>
+        </div>
+
+        {/* Accommodation toggle */}
+        <div
+          className="p-3 rounded"
+          style={{
+            background: "var(--bg-main)",
+            border: "1px solid var(--border-color)",
+          }}
+        >
+          <Form.Check
+            type="switch"
+            id="needs-accommodation"
+            label={
+              <span className="fw-bold">
+                <i className="bi bi-house-fill me-2 text-primary" />
+                Requires Accommodation
+              </span>
+            }
+            checked={needsAccommodation}
+            onChange={(e) => setNeedsAccommodation(e.target.checked)}
+          />
+
+          {needsAccommodation && (
+            <div className="mt-3 pt-3 border-top d-grid gap-3">
+              <p className="text-muted small mb-0 fw-bold">
+                BOARDING PERFORMA DETAILS
+              </p>
+              <Row>
+                <Col>
+                  <Form.Group>
+                    <Form.Label className="text-muted small">
+                      Arrival Date
+                    </Form.Label>
+                    <Form.Control
+                      type="date"
+                      value={arrivalDate}
+                      onChange={(e) => setArrivalDate(e.target.value)}
+                      style={inputStyle}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col>
+                  <Form.Group>
+                    <Form.Label className="text-muted small">
+                      Arrival Time
+                    </Form.Label>
+                    <Form.Control
+                      type="time"
+                      value={arrivalTime}
+                      onChange={(e) => setArrivalTime(e.target.value)}
+                      style={inputStyle}
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+              <Row>
+                <Col>
+                  <Form.Group>
+                    <Form.Label className="text-muted small">
+                      Departure Date
+                    </Form.Label>
+                    <Form.Control
+                      type="date"
+                      value={departureDate}
+                      onChange={(e) => setDepartureDate(e.target.value)}
+                      style={inputStyle}
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+              <Row className="g-2">
+                <Col>
+                  <Form.Group>
+                    <Form.Label className="text-muted small">
+                      <i className="bi bi-gender-male me-1 text-primary" />
+                      Boys
+                    </Form.Label>
+                    <Form.Control
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                      value={boysCount}
+                      onChange={(e) => setBoysCount(e.target.value)}
+                      style={inputStyle}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col>
+                  <Form.Group>
+                    <Form.Label className="text-muted small">
+                      <i className="bi bi-gender-female me-1 text-danger" />
+                      Girls
+                    </Form.Label>
+                    <Form.Control
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                      value={girlsCount}
+                      onChange={(e) => setGirlsCount(e.target.value)}
+                      style={inputStyle}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col>
+                  <Form.Group>
+                    <Form.Label className="text-muted small fw-bold">
+                      Total
+                    </Form.Label>
+                    <Form.Control
+                      readOnly
+                      value={totalContingent || ""}
+                      placeholder="Auto"
+                      style={{
+                        ...inputStyle,
+                        backgroundColor: "var(--bg-main)",
+                        fontWeight: "bold",
+                        color: totalContingent > 0 ? "var(--text-primary)" : "var(--text-muted)",
+                      }}
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+            </div>
+          )}
+        </div>
       </Modal.Body>
 
       <Modal.Footer className="border-0" style={modalStyle}>
