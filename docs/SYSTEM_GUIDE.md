@@ -124,13 +124,13 @@ The portal implements strict role-based gating through [`AuthRoute.jsx`](file://
 Users sign up with their official college credentials. New accounts are quarantined in a `pending` state until verified by a Cultural Committee administrator.
 
 > 📸 **SCREENSHOT 1: Login & Authentication Screen**  
-> ![Login Screen](docs/screenshots/01_login_screen.png)  
+> ![Login Screen](screenshots/01_login_screen.png)  
 
 > 📸 **SCREENSHOT 2: Pending Approval Notice**  
-> ![Pending Approval Screen](docs/screenshots/02_pending_approval.png)  
+> ![Pending Approval Screen](screenshots/02_pending_approval.png)  
 
 > 📸 **SCREENSHOT 3: User Management Console (`/users`)**  
-> ![Users Management Console](docs/screenshots/03_users_management.png)  
+> ![Users Management Console](screenshots/03_users_management.png)  
 
 ---
 
@@ -143,13 +143,13 @@ The landing page (`/`) centralizes all events in the system.
 - **Dual-Mode Modal**: Create new events or edit existing events. When editing, the Youth Festival switch is locked to protect underlying subcollections.
 
 > 📸 **SCREENSHOT 4: Home Dashboard & Event Cards Grid**  
-> ![Home Dashboard](docs/screenshots/04_home_dashboard.png)  
+> ![Home Dashboard](screenshots/04_home_dashboard.png)  
 
 > 📸 **SCREENSHOT 5: Event Card Admin 3-Dots Dropdown**  
-> ![Card Actions Dropdown](docs/screenshots/05_card_dropdown_menu.png)  
+> ![Card Actions Dropdown](screenshots/05_card_dropdown_menu.png)  
 
 > 📸 **SCREENSHOT 6: Create / Edit Event Modal**  
-> ![Edit Event Modal](docs/screenshots/06_edit_event_modal.png)  
+> ![Edit Event Modal](screenshots/06_edit_event_modal.png)  
 
 ---
 
@@ -160,7 +160,7 @@ Clicking any card on the dashboard opens the dedicated Event Workspace (`/event/
 - **Module Grid**: Soft-UI cards routing directly into specialized sub-modules.
 
 > 📸 **SCREENSHOT 7: Event Dashboard Workspace**  
-> ![Event Details Workspace](docs/screenshots/07_event_dashboard.png)  
+> ![Event Details Workspace](screenshots/07_event_dashboard.png)  
 
 ---
 
@@ -168,7 +168,7 @@ Clicking any card on the dashboard opens the dedicated Event Workspace (`/event/
 Organizers schedule preparatory meetings and record attendance per student/committee with timestamps and agendas.
 
 > 📸 **SCREENSHOT 8: Meetings & Attendance Screen**  
-> ![Meetings and Attendance](docs/screenshots/08_meetings_attendance.png)  
+> ![Meetings and Attendance](screenshots/08_meetings_attendance.png)  
 
 ---
 
@@ -176,7 +176,7 @@ Organizers schedule preparatory meetings and record attendance per student/commi
 Allows structuring student volunteers into functional sub-committees (e.g., *Stage Decoration*, *Discipline*, *Sound & Light*, *Refreshments*) with Student Heads and Members.
 
 > 📸 **SCREENSHOT 9: Teams & Student Committees**  
-> ![Teams Management](docs/screenshots/09_teams_committees.png)  
+> ![Teams Management](screenshots/09_teams_committees.png)  
 
 ---
 
@@ -184,7 +184,7 @@ Allows structuring student volunteers into functional sub-committees (e.g., *Sta
 Tracks faculty coordinators, organizing committee in-charges, department representatives, and administrative contacts.
 
 > 📸 **SCREENSHOT 10: Faculty Coordinators Directory**  
-> ![Faculty Incharges](docs/screenshots/10_faculty_teachers.png)  
+> ![Faculty Incharges](screenshots/10_faculty_teachers.png)  
 
 ---
 
@@ -192,7 +192,7 @@ Tracks faculty coordinators, organizing committee in-charges, department represe
 Maintains a transparent ledger of sponsors, pledged funds, received payments, proof receipts, and sponsorship tiers (Platinum, Gold, Silver).
 
 > 📸 **SCREENSHOT 11: Sponsorship & Budget Tracker**  
-> ![Sponsorship Tracker](docs/screenshots/11_sponsorship_tracker.png)  
+> ![Sponsorship Tracker](screenshots/11_sponsorship_tracker.png)  
 
 ---
 
@@ -200,7 +200,7 @@ Maintains a transparent ledger of sponsors, pledged funds, received payments, pr
 For non-festival events, tracks items/competitions, categories (Music, Dance, Literary, Fine Arts), student entries (Name, URN, CRN, Branch), and final prize rankings (1st, 2nd, 3rd).
 
 > 📸 **SCREENSHOT  12: Competition Items & Participant Scoring**  
-> ![Participants Roster](docs/screenshots/12_participants_scoring.png)  
+> ![Participants Roster](screenshots/12_participants_scoring.png)  
 
 ---
 
@@ -214,16 +214,16 @@ When GNDEC is the **Host College**, an advanced operations engine is activated:
 5. **Results & Trophies Engine (`yf_results`)**: Calculates 1st (5 pts), 2nd (3 pts), 3rd (1 pt) rankings to dynamically generate overall institutional trophies.
 
 > 📸 **SCREENSHOT 13: Youth Festival Host Operations Dashboard**  
-> ![YF Host Dashboard](docs/screenshots/13_yf_host_dashboard.png)  
+> ![YF Host Dashboard](screenshots/13_yf_host_dashboard.png)  
 
 > 📸 **SCREENSHOT 14: Gate Check-in & Arrival Status**  
-> ![Gate Desk Check-in](docs/screenshots/14_yf_checkin_desk.png)  
+> ![Gate Desk Check-in](screenshots/14_yf_checkin_desk.png)  
 
 > 📸 **SCREENSHOT 15: Hostel Room Allotment Manager**  
-> ![Accommodation Manager](docs/screenshots/15_yf_accommodation.png)  
+> ![Accommodation Manager](screenshots/15_yf_accommodation.png)  
 
 > 📸 **SCREENSHOT 16: Youth Festival Trophy & Aggregate Results Board**  
-> ![Results and Trophies](docs/screenshots/16_yf_results_trophies.png)  
+> ![Results and Trophies](screenshots/16_yf_results_trophies.png)  
 
 ---
 
@@ -231,7 +231,7 @@ When GNDEC is the **Host College**, an advanced operations engine is activated:
 When GNDEC participates as a visiting contingent, this mode manages GNDEC's internal student roster, rehearsals, and item submissions.
 
 > 📸 **SCREENSHOT 17: GNDEC Contingent Roster**  
-> ![Contingent Roster](docs/screenshots/17_yf_contingent_roster.png)  
+> ![Contingent Roster](screenshots/17_yf_contingent_roster.png)  
 
 ---
 
@@ -250,7 +250,7 @@ The portal dynamically compiles complex tabular data into publication-ready land
 - **Full Notification Hub (`/notifications`)**: Grouped chronologically (*Today*, *Yesterday*, *This Week*, *Earlier*) with shimmering skeleton loaders (`placeholder-glow`).
 
 > 📸 **SCREENSHOT 18: Notification Dropdown & Mobile Bottom Sheet**  
-> ![Notification Drawer](docs/screenshots/18_notifications_popover.png)  
+> ![Notification Drawer](screenshots/18_notifications_popover.png)  
 
 ---
 
@@ -260,7 +260,7 @@ Integrated with `@emailjs/browser` to send instant broadcast announcements to pa
 - **Pre-Built Templates**: Audition invitations, meeting notifications, event results announcements, and custom alerts.
 
 > 📸 **SCREENSHOT 19: Broadcast Email Center (`/email`)**  
-> ![Broadcast Email](docs/screenshots/19_broadcast_email.png)  
+> ![Broadcast Email](screenshots/19_broadcast_email.png)  
 
 ---
 
@@ -268,7 +268,7 @@ Integrated with `@emailjs/browser` to send instant broadcast announcements to pa
 Interactive visual timeline (`/calendar`) showing multi-day festivals and individual events with chronological badges.
 
 > 📸 **SCREENSHOT 20: Event Calendar & Timeline (`/calendar`)**  
-> ![Event Calendar](docs/screenshots/20_event_calendar.png)  
+> ![Event Calendar](screenshots/20_event_calendar.png)  
 
 ---
 
@@ -276,7 +276,7 @@ Interactive visual timeline (`/calendar`) showing multi-day festivals and indivi
 An immutable audit log (`/activity-logs`) available to administrators tracking all system mutations (event creations, updates, deletions, user approvals).
 
 > 📸 **SCREENSHOT 21: Activity Audit Logs (`/activity-logs`)**  
-> ![Activity Logs](docs/screenshots/21_activity_logs.png)  
+> ![Activity Logs](screenshots/21_activity_logs.png)  
 
 ---
 
@@ -287,7 +287,7 @@ An immutable audit log (`/activity-logs`) available to administrators tracking a
 - **PWA Installation**: Install as an offline-capable native app on desktop and mobile.
 
 > 📸 **SCREENSHOT 22: Command Palette (`Ctrl+K`) & Profile Popover**  
-> ![Command Palette Overlay](docs/screenshots/22_command_palette.png)  
+> ![Command Palette Overlay](screenshots/22_command_palette.png)  
 
 ---
 
