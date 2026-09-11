@@ -636,7 +636,7 @@ export default function Layout({ children }) {
             onMouseLeave={() => setFooterHovered(false)}
           >
             <span>
-              © -{" "}
+              © {new Date().getFullYear()} -{" "}
               <span
                 style={{
                   fontWeight: 600,
