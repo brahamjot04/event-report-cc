@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   signInWithEmailAndPassword,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
 } from "firebase/auth";
 import { auth } from "../firebase";
@@ -16,6 +17,24 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
+
+  // Handle the return from Google's OAuth redirect page
+  useEffect(() => {
+    setLoading(true);
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) {
+          navigate("/");
+        }
+      })
+      .catch((err) => {
+        console.error("Redirect sign-in error:", err);
+        setError("Google Sign-In failed. Please try again.");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [navigate]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -36,8 +55,9 @@ export default function Login() {
     setLoading(true);
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
-      navigate("/");
+      // Use redirect instead of popup — avoids auth/popup-blocked on production/Vercel
+      await signInWithRedirect(auth, provider);
+      // Page will fully redirect to Google; on return, useEffect above captures the result
     } catch (err) {
       console.error(err);
       setError("Google Sign-In failed. Please try again.");
