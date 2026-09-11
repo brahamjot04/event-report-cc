@@ -125,15 +125,12 @@ Users sign up with their official college credentials. New accounts are quaranti
 
 > 📸 **SCREENSHOT PLACEHOLDER 1: Login & Authentication Screen**  
 > ![Login Screen](docs/screenshots/01_login_screen.png)  
-> *Capture the `/login` page showing the email/password form, branding logo, and link to sign up.*
 
 > 📸 **SCREENSHOT PLACEHOLDER 2: Pending Approval Notice**  
 > ![Pending Approval Screen](docs/screenshots/02_pending_approval.png)  
-> *Capture the `/pending-approval` screen displayed to newly registered users awaiting verification.*
 
 > 📸 **SCREENSHOT PLACEHOLDER 3: User Management Console (`/users`)**  
 > ![Users Management Console](docs/screenshots/03_users_management.png)  
-> *Capture the `/users` table showing the Pending Approvals queue with Approve/Reject buttons and Role selection.*
 
 ---
 
@@ -147,15 +144,12 @@ The landing page (`/`) centralizes all events in the system.
 
 > 📸 **SCREENSHOT PLACEHOLDER 4: Home Dashboard & Event Cards Grid**  
 > ![Home Dashboard](docs/screenshots/04_home_dashboard.png)  
-> *Capture the Home page (`/`) showing the search bar, filter buttons, metric cards, and the grid of event cards.*
 
 > 📸 **SCREENSHOT PLACEHOLDER 5: Event Card Admin 3-Dots Dropdown**  
 > ![Card Actions Dropdown](docs/screenshots/05_card_dropdown_menu.png)  
-> *Capture an event card with the 3-dots dropdown menu open, highlighting "Edit Event" and "Delete Event".*
 
 > 📸 **SCREENSHOT PLACEHOLDER 6: Create / Edit Event Modal**  
 > ![Edit Event Modal](docs/screenshots/06_edit_event_modal.png)  
-> *Capture the modal dialog showing event title, date range picker, venue, and Youth Festival configuration.*
 
 ---
 
@@ -167,7 +161,6 @@ Clicking any card on the dashboard opens the dedicated Event Workspace (`/event/
 
 > 📸 **SCREENSHOT PLACEHOLDER 7: Event Dashboard Workspace**  
 > ![Event Details Workspace](docs/screenshots/07_event_dashboard.png)  
-> *Capture the top banner with the "Edit Event" button and the navigation cards for Meetings, Teams, Teachers, and Sponsors.*
 
 ---
 
@@ -176,7 +169,6 @@ Organizers schedule preparatory meetings and record attendance per student/commi
 
 > 📸 **SCREENSHOT PLACEHOLDER 8: Meetings & Attendance Screen**  
 > ![Meetings and Attendance](docs/screenshots/08_meetings_attendance.png)  
-> *Capture the meeting cards showing date, venue, agenda summary, and the student attendance checklist.*
 
 ---
 
@@ -185,7 +177,6 @@ Allows structuring student volunteers into functional sub-committees (e.g., *Sta
 
 > 📸 **SCREENSHOT PLACEHOLDER 9: Teams & Student Committees**  
 > ![Teams Management](docs/screenshots/09_teams_committees.png)  
-> *Capture the team cards displaying committee names, student head avatars, member lists, and role tags.*
 
 ---
 
@@ -194,7 +185,6 @@ Tracks faculty coordinators, organizing committee in-charges, department represe
 
 > 📸 **SCREENSHOT PLACEHOLDER 10: Faculty Coordinators Directory**  
 > ![Faculty Incharges](docs/screenshots/10_faculty_teachers.png)  
-> *Capture the teachers table categorized by organizing committees with designations and contact details.*
 
 ---
 
@@ -203,7 +193,6 @@ Maintains a transparent ledger of sponsors, pledged funds, received payments, pr
 
 > 📸 **SCREENSHOT PLACEHOLDER 11: Sponsorship & Budget Tracker**  
 > ![Sponsorship Tracker](docs/screenshots/11_sponsorship_tracker.png)  
-> *Capture the sponsorship table showing company logos, pledged amounts, payment status pills, and action menus.*
 
 ---
 
@@ -212,7 +201,6 @@ For non-festival events, tracks items/competitions, categories (Music, Dance, Li
 
 > 📸 **SCREENSHOT PLACEHOLDER 12: Competition Items & Participant Scoring**  
 > ![Participants Roster](docs/screenshots/12_participants_scoring.png)  
-> *Capture the item tabs with student participant lists, URN/CRN numbers, and awarded positions.*
 
 ---
 
@@ -227,19 +215,15 @@ When GNDEC is the **Host College**, an advanced operations engine is activated:
 
 > 📸 **SCREENSHOT PLACEHOLDER 13: Youth Festival Host Operations Dashboard**  
 > ![YF Host Dashboard](docs/screenshots/13_yf_host_dashboard.png)  
-> *Capture the grid of YF host modules (Colleges, Check-in, Venue Mapping, Accommodation, Results).*
 
 > 📸 **SCREENSHOT PLACEHOLDER 14: Gate Check-in & Arrival Status**  
 > ![Gate Desk Check-in](docs/screenshots/14_yf_checkin_desk.png)  
-> *Capture the live desk table with arrival checkboxes, college names, and CSV export action.*
 
 > 📸 **SCREENSHOT PLACEHOLDER 15: Hostel Room Allotment Manager**  
 > ![Accommodation Manager](docs/screenshots/15_yf_accommodation.png)  
-> *Capture the hostel allotment view showing room numbers, assigned colleges, and bed occupancy bars.*
 
 > 📸 **SCREENSHOT PLACEHOLDER 16: Youth Festival Trophy & Aggregate Results Board**  
 > ![Results and Trophies](docs/screenshots/16_yf_results_trophies.png)  
-> *Capture the official points table with college positions, points breakdown, and Overall Trophy standings.*
 
 ---
 
@@ -248,7 +232,6 @@ When GNDEC participates as a visiting contingent, this mode manages GNDEC's inte
 
 > 📸 **SCREENSHOT PLACEHOLDER 17: GNDEC Contingent Roster**  
 > ![Contingent Roster](docs/screenshots/17_yf_contingent_roster.png)  
-> *Capture the contingent preparation list showing student items, categories, and accompaniment requirements.*
 
 ---
 
@@ -268,7 +251,6 @@ The portal dynamically compiles complex tabular data into publication-ready land
 
 > 📸 **SCREENSHOT PLACEHOLDER 18: Notification Dropdown & Mobile Bottom Sheet**  
 > ![Notification Drawer](docs/screenshots/18_notifications_popover.png)  
-> *Capture the notification popover open on desktop or bottom sheet on mobile showing unread notifications.*
 
 ---
 
@@ -279,7 +261,6 @@ Integrated with `@emailjs/browser` to send instant broadcast announcements to pa
 
 > 📸 **SCREENSHOT PLACEHOLDER 19: Broadcast Email Center (`/email`)**  
 > ![Broadcast Email](docs/screenshots/19_broadcast_email.png)  
-> *Capture the Email page showing template selectors, recipient preview, and subject/body composer.*
 
 ---
 
@@ -288,7 +269,6 @@ Interactive visual timeline (`/calendar`) showing multi-day festivals and indivi
 
 > 📸 **SCREENSHOT PLACEHOLDER 20: Event Calendar & Timeline (`/calendar`)**  
 > ![Event Calendar](docs/screenshots/20_event_calendar.png)  
-> *Capture the `/calendar` timeline displaying past and upcoming event cards.*
 
 ---
 
@@ -297,7 +277,6 @@ An immutable audit log (`/activity-logs`) available to administrators tracking a
 
 > 📸 **SCREENSHOT PLACEHOLDER 21: Activity Audit Logs (`/activity-logs`)**  
 > ![Activity Logs](docs/screenshots/21_activity_logs.png)  
-> *Capture the audit log table showing timestamps, performed-by user badges, and descriptive action notes.*
 
 ---
 
@@ -309,7 +288,6 @@ An immutable audit log (`/activity-logs`) available to administrators tracking a
 
 > 📸 **SCREENSHOT PLACEHOLDER 22: Command Palette (`Ctrl+K`) & Profile Popover**  
 > ![Command Palette Overlay](docs/screenshots/22_command_palette.png)  
-> *Capture the centered Command Palette overlay with query text and keyboard navigation highlighted.*
 
 ---
 
@@ -346,9 +324,3 @@ docs/screenshots/
 | **20** | `20_event_calendar.png` | `/calendar` | Event timeline with upcoming/past badges | 1920×1080 |
 | **21** | `21_activity_logs.png` | `/activity-logs` | Activity audit log table with action tags | 1920×1080 |
 | **22** | `22_command_palette.png` | Anywhere (`Ctrl+K`) | Command palette overlay with search query | 1920×1080 |
-
-### Tips for High-Quality Captures:
-1. **Browser Zoom**: Keep browser zoom at 100% (default) so font crispness and padding match the layout design.
-2. **Data Consistency**: Use clean sample event names (e.g. *"IKGPTU Inter-Zonal Youth Festival 2026"*, *"Anand Utsav Cultural Fest"*).
-3. **Theme Uniformity**: Capture screenshots consistently in either Light Mode or Dark Mode.
-4. **Asset Format**: Save images as standard `.png` files to maintain clean text edges and transparent rounded borders.
