@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
   GoogleAuthProvider,
 } from "firebase/auth";
 import { auth } from "../firebase";
@@ -39,13 +40,22 @@ export default function Login() {
       await signInWithPopup(auth, provider);
       navigate("/");
     } catch (err) {
-      console.error(err);
       if (err.code === "auth/popup-blocked") {
-        setError("Popup was blocked by your browser. Please allow popups for this site and try again.");
+        // Browser blocked the popup — fall back to full-page redirect
+        try {
+          setError(""); // clear error, show spinner while redirecting
+          await signInWithRedirect(auth, provider);
+          // page navigates away; AuthContext handles getRedirectResult on return
+        } catch (redirectErr) {
+          console.error("Redirect fallback failed:", redirectErr);
+          setError("Sign-In failed. Please allow popups for this site and try again.");
+          setLoading(false);
+        }
       } else {
+        console.error(err);
         setError("Google Sign-In failed. Please try again.");
+        setLoading(false);
       }
-      setLoading(false);
     }
   };
 
