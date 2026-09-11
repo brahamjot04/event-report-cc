@@ -7,14 +7,33 @@ import {
 } from "firebase/firestore";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 
+const isLocalhost = Boolean(
+  typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1" ||
+      window.location.hostname === "[::1]")
+);
+
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCF_-t-uGCwdX8ee_01T5qHv9nQX3HfxQw",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "event-report-cc.firebaseapp.com",
+  apiKey:
+    import.meta.env.VITE_FIREBASE_API_KEY ||
+    "AIzaSyCF_-t-uGCwdX8ee_01T5qHv9nQX3HfxQw",
+  authDomain: isLocalhost
+    ? "event-report-cc.firebaseapp.com"
+    : import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ||
+      (typeof window !== "undefined"
+        ? window.location.host
+        : "ccgndec.vercel.app"),
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "event-report-cc",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "event-report-cc.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "1069208650480",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:1069208650480:web:0e2765c0804db227b3f835"
+  storageBucket:
+    import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ||
+    "event-report-cc.firebasestorage.app",
+  messagingSenderId:
+    import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "1069208650480",
+  appId:
+    import.meta.env.VITE_FIREBASE_APP_ID ||
+    "1:1069208650480:web:0e2765c0804db227b3f835",
 };
 
 // Initialize Firebase

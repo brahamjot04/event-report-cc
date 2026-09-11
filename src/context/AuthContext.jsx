@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect } from "react";
 import { onAuthStateChanged, signOut, getRedirectResult } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
 
 const AuthContext = createContext(null);
@@ -45,7 +45,23 @@ export function AuthProvider({ children }) {
               setRole(data.role || "user");
               setStatus(normalizedStatus);
             } else {
-              setUserProfile(null);
+              // Create user doc for OAuth users who don't have a profile yet
+              const newProfile = {
+                uid: currentUser.uid,
+                name:
+                  currentUser.displayName ||
+                  currentUser.email?.split("@")[0] ||
+                  "User",
+                email: currentUser.email || "",
+                role: "user",
+                status: "pending",
+                createdAt: new Date(),
+              };
+              setDoc(doc(db, "users", currentUser.uid), newProfile).catch(
+                (err) =>
+                  console.error("Error creating user profile document:", err)
+              );
+              setUserProfile(newProfile);
               setRole("user");
               setStatus("pending");
             }
