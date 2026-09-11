@@ -4,12 +4,29 @@ import { Container, Row, Col, Card, Badge, Button, Form, InputGroup } from "reac
 import Layout from "../components/Layout";
 import { useNotifications, formatRelativeTime } from "../context/NotificationContext";
 
+function getDateBucket(timestamp) {
+  if (!timestamp) return "Earlier";
+  const date = timestamp?.toDate ? timestamp.toDate() : new Date(timestamp);
+  if (isNaN(date.getTime())) return "Earlier";
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const itemDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+  const diffDays = Math.round((today - itemDay) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return "This Week";
+  return "Earlier";
+}
+
 export default function Notifications() {
   const navigate = useNavigate();
   const {
     notifications,
     unreadCount,
     readIds,
+    loading,
     markAllAsRead,
     toggleRead,
     quickApproveUser,
@@ -53,6 +70,24 @@ export default function Notifications() {
 
     return list;
   }, [notifications, activeTab, searchQuery, readIds]);
+
+  // Grouped by temporal buckets
+  const groupedList = useMemo(() => {
+    const buckets = [
+      { key: "Today", label: "Today", items: [] },
+      { key: "Yesterday", label: "Yesterday", items: [] },
+      { key: "This Week", label: "This Week", items: [] },
+      { key: "Earlier", label: "Earlier", items: [] },
+    ];
+
+    filteredList.forEach((item) => {
+      const bucket = getDateBucket(item.timestamp);
+      const target = buckets.find((b) => b.key === bucket) || buckets[3];
+      target.items.push(item);
+    });
+
+    return buckets.filter((b) => b.items.length > 0);
+  }, [filteredList]);
 
   const handleQuickApprove = async (item) => {
     setApprovingId(item.sourceId);
@@ -192,8 +227,35 @@ export default function Notifications() {
         </Card>
 
         {/* NOTIFICATIONS FEED */}
-        <div className="d-flex flex-column gap-3">
-          {filteredList.length === 0 ? (
+        <div className="d-flex flex-column gap-4">
+          {loading ? (
+            <div className="d-flex flex-column gap-3">
+              {[1, 2, 3, 4].map((i) => (
+                <Card
+                  key={i}
+                  className="border-0 shadow-sm placeholder-glow"
+                  style={{ backgroundColor: "var(--bg-card)" }}
+                >
+                  <Card.Body className="p-3">
+                    <div className="d-flex align-items-start gap-3">
+                      <div
+                        className="rounded-circle placeholder flex-shrink-0"
+                        style={{ width: "44px", height: "44px" }}
+                      />
+                      <div className="flex-grow-1">
+                        <div className="d-flex align-items-center gap-2 mb-2">
+                          <span className="placeholder col-4 rounded py-2" />
+                          <span className="placeholder col-2 rounded py-2" />
+                        </div>
+                        <div className="placeholder col-8 rounded mb-2 py-1" />
+                        <div className="placeholder col-3 rounded py-1" />
+                      </div>
+                    </div>
+                  </Card.Body>
+                </Card>
+              ))}
+            </div>
+          ) : filteredList.length === 0 ? (
             <Card
               className="text-center py-5 border-0 shadow-sm"
               style={{
@@ -212,161 +274,188 @@ export default function Notifications() {
               </Card.Body>
             </Card>
           ) : (
-            filteredList.map((item) => {
-              const isUnread = !readIds.has(item.id);
-              const formattedDate = item.timestamp?.toDate
-                ? item.timestamp.toDate().toLocaleString("en-IN", {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })
-                : new Date(item.timestamp).toLocaleString("en-IN", {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  });
+            groupedList.map((group) => (
+              <div key={group.key} className="d-flex flex-column gap-2.5">
+                {/* Date Header */}
+                <div className="d-flex align-items-center gap-2 px-1 mb-1">
+                  <span
+                    className="fw-bold small text-uppercase text-muted"
+                    style={{ letterSpacing: "0.5px", fontSize: "11px" }}
+                  >
+                    {group.label}
+                  </span>
+                  <span
+                    className="badge rounded-pill bg-body-secondary text-secondary"
+                    style={{ fontSize: "10px" }}
+                  >
+                    {group.items.length}
+                  </span>
+                  <div
+                    className="flex-grow-1 border-bottom ms-2"
+                    style={{ borderColor: "var(--border-color)", opacity: 0.6 }}
+                  />
+                </div>
 
-              return (
-                <Card
-                  key={item.id}
-                  className="border-0 shadow-sm transition-all"
-                  style={{
-                    backgroundColor: isUnread
-                      ? "rgba(13, 110, 253, 0.04)"
-                      : "var(--bg-card)",
-                    color: "var(--text-primary)",
-                    borderLeft: isUnread
-                      ? "4px solid var(--bs-primary)"
-                      : "4px solid transparent",
-                  }}
-                >
-                  <Card.Body className="p-3">
-                    <div className="d-flex flex-column flex-sm-row align-items-start justify-content-between gap-3">
-                      {/* Left icon & content */}
-                      <div className="d-flex align-items-start gap-3 flex-grow-1">
-                        <div
-                          className="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 mt-1"
-                          style={{
-                            width: "44px",
-                            height: "44px",
-                            backgroundColor: "var(--soft-hover)",
-                            border: "1px solid var(--border-color)",
-                          }}
-                        >
-                          <i className={`bi ${item.icon} ${item.iconColor} fs-5`}></i>
-                        </div>
+                {/* Items in this date group */}
+                <div className="d-flex flex-column gap-2.5">
+                  {group.items.map((item) => {
+                    const isUnread = !readIds.has(item.id);
+                    const formattedDate = item.timestamp?.toDate
+                      ? item.timestamp.toDate().toLocaleString("en-IN", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })
+                      : new Date(item.timestamp).toLocaleString("en-IN", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        });
 
-                        <div className="flex-grow-1">
-                          <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
-                            <span className="fw-bold">{item.title}</span>
-                            <Badge
-                              bg={item.badgeVariant || "secondary"}
-                              style={{ fontSize: "11px" }}
-                            >
-                              {item.badge}
-                            </Badge>
-                            {isUnread && (
-                              <Badge bg="primary" pill style={{ fontSize: "10px" }}>
-                                New
-                              </Badge>
-                            )}
+                    return (
+                      <Card
+                        key={item.id}
+                        className="border-0 shadow-sm transition-all"
+                        style={{
+                          backgroundColor: isUnread
+                            ? "rgba(13, 110, 253, 0.04)"
+                            : "var(--bg-card)",
+                          color: "var(--text-primary)",
+                          borderLeft: isUnread
+                            ? "4px solid var(--bs-primary)"
+                            : "4px solid transparent",
+                        }}
+                      >
+                        <Card.Body className="p-3">
+                          <div className="d-flex flex-column flex-sm-row align-items-start justify-content-between gap-3">
+                            {/* Left icon & content */}
+                            <div className="d-flex align-items-start gap-3 flex-grow-1">
+                              <div
+                                className="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 mt-1"
+                                style={{
+                                  width: "44px",
+                                  height: "44px",
+                                  backgroundColor: "var(--soft-hover)",
+                                  border: "1px solid var(--border-color)",
+                                }}
+                              >
+                                <i className={`bi ${item.icon} ${item.iconColor} fs-5`}></i>
+                              </div>
+
+                              <div className="flex-grow-1">
+                                <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
+                                  <span className="fw-bold">{item.title}</span>
+                                  <Badge
+                                    bg={item.badgeVariant || "secondary"}
+                                    style={{ fontSize: "11px" }}
+                                  >
+                                    {item.badge}
+                                  </Badge>
+                                  {isUnread && (
+                                    <Badge bg="primary" pill style={{ fontSize: "10px" }}>
+                                      New
+                                    </Badge>
+                                  )}
+                                </div>
+
+                                <p
+                                  className="text-body mb-2 small"
+                                  style={{ lineHeight: 1.4 }}
+                                >
+                                  {item.description}
+                                </p>
+
+                                <div
+                                  className="text-muted d-flex flex-wrap align-items-center gap-3"
+                                  style={{ fontSize: "12px" }}
+                                >
+                                  <span>
+                                    <i className="bi bi-clock me-1"></i>
+                                    {formatRelativeTime(item.timestamp)} ({formattedDate})
+                                  </span>
+                                  {item.data?.performedBy && (
+                                    <span>
+                                      <i className="bi bi-person me-1"></i>
+                                      By {item.data.performedBy}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Right actions */}
+                            <div className="d-flex align-items-center gap-2 flex-shrink-0 align-self-sm-center ms-auto">
+                              {/* Approval Quick Action */}
+                              {item.type === "approval" && (
+                                <Button
+                                  variant="success"
+                                  size="sm"
+                                  className="rounded-pill px-3 fw-semibold"
+                                  disabled={approvingId === item.sourceId}
+                                  onClick={() => handleQuickApprove(item)}
+                                >
+                                  {approvingId === item.sourceId ? (
+                                    "Approving..."
+                                  ) : (
+                                    <>
+                                      <i className="bi bi-check-lg me-1"></i>
+                                      Approve
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+
+                              {/* Navigation link */}
+                              {item.type === "approval" && (
+                                <Button
+                                  variant="outline-secondary"
+                                  size="sm"
+                                  className="rounded-pill px-3"
+                                  onClick={() => navigate("/users")}
+                                >
+                                  Review
+                                </Button>
+                              )}
+                              {item.type === "broadcast" && (
+                                <Button
+                                  variant="outline-secondary"
+                                  size="sm"
+                                  className="rounded-pill px-3"
+                                  onClick={() => navigate("/email")}
+                                >
+                                  View
+                                </Button>
+                              )}
+                              {item.type === "activity" && (
+                                <Button
+                                  variant="outline-secondary"
+                                  size="sm"
+                                  className="rounded-pill px-3"
+                                  onClick={() => navigate("/activity-logs")}
+                                >
+                                  Logs
+                                </Button>
+                              )}
+
+                              {/* Toggle Read */}
+                              <Button
+                                variant="link"
+                                size="sm"
+                                className="p-1 text-muted text-decoration-none"
+                                title={isUnread ? "Mark as read" : "Mark as unread"}
+                                onClick={() => toggleRead(item.id)}
+                              >
+                                <i
+                                  className={`bi ${isUnread ? "bi-envelope" : "bi-envelope-open"} fs-5`}
+                                ></i>
+                              </Button>
+                            </div>
                           </div>
-
-                          <p
-                            className="text-body mb-2 small"
-                            style={{ lineHeight: 1.4 }}
-                          >
-                            {item.description}
-                          </p>
-
-                          <div
-                            className="text-muted d-flex flex-wrap align-items-center gap-3"
-                            style={{ fontSize: "12px" }}
-                          >
-                            <span>
-                              <i className="bi bi-clock me-1"></i>
-                              {formatRelativeTime(item.timestamp)} ({formattedDate})
-                            </span>
-                            {item.data?.performedBy && (
-                              <span>
-                                <i className="bi bi-person me-1"></i>
-                                By {item.data.performedBy}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Right actions */}
-                      <div className="d-flex align-items-center gap-2 flex-shrink-0 align-self-sm-center ms-auto">
-                        {/* Approval Quick Action */}
-                        {item.type === "approval" && (
-                          <Button
-                            variant="success"
-                            size="sm"
-                            className="rounded-pill px-3 fw-semibold"
-                            disabled={approvingId === item.sourceId}
-                            onClick={() => handleQuickApprove(item)}
-                          >
-                            {approvingId === item.sourceId ? (
-                              "Approving..."
-                            ) : (
-                              <>
-                                <i className="bi bi-check-lg me-1"></i>
-                                Approve
-                              </>
-                            )}
-                          </Button>
-                        )}
-
-                        {/* Navigation link */}
-                        {item.type === "approval" && (
-                          <Button
-                            variant="outline-secondary"
-                            size="sm"
-                            className="rounded-pill px-3"
-                            onClick={() => navigate("/users")}
-                          >
-                            Review
-                          </Button>
-                        )}
-                        {item.type === "broadcast" && (
-                          <Button
-                            variant="outline-secondary"
-                            size="sm"
-                            className="rounded-pill px-3"
-                            onClick={() => navigate("/email")}
-                          >
-                            View
-                          </Button>
-                        )}
-                        {item.type === "activity" && (
-                          <Button
-                            variant="outline-secondary"
-                            size="sm"
-                            className="rounded-pill px-3"
-                            onClick={() => navigate("/activity-logs")}
-                          >
-                            Logs
-                          </Button>
-                        )}
-
-                        {/* Toggle Read */}
-                        <Button
-                          variant="link"
-                          size="sm"
-                          className="p-1 text-muted text-decoration-none"
-                          title={isUnread ? "Mark as read" : "Mark as unread"}
-                          onClick={() => toggleRead(item.id)}
-                        >
-                          <i
-                            className={`bi ${isUnread ? "bi-envelope" : "bi-envelope-open"} fs-5`}
-                          ></i>
-                        </Button>
-                      </div>
-                    </div>
-                  </Card.Body>
-                </Card>
-              );
-            })
+                        </Card.Body>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
           )}
         </div>
       </Container>

@@ -13,7 +13,7 @@ import "../assets/DashboardStyles.css";
 export default function Layout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, role, isAdmin, logout } = useAuth();
   const {
     isInstallable,
     isInstalled,
@@ -38,8 +38,10 @@ export default function Layout({ children }) {
   const { unreadCount } = useNotifications();
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef(null);
 
-  // Global hotkeys for Command Palette (Ctrl+K, Cmd+K, /)
+  // Global hotkeys for Command Palette (Ctrl+K, Cmd+K, /) and Notifications (Ctrl+Shift+N)
   useEffect(() => {
     const handleKeyDown = (e) => {
       const tag = document.activeElement?.tagName;
@@ -49,7 +51,10 @@ export default function Layout({ children }) {
         tag === "SELECT" ||
         document.activeElement?.isContentEditable;
 
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        setIsNotificationOpen((prev) => !prev);
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setIsCommandPaletteOpen((prev) => !prev);
       } else if (
@@ -67,6 +72,26 @@ export default function Layout({ children }) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  // Dismiss profile menu on outside click or Escape
+  useEffect(() => {
+    if (!isProfileMenuOpen) return;
+    const handleClickOutside = (e) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") setIsProfileMenuOpen(false);
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isProfileMenuOpen]);
 
   // Persist sidebar collapsed state
   useEffect(() => {
@@ -97,10 +122,12 @@ export default function Layout({ children }) {
     }, 600);
   };
 
-  // Close mobile sidebar when route changes (but keep collapsed state)
+  // Close mobile sidebar and popovers when route changes
   useEffect(() => {
     setSidebarOpen(false);
     setSidebarAnimatingOut(false);
+    setIsNotificationOpen(false);
+    setIsProfileMenuOpen(false);
   }, [location.pathname]);
 
   useEffect(
@@ -395,15 +422,15 @@ export default function Layout({ children }) {
               {/* Notification Bell with Dropdown Popover */}
               <div className="position-relative">
                 <div
-                  className="notification-bell-btn p-2 rounded-circle shadow-sm cursor-pointer position-relative d-flex align-items-center justify-content-center"
+                  className={`notification-bell-btn p-2 rounded-circle shadow-sm cursor-pointer position-relative d-flex align-items-center justify-content-center ${isNotificationOpen ? "active" : ""}`}
                   style={{
                     width: 40,
                     height: 40,
-                    backgroundColor: "var(--bg-card)",
-                    border: "1px solid var(--border-color)",
+                    backgroundColor: isNotificationOpen ? "rgba(13, 110, 253, 0.08)" : "var(--bg-card)",
+                    border: isNotificationOpen ? "1px solid var(--bs-primary)" : "1px solid var(--border-color)",
                   }}
                   onClick={() => setIsNotificationOpen((prev) => !prev)}
-                  title="Notifications & Alerts"
+                  title="Notifications & Alerts (Ctrl+Shift+N)"
                   role="button"
                   tabIndex={0}
                   aria-label="Notifications"
@@ -414,7 +441,7 @@ export default function Layout({ children }) {
                   ></i>
                   {unreadCount > 0 && (
                     <span
-                      className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                      className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger badge-pulse"
                       style={{
                         fontSize: "0.65rem",
                         padding: "0.25rem 0.4rem",
@@ -429,26 +456,131 @@ export default function Layout({ children }) {
                   onClose={() => setIsNotificationOpen(false)}
                 />
               </div>
-              <div
-                className="px-3 py-2 rounded-pill shadow-sm d-flex align-items-center gap-2 cursor-pointer"
-                style={{
-                  backgroundColor: "var(--bg-card)",
-                  border: "1px solid var(--border-color)",
-                }}
-                onClick={() => navigate("/profile")}
-              >
+
+              {/* Profile Menu Trigger & Popover */}
+              <div ref={profileMenuRef} className="position-relative">
                 <div
-                  className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center fw-bold"
-                  style={{ width: 32, height: 32 }}
+                  className="px-3 py-2 rounded-pill shadow-sm d-flex align-items-center gap-2 cursor-pointer"
+                  style={{
+                    backgroundColor: isProfileMenuOpen ? "rgba(13, 110, 253, 0.08)" : "var(--bg-card)",
+                    border: isProfileMenuOpen ? "1px solid var(--bs-primary)" : "1px solid var(--border-color)",
+                    transition: "all 0.2s ease",
+                  }}
+                  onClick={() => setIsProfileMenuOpen((prev) => !prev)}
+                  role="button"
+                  tabIndex={0}
+                  title="Account Menu"
                 >
-                  {userInitial}
+                  <div
+                    className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center fw-bold"
+                    style={{ width: 32, height: 32 }}
+                  >
+                    {userInitial}
+                  </div>
+                  <div
+                    className="d-flex flex-column"
+                    style={{ lineHeight: "1.1" }}
+                  >
+                    <span className="fw-bold small" style={{ color: "var(--text-primary)" }}>{userName}</span>
+                  </div>
+                  <i className={`bi ${isProfileMenuOpen ? "bi-chevron-up" : "bi-chevron-down"} small text-muted ms-1`}></i>
                 </div>
-                <div
-                  className="d-flex flex-column"
-                  style={{ lineHeight: "1.1" }}
-                >
-                  <span className="fw-bold small" style={{ color: "var(--text-primary)" }}>{userName}</span>
-                </div>
+
+                {isProfileMenuOpen && (
+                  <div className="profile-menu-popover">
+                    {/* Header info */}
+                    <div className="p-3 border-bottom" style={{ borderColor: "var(--border-color)", backgroundColor: "var(--bg-card)" }}>
+                      <div className="d-flex align-items-center gap-2 mb-2">
+                        <div
+                          className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
+                          style={{ width: 34, height: 34, fontSize: "14px" }}
+                        >
+                          {userInitial}
+                        </div>
+                        <div className="overflow-hidden">
+                          <div className="fw-bold small text-truncate" style={{ color: "var(--text-primary)" }}>
+                            {userName}
+                          </div>
+                          <div className="text-muted text-truncate" style={{ fontSize: "11px" }}>
+                            {user?.email || "Signed In"}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-1">
+                        <span
+                          className={`badge rounded-pill ${isAdmin ? "bg-danger" : "bg-primary"}`}
+                          style={{ fontSize: "10px", fontWeight: 600 }}
+                        >
+                          {isAdmin ? "Administrator" : (role ? role.toUpperCase() : "MEMBER")}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Menu items */}
+                    <div className="py-1">
+                      <button
+                        type="button"
+                        className="profile-menu-item"
+                        onClick={() => {
+                          navigate("/profile");
+                          setIsProfileMenuOpen(false);
+                        }}
+                      >
+                        <i className="bi bi-person-gear text-primary fs-6"></i>
+                        <span>Account Settings</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="profile-menu-item"
+                        onClick={() => {
+                          const btn = document.querySelector(".theme-toggle-btn");
+                          if (btn) btn.click();
+                        }}
+                      >
+                        <i className="bi bi-moon-stars text-warning fs-6"></i>
+                        <span>Toggle Theme</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="profile-menu-item"
+                        onClick={() => {
+                          setIsProfileMenuOpen(false);
+                          setIsCommandPaletteOpen(true);
+                        }}
+                      >
+                        <i className="bi bi-search text-info fs-6"></i>
+                        <span>Search Palette (Ctrl+K)</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="profile-menu-item"
+                        onClick={() => {
+                          setIsProfileMenuOpen(false);
+                          navigate("/notifications");
+                        }}
+                      >
+                        <i className="bi bi-bell text-danger fs-6"></i>
+                        <span>Notification Hub</span>
+                      </button>
+                    </div>
+
+                    {/* Sign out */}
+                    <div className="border-top py-1" style={{ borderColor: "var(--border-color)" }}>
+                      <button
+                        type="button"
+                        className="profile-menu-item danger-item"
+                        onClick={async () => {
+                          setIsProfileMenuOpen(false);
+                          await logout();
+                          navigate("/login");
+                        }}
+                      >
+                        <i className="bi bi-box-arrow-right text-danger fs-6"></i>
+                        <span className="text-danger fw-semibold">Sign Out</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

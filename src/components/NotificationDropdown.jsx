@@ -80,25 +80,34 @@ export default function NotificationDropdown({ isOpen, onClose }) {
   };
 
   return (
-    <div
-      ref={dropdownRef}
-      className="position-absolute end-0 mt-2 shadow-lg rounded-3 border overflow-hidden d-flex flex-column"
-      style={{
-        top: "100%",
-        width: "380px",
-        minWidth: "340px",
-        maxWidth: "calc(100vw - 2rem)",
-        backgroundColor: "var(--bg-card)",
-        borderColor: "var(--border-color)",
-        color: "var(--text-primary)",
-        zIndex: 1050,
-      }}
-    >
-      {/* HEADER */}
+    <>
+      {/* Mobile Backdrop (<576px) */}
+      <div className="bottom-sheet-backdrop d-sm-none" onClick={onClose} />
+
       <div
-        className="d-flex align-items-center justify-content-between p-3 border-bottom gap-2"
-        style={{ borderColor: "var(--border-color)", backgroundColor: "var(--bg-card)" }}
+        ref={dropdownRef}
+        className="notification-dropdown-container notification-popover-enter position-absolute end-0 mt-2 shadow-lg rounded-3 border overflow-hidden d-flex flex-column"
+        style={{
+          top: "100%",
+          width: "380px",
+          minWidth: "340px",
+          maxWidth: "calc(100vw - 2rem)",
+          backgroundColor: "var(--bg-card)",
+          borderColor: "var(--border-color)",
+          color: "var(--text-primary)",
+          zIndex: 1050,
+        }}
       >
+        {/* Mobile Drawer Handle Bar */}
+        <div className="d-flex d-sm-none justify-content-center pt-2 pb-1" style={{ backgroundColor: "var(--bg-card)" }}>
+          <div style={{ width: "40px", height: "4px", borderRadius: "999px", backgroundColor: "var(--border-color)" }} />
+        </div>
+
+        {/* HEADER */}
+        <div
+          className="d-flex align-items-center justify-content-between p-3 border-bottom gap-2"
+          style={{ borderColor: "var(--border-color)", backgroundColor: "var(--bg-card)" }}
+        >
         <div className="d-flex align-items-center gap-2 flex-shrink-0 text-nowrap">
           <span className="fw-bold fs-6 text-nowrap">Notifications</span>
           {unreadCount > 0 ? (
@@ -352,5 +361,6 @@ export default function NotificationDropdown({ isOpen, onClose }) {
         </button>
       </div>
     </div>
+    </>
   );
 }

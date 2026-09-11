@@ -23,6 +23,7 @@ export default function EventDashboard({
   eventData,
   setView,
   userRole,
+  onEdit,
   onDelete,
   onManageProofLink,
   hasProofLink,
@@ -58,10 +59,22 @@ export default function EventDashboard({
             {eventData.venue}
             <span className="mx-2">&bull;</span>
             <i className="bi bi-calendar-check-fill text-primary me-1"></i>{" "}
-            {formatDate(eventData.date)}
+            {eventData.isYouthFestival && eventData.startDate
+              ? `${formatDate(eventData.startDate)} – ${formatDate(eventData.endDate) || "?"}`
+              : formatDate(eventData.date)}
           </span>
         </div>
         <div className="ms-auto d-flex align-items-center gap-2">
+          {(userRole === "admin" || userRole === "super_admin") && onEdit && (
+            <Button
+              variant="outline-primary"
+              className="px-3"
+              onClick={onEdit}
+            >
+              <i className="bi bi-pencil-fill me-2"></i>
+              Edit Event
+            </Button>
+          )}
           <Button
             variant={hasProofLink ? "outline-success" : "outline-secondary"}
             className="px-4"

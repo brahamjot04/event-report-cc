@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import { collection, getDocs, addDoc } from "firebase/firestore";
+import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { loadWithCache, invalidateCache } from "../utils/dataCache";
 import { logAction } from "../utils/logger";
 import { useAuth } from "../context/AuthContext";
-import { Row, Col, Modal, Form, Button, Spinner } from "react-bootstrap";
+import { useToast } from "../context/ToastContext";
+import { Row, Col, Modal, Form, Button, Spinner, Dropdown } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 
@@ -20,7 +21,8 @@ const BLANK_FORM = {
 };
 
 export default function Home() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
+  const { showSuccess, showError, confirm } = useToast();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -30,6 +32,8 @@ export default function Home() {
 
   // Modal States
   const [showEventModal, setShowEventModal] = useState(false);
+  const [editingEventId, setEditingEventId] = useState(null);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ ...BLANK_FORM });
 
   const navigate = useNavigate();
@@ -57,30 +61,106 @@ export default function Home() {
   const setField = (field, value) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
-  const handleCreateEvent = async () => {
-    if (!form.title.trim()) return;
-    const payload = {
-      title: form.title.trim(),
-      date: form.isYouthFestival ? form.startDate : form.date,
-      venue: form.venue.trim(),
-      isYouthFestival: form.isYouthFestival,
-      createdAt: new Date(),
-    };
-    if (form.isYouthFestival) {
-      payload.startDate = form.startDate;
-      payload.endDate = form.endDate;
-      payload.isHostCollege = form.isHostCollege;
-    }
-    await addDoc(collection(db, "events"), payload);
-    invalidateCache("all_events_list");
-    await logAction(
-      "CREATE_EVENT",
-      `Created event "${payload.title}"${payload.isYouthFestival ? " (Youth Festival)" : ""}`,
-      user
-    );
-    setShowEventModal(false);
+  const handleOpenCreateModal = () => {
+    setEditingEventId(null);
     setForm({ ...BLANK_FORM });
-    fetchData();
+    setShowEventModal(true);
+  };
+
+  const handleOpenEditModal = (e, ev) => {
+    e.stopPropagation();
+    setEditingEventId(ev.id);
+    setForm({
+      title: ev.title || "",
+      date: ev.date || "",
+      venue: ev.venue || "",
+      isYouthFestival: !!ev.isYouthFestival,
+      startDate: ev.startDate || (ev.isYouthFestival ? ev.date : "") || "",
+      endDate: ev.endDate || "",
+      isHostCollege: !!ev.isHostCollege,
+    });
+    setShowEventModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowEventModal(false);
+    setEditingEventId(null);
+    setForm({ ...BLANK_FORM });
+  };
+
+  const handleDeleteEvent = async (e, ev) => {
+    if (e) e.stopPropagation();
+    const confirmed = await confirm({
+      title: "Delete Event",
+      message: `Are you sure you want to delete "${ev.title || "this event"}"? This cannot be undone.`,
+      variant: "danger",
+      confirmText: "Delete Event",
+    });
+    if (!confirmed) return;
+
+    try {
+      await deleteDoc(doc(db, "events", ev.id));
+      invalidateCache("all_events_list");
+      invalidateCache(`event_details_${ev.id}`);
+      await logAction("DELETE_EVENT", `Deleted event "${ev.title || ev.id}"`, user);
+      showSuccess("Event deleted successfully.");
+      if (editingEventId === ev.id) {
+        handleCloseModal();
+      }
+      fetchData();
+    } catch (err) {
+      console.error("Error deleting event:", err);
+      showError("Failed to delete event. Please try again.");
+    }
+  };
+
+  const handleSaveEvent = async () => {
+    if (!form.title.trim() || saving) return;
+    setSaving(true);
+    try {
+      const payload = {
+        title: form.title.trim(),
+        date: form.isYouthFestival ? form.startDate : form.date,
+        venue: form.venue.trim(),
+        isYouthFestival: form.isYouthFestival,
+      };
+      if (form.isYouthFestival) {
+        payload.startDate = form.startDate;
+        payload.endDate = form.endDate;
+        payload.isHostCollege = form.isHostCollege;
+      }
+
+      if (editingEventId) {
+        payload.updatedAt = new Date();
+        await updateDoc(doc(db, "events", editingEventId), payload);
+        invalidateCache("all_events_list");
+        invalidateCache(`event_details_${editingEventId}`);
+        await logAction(
+          "UPDATE_EVENT",
+          `Updated event "${payload.title}"${payload.isYouthFestival ? " (Youth Festival)" : ""}`,
+          user
+        );
+        showSuccess("Event updated successfully.");
+      } else {
+        payload.createdAt = new Date();
+        await addDoc(collection(db, "events"), payload);
+        invalidateCache("all_events_list");
+        await logAction(
+          "CREATE_EVENT",
+          `Created event "${payload.title}"${payload.isYouthFestival ? " (Youth Festival)" : ""}`,
+          user
+        );
+        showSuccess("Event created successfully.");
+      }
+
+      handleCloseModal();
+      fetchData();
+    } catch (err) {
+      console.error("Error saving event:", err);
+      showError("Failed to save event. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Filtered Events
@@ -182,9 +262,53 @@ export default function Home() {
           {filteredEvents.map((ev) => (
             <Col key={ev.id} xs={12} sm={6} md={4} lg={3}>
               <div
-                className="soft-card"
+                className="soft-card position-relative"
                 onClick={() => navigate(`/event/${ev.id}`)}
               >
+                {/* Admin 3-dots action menu */}
+                {isAdmin && (
+                  <div
+                    className="position-absolute top-0 end-0 p-2"
+                    style={{ zIndex: 10 }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Dropdown align="end">
+                      <Dropdown.Toggle
+                        as="button"
+                        className="btn p-0 border-0 text-decoration-none event-card-dropdown-toggle shadow-none"
+                        title="Event Actions"
+                        aria-label="Event Actions"
+                      >
+                        <i className="bi bi-three-dots-vertical fs-6"></i>
+                      </Dropdown.Toggle>
+                      <Dropdown.Menu
+                        style={{
+                          backgroundColor: "var(--bg-card)",
+                          borderColor: "var(--border-color)",
+                          boxShadow: "var(--shadow)",
+                          minWidth: "10rem",
+                        }}
+                      >
+                        <Dropdown.Item
+                          onClick={(e) => handleOpenEditModal(e, ev)}
+                          className="d-flex align-items-center gap-2 py-2 text-primary"
+                        >
+                          <i className="bi bi-pencil-fill"></i>
+                          <span className="fw-medium">Edit Event</span>
+                        </Dropdown.Item>
+                        <Dropdown.Divider style={{ borderColor: "var(--border-color)" }} />
+                        <Dropdown.Item
+                          onClick={(e) => handleDeleteEvent(e, ev)}
+                          className="d-flex align-items-center gap-2 py-2 text-danger"
+                        >
+                          <i className="bi bi-trash3-fill"></i>
+                          <span className="fw-medium">Delete Event</span>
+                        </Dropdown.Item>
+                      </Dropdown.Menu>
+                    </Dropdown>
+                  </div>
+                )}
+
                 <div
                   className={`avatar-circle ${
                     ev.isYouthFestival
@@ -246,7 +370,7 @@ export default function Home() {
           <Col xs={12} sm={6} md={4} lg={3}>
             <div
               className="soft-card add-card"
-              onClick={() => setShowEventModal(true)}
+              onClick={handleOpenCreateModal}
             >
               <i className="bi bi-plus-circle-fill fs-3 mb-2" />
               <span className="fw-bold">Create Event</span>
@@ -255,13 +379,10 @@ export default function Home() {
         </Row>
       </div>
 
-      {/* CREATE EVENT MODAL */}
+      {/* CREATE / EDIT EVENT MODAL */}
       <Modal
         show={showEventModal}
-        onHide={() => {
-          setShowEventModal(false);
-          setForm({ ...BLANK_FORM });
-        }}
+        onHide={handleCloseModal}
         centered
         size={form.isYouthFestival ? "lg" : undefined}
       >
@@ -272,7 +393,9 @@ export default function Home() {
           }}
         >
           <Modal.Header closeButton className="border-0">
-            <Modal.Title className="fw-bold">Create New Event</Modal.Title>
+            <Modal.Title className="fw-bold">
+              {editingEventId ? "Edit Event" : "Create New Event"}
+            </Modal.Title>
           </Modal.Header>
           <Modal.Body>
             <Form className="d-grid gap-3">
@@ -301,10 +424,16 @@ export default function Home() {
                 <Form.Check
                   type="switch"
                   id="is-youth-festival"
+                  disabled={!!editingEventId}
                   label={
                     <span className="fw-bold">
                       <i className="bi bi-trophy-fill text-warning me-2" />
                       This is a Youth Festival
+                      {editingEventId && (
+                        <small className="text-muted fw-normal ms-2">
+                          (Event category cannot be changed)
+                        </small>
+                      )}
                     </span>
                   }
                   checked={form.isYouthFestival}
@@ -420,21 +549,39 @@ export default function Home() {
             </Form>
           </Modal.Body>
           <Modal.Footer className="border-0">
+            {editingEventId && isAdmin && (
+              <Button
+                variant="outline-danger"
+                className="me-auto"
+                onClick={(e) => handleDeleteEvent(e, { id: editingEventId, title: form.title })}
+                disabled={saving}
+              >
+                <i className="bi bi-trash3 me-1"></i>
+                Delete Event
+              </Button>
+            )}
             <Button
               variant="outline-secondary"
-              onClick={() => {
-                setShowEventModal(false);
-                setForm({ ...BLANK_FORM });
-              }}
+              onClick={handleCloseModal}
+              disabled={saving}
             >
               Cancel
             </Button>
             <Button
               variant="primary"
-              onClick={handleCreateEvent}
-              disabled={!form.title.trim()}
+              onClick={handleSaveEvent}
+              disabled={!form.title.trim() || saving}
             >
-              Create Event
+              {saving ? (
+                <>
+                  <Spinner size="sm" animation="border" className="me-1" />
+                  Saving...
+                </>
+              ) : editingEventId ? (
+                "Save Changes"
+              ) : (
+                "Create Event"
+              )}
             </Button>
           </Modal.Footer>
         </div>

@@ -43,6 +43,7 @@ export function NotificationProvider({ children }) {
   const [pendingUsers, setPendingUsers] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
   const [broadcastEmails, setBroadcastEmails] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   // Read notification IDs stored in localStorage per user
   const currentUid = user?.uid || null;
@@ -50,6 +51,11 @@ export function NotificationProvider({ children }) {
 
   const [readIds, setReadIds] = useState(new Set());
   const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 500);
+    return () => clearTimeout(timer);
+  }, [user, isAdmin]);
 
   // Load from localStorage on mount and whenever user account changes
   useEffect(() => {
@@ -281,6 +287,7 @@ export function NotificationProvider({ children }) {
       unreadCount,
       pendingCount: pendingUsers.length,
       readIds,
+      loading,
       markAllAsRead,
       markAsRead,
       toggleRead,
@@ -291,6 +298,7 @@ export function NotificationProvider({ children }) {
       unreadCount,
       pendingUsers.length,
       readIds,
+      loading,
       markAllAsRead,
       markAsRead,
       toggleRead,

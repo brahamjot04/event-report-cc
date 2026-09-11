@@ -11,7 +11,7 @@ import {
 import { db } from "../firebase";
 import { loadWithCache, invalidateCache } from "../utils/dataCache";
 import { logAction } from "../utils/logger";
-import { Spinner, Modal, Form, Button } from "react-bootstrap";
+import { Spinner, Modal, Form, Button, Row, Col } from "react-bootstrap";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import Layout from "../components/Layout";
@@ -47,6 +47,69 @@ export default function EventDetails() {
   const [showProofModal, setShowProofModal] = useState(false);
   const [proofLinkDraft, setProofLinkDraft] = useState("");
   const [savingProofLink, setSavingProofLink] = useState(false);
+
+  // Edit Event Modal State
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    date: "",
+    venue: "",
+    isYouthFestival: false,
+    startDate: "",
+    endDate: "",
+    isHostCollege: false,
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const handleOpenEditModal = () => {
+    if (!eventData) return;
+    setEditForm({
+      title: eventData.title || "",
+      date: eventData.date || "",
+      venue: eventData.venue || "",
+      isYouthFestival: !!eventData.isYouthFestival,
+      startDate: eventData.startDate || (eventData.isYouthFestival ? eventData.date : "") || "",
+      endDate: eventData.endDate || "",
+      isHostCollege: !!eventData.isHostCollege,
+    });
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editForm.title.trim() || savingEdit) return;
+    setSavingEdit(true);
+    try {
+      const payload = {
+        title: editForm.title.trim(),
+        date: editForm.isYouthFestival ? editForm.startDate : editForm.date,
+        venue: editForm.venue.trim(),
+        isYouthFestival: editForm.isYouthFestival,
+        updatedAt: new Date(),
+      };
+      if (editForm.isYouthFestival) {
+        payload.startDate = editForm.startDate;
+        payload.endDate = editForm.endDate;
+        payload.isHostCollege = editForm.isHostCollege;
+      }
+
+      await updateDoc(doc(db, "events", id), payload);
+      invalidateCache("all_events_list");
+      invalidateCache(`event_details_${id}`);
+      await logAction(
+        "UPDATE_EVENT",
+        `Updated event "${payload.title}"${payload.isYouthFestival ? " (Youth Festival)" : ""}`,
+        user
+      );
+      setEventData((prev) => (prev ? { ...prev, ...payload } : prev));
+      showSuccess("Event updated successfully.");
+      setShowEditModal(false);
+    } catch (err) {
+      console.error("Error saving event:", err);
+      showError("Failed to update event. Please try again.");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   const normalizeProofUrl = (value = "") => {
     const trimmed = String(value).trim();
@@ -716,6 +779,7 @@ export default function EventDetails() {
             eventData={eventData}
             setView={setCurrentView}
             userRole={userRole}
+            onEdit={handleOpenEditModal}
             onDelete={handleDeleteEvent}
             onManageProofLink={handleOpenProofModal}
             hasProofLink={!!String(eventData?.proofUrl || "").trim()}
@@ -726,11 +790,19 @@ export default function EventDetails() {
     }
   };
 
+  // Helper styles for dark-mode compatible form inputs
+  const inputStyle = {
+    backgroundColor: "var(--bg-main)",
+    color: "var(--text-primary)",
+    borderColor: "var(--border-color)",
+  };
+
   // Wrap everything in Layout so Sidebar persists even during loading
   return (
     <Layout>
       {renderView()}
 
+      {/* PROOF LINK MODAL */}
       <Modal show={showProofModal} onHide={() => setShowProofModal(false)} centered>
         <Modal.Header closeButton>
           <Modal.Title>Upload Proof Link</Modal.Title>
@@ -765,6 +837,221 @@ export default function EventDetails() {
             {savingProofLink ? "Saving..." : "Save Link"}
           </Button>
         </Modal.Footer>
+      </Modal>
+
+      {/* EDIT EVENT MODAL */}
+      <Modal
+        show={showEditModal}
+        onHide={() => setShowEditModal(false)}
+        centered
+        size={editForm.isYouthFestival ? "lg" : undefined}
+      >
+        <div
+          style={{
+            backgroundColor: "var(--bg-card)",
+            color: "var(--text-primary)",
+          }}
+        >
+          <Modal.Header closeButton className="border-0">
+            <Modal.Title className="fw-bold">Edit Event</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Form className="d-grid gap-3">
+              {/* Title */}
+              <Form.Group>
+                <Form.Label className="text-muted small fw-bold">
+                  EVENT TITLE
+                </Form.Label>
+                <Form.Control
+                  size="lg"
+                  placeholder="e.g. Annual Tech Fest"
+                  value={editForm.title}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, title: e.target.value }))
+                  }
+                  style={inputStyle}
+                />
+              </Form.Group>
+
+              {/* Youth Festival toggle (locked) */}
+              <div
+                className="p-3 rounded"
+                style={{
+                  background: "var(--bg-main)",
+                  border: "1px solid var(--border-color)",
+                }}
+              >
+                <Form.Check
+                  type="switch"
+                  id="is-youth-festival-detail"
+                  disabled
+                  label={
+                    <span className="fw-bold">
+                      <i className="bi bi-trophy-fill text-warning me-2" />
+                      This is a Youth Festival
+                      <small className="text-muted fw-normal ms-2">
+                        (Event category cannot be changed)
+                      </small>
+                    </span>
+                  }
+                  checked={editForm.isYouthFestival}
+                  onChange={() => {}}
+                />
+
+                {editForm.isYouthFestival && (
+                  <div className="mt-3 pt-3 border-top d-grid gap-3">
+                    <Row>
+                      <Col>
+                        <Form.Group>
+                          <Form.Label className="text-muted small fw-bold">
+                            START DATE
+                          </Form.Label>
+                          <Form.Control
+                            type="date"
+                            value={editForm.startDate}
+                            onChange={(e) =>
+                              setEditForm((prev) => ({
+                                ...prev,
+                                startDate: e.target.value,
+                              }))
+                            }
+                            onClick={(e) => e.target.showPicker?.()}
+                            style={inputStyle}
+                          />
+                        </Form.Group>
+                      </Col>
+                      <Col>
+                        <Form.Group>
+                          <Form.Label className="text-muted small fw-bold">
+                            END DATE
+                          </Form.Label>
+                          <Form.Control
+                            type="date"
+                            value={editForm.endDate}
+                            onChange={(e) =>
+                              setEditForm((prev) => ({
+                                ...prev,
+                                endDate: e.target.value,
+                              }))
+                            }
+                            onClick={(e) => e.target.showPicker?.()}
+                            style={inputStyle}
+                          />
+                        </Form.Group>
+                      </Col>
+                    </Row>
+
+                    <Form.Check
+                      type="switch"
+                      id="is-host-college-detail"
+                      label={
+                        <span>
+                          <strong>GNDEC is the Host College</strong>
+                          <small className="text-muted ms-2">
+                            (manage all participating colleges &amp; accommodation)
+                          </small>
+                        </span>
+                      }
+                      checked={editForm.isHostCollege}
+                      onChange={(e) =>
+                        setEditForm((prev) => ({
+                          ...prev,
+                          isHostCollege: e.target.checked,
+                        }))
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Date + Venue for non-YF */}
+              {!editForm.isYouthFestival && (
+                <Row>
+                  <Col>
+                    <Form.Group>
+                      <Form.Label className="text-muted small fw-bold">
+                        DATE
+                      </Form.Label>
+                      <Form.Control
+                        type="date"
+                        value={editForm.date}
+                        onChange={(e) =>
+                          setEditForm((prev) => ({
+                            ...prev,
+                            date: e.target.value,
+                          }))
+                        }
+                        onClick={(e) => e.target.showPicker?.()}
+                        style={inputStyle}
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col>
+                    <Form.Group>
+                      <Form.Label className="text-muted small fw-bold">
+                        VENUE
+                      </Form.Label>
+                      <Form.Control
+                        placeholder="e.g. Auditorium"
+                        value={editForm.venue}
+                        onChange={(e) =>
+                          setEditForm((prev) => ({
+                            ...prev,
+                            venue: e.target.value,
+                          }))
+                        }
+                        style={inputStyle}
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
+              )}
+
+              {/* Venue for YF */}
+              {editForm.isYouthFestival && (
+                <Form.Group>
+                  <Form.Label className="text-muted small fw-bold">
+                    PRIMARY VENUE
+                  </Form.Label>
+                  <Form.Control
+                    placeholder="e.g. GNDEC Campus"
+                    value={editForm.venue}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        venue: e.target.value,
+                      }))
+                    }
+                    style={inputStyle}
+                  />
+                </Form.Group>
+              )}
+            </Form>
+          </Modal.Body>
+          <Modal.Footer className="border-0">
+            <Button
+              variant="outline-secondary"
+              onClick={() => setShowEditModal(false)}
+              disabled={savingEdit}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleSaveEdit}
+              disabled={!editForm.title.trim() || savingEdit}
+            >
+              {savingEdit ? (
+                <>
+                  <Spinner size="sm" animation="border" className="me-1" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          </Modal.Footer>
+        </div>
       </Modal>
     </Layout>
   );
