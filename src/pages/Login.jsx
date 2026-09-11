@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   signInWithEmailAndPassword,
-  signInWithRedirect,
+  signInWithPopup,
   GoogleAuthProvider,
 } from "firebase/auth";
 import { auth } from "../firebase";
@@ -36,12 +36,15 @@ export default function Login() {
     setLoading(true);
     const provider = new GoogleAuthProvider();
     try {
-      // Redirect to Google — page navigates away fully (no popup needed).
-      // AuthContext handles getRedirectResult on return; PublicRoute auto-redirects to /.
-      await signInWithRedirect(auth, provider);
+      await signInWithPopup(auth, provider);
+      navigate("/");
     } catch (err) {
       console.error(err);
-      setError("Google Sign-In failed. Please try again.");
+      if (err.code === "auth/popup-blocked") {
+        setError("Popup was blocked by your browser. Please allow popups for this site and try again.");
+      } else {
+        setError("Google Sign-In failed. Please try again.");
+      }
       setLoading(false);
     }
   };
