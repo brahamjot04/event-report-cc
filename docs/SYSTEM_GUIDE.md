@@ -88,7 +88,7 @@ graph TD
 
 ## 4. User Roles & Access Control (RBAC)
 
-The portal implements strict role-based gating through [`AuthRoute.jsx`](file:///d:/Sem-8/gndec-reports/src/components/AuthRoute.jsx):
+The portal implements strict role-based gating through [`AuthRoute.jsx`](https://github.com/brahamjot04/event-report-cc/tree/main/src/components/AuthRoute.jsx):
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
