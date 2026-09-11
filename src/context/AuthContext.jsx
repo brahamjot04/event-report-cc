@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect } from "react";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged, signOut, getRedirectResult } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "../firebase";
 
@@ -14,6 +14,12 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Process any pending Google redirect sign-in result.
+    // Calling this triggers onAuthStateChanged automatically if a redirect just completed.
+    getRedirectResult(auth).catch((err) => {
+      console.error("Google redirect sign-in error:", err);
+    });
+
     let unsubscribeDoc = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
