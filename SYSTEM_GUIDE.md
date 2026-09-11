@@ -258,10 +258,6 @@ The portal dynamically compiles complex tabular data into publication-ready land
 - **Comprehensive Event Report**: Includes header, proof URL link, faculty committees, teams, participants, and meetings.
 - **Youth Festival Official Performas**: Boarding performa, participation performa, room allotment sheets, and official results sheets.
 
-> 📸 **SCREENSHOT PLACEHOLDER 18: Generated PDF Report Preview**  
-> ![Generated PDF Report](docs/screenshots/18_pdf_report_preview.png)  
-> *Capture the exported PDF preview displaying the GNDEC Cultural Committee header and grid tables.*
-
 ---
 
 ### 5.12 Notification System & Mobile Drawer
@@ -270,8 +266,8 @@ The portal dynamically compiles complex tabular data into publication-ready land
 - **Global Hotkey**: Press `Ctrl+Shift+N` (or `Cmd+Shift+N`) to toggle the notification dropdown from anywhere.
 - **Full Notification Hub (`/notifications`)**: Grouped chronologically (*Today*, *Yesterday*, *This Week*, *Earlier*) with shimmering skeleton loaders (`placeholder-glow`).
 
-> 📸 **SCREENSHOT PLACEHOLDER 19: Notification Dropdown & Mobile Bottom Sheet**  
-> ![Notification Drawer](docs/screenshots/19_notifications_popover.png)  
+> 📸 **SCREENSHOT PLACEHOLDER 18: Notification Dropdown & Mobile Bottom Sheet**  
+> ![Notification Drawer](docs/screenshots/18_notifications_popover.png)  
 > *Capture the notification popover open on desktop or bottom sheet on mobile showing unread notifications.*
 
 ---
@@ -281,8 +277,8 @@ Integrated with `@emailjs/browser` to send instant broadcast announcements to pa
 
 - **Pre-Built Templates**: Audition invitations, meeting notifications, event results announcements, and custom alerts.
 
-> 📸 **SCREENSHOT PLACEHOLDER 20: Broadcast Email Center (`/email`)**  
-> ![Broadcast Email](docs/screenshots/20_broadcast_email.png)  
+> 📸 **SCREENSHOT PLACEHOLDER 19: Broadcast Email Center (`/email`)**  
+> ![Broadcast Email](docs/screenshots/19_broadcast_email.png)  
 > *Capture the Email page showing template selectors, recipient preview, and subject/body composer.*
 
 ---
@@ -290,8 +286,8 @@ Integrated with `@emailjs/browser` to send instant broadcast announcements to pa
 ### 5.14 Event Calendar & Timeline
 Interactive visual timeline (`/calendar`) showing multi-day festivals and individual events with chronological badges.
 
-> 📸 **SCREENSHOT PLACEHOLDER 21: Event Calendar & Timeline (`/calendar`)**  
-> ![Event Calendar](docs/screenshots/21_event_calendar.png)  
+> 📸 **SCREENSHOT PLACEHOLDER 20: Event Calendar & Timeline (`/calendar`)**  
+> ![Event Calendar](docs/screenshots/20_event_calendar.png)  
 > *Capture the `/calendar` timeline displaying past and upcoming event cards.*
 
 ---
@@ -299,8 +295,8 @@ Interactive visual timeline (`/calendar`) showing multi-day festivals and indivi
 ### 5.15 Activity Logs & Audit Trail
 An immutable audit log (`/activity-logs`) available to administrators tracking all system mutations (event creations, updates, deletions, user approvals).
 
-> 📸 **SCREENSHOT PLACEHOLDER 22: Activity Audit Logs (`/activity-logs`)**  
-> ![Activity Logs](docs/screenshots/22_activity_logs.png)  
+> 📸 **SCREENSHOT PLACEHOLDER 21: Activity Audit Logs (`/activity-logs`)**  
+> ![Activity Logs](docs/screenshots/21_activity_logs.png)  
 > *Capture the audit log table showing timestamps, performed-by user badges, and descriptive action notes.*
 
 ---
@@ -311,13 +307,9 @@ An immutable audit log (`/activity-logs`) available to administrators tracking a
 - **Theme Engine**: Toggle between Light Mode and Dark Mode with full CSS variable persistence.
 - **PWA Installation**: Install as an offline-capable native app on desktop and mobile.
 
-> 📸 **SCREENSHOT PLACEHOLDER 23: Command Palette (`Ctrl+K`) & Profile Popover**  
-> ![Command Palette Overlay](docs/screenshots/23_command_palette.png)  
+> 📸 **SCREENSHOT PLACEHOLDER 22: Command Palette (`Ctrl+K`) & Profile Popover**  
+> ![Command Palette Overlay](docs/screenshots/22_command_palette.png)  
 > *Capture the centered Command Palette overlay with query text and keyboard navigation highlighted.*
-
-> 📸 **SCREENSHOT PLACEHOLDER 24: Dark Mode Interface Theme**  
-> ![Dark Mode Theme](docs/screenshots/24_dark_mode_view.png)  
-> *Capture the dashboard rendered in Dark Mode showing high-contrast cards and primary glowing accents.*
 
 ---
 
@@ -349,16 +341,14 @@ docs/screenshots/
 | **15** | `15_yf_accommodation.png` | `/event/:id` (Rooms) | Hostel rooms allotment & occupancy bars | 1920×1080 |
 | **16** | `16_yf_results_trophies.png` | `/event/:id` (Results) | College aggregate points & Trophy board | 1920×1080 |
 | **17** | `17_yf_contingent_roster.png` | `/event/:id` (Contingent) | GNDEC visiting contingent roster table | 1920×1080 |
-| **18** | `18_pdf_report_preview.png` | PDF Reader / Browser | Exported landscape Event Report PDF | 1920×1080 |
-| **19** | `19_notifications_popover.png` | Anywhere (`Ctrl+Shift+N`) | Notification popover open showing date groups | 1280×720 (or crop) |
-| **20** | `20_broadcast_email.png` | `/email` | Email composer with template selected | 1920×1080 |
-| **21** | `21_event_calendar.png` | `/calendar` | Event timeline with upcoming/past badges | 1920×1080 |
-| **22** | `22_activity_logs.png` | `/activity-logs` | Activity audit log table with action tags | 1920×1080 |
-| **23** | `23_command_palette.png` | Anywhere (`Ctrl+K`) | Command palette overlay with search query | 1920×1080 |
-| **24** | `24_dark_mode_view.png` | `/` | Home dashboard rendered in Dark Mode | 1920×1080 |
+| **18** | `18_notifications_popover.png` | Anywhere (`Ctrl+Shift+N`) | Notification popover open showing date groups | 1280×720 (or crop) |
+| **19** | `19_broadcast_email.png` | `/email` | Email composer with template selected | 1920×1080 |
+| **20** | `20_event_calendar.png` | `/calendar` | Event timeline with upcoming/past badges | 1920×1080 |
+| **21** | `21_activity_logs.png` | `/activity-logs` | Activity audit log table with action tags | 1920×1080 |
+| **22** | `22_command_palette.png` | Anywhere (`Ctrl+K`) | Command palette overlay with search query | 1920×1080 |
 
 ### Tips for High-Quality Captures:
 1. **Browser Zoom**: Keep browser zoom at 100% (default) so font crispness and padding match the layout design.
 2. **Data Consistency**: Use clean sample event names (e.g. *"IKGPTU Inter-Zonal Youth Festival 2026"*, *"Anand Utsav Cultural Fest"*).
-3. **Theme Uniformity**: For screenshots 01 through 23, capture in **Light Mode** (or consistently in **Dark Mode**), reserving screenshot 24 specifically to demonstrate the Dark/Light contrast.
+3. **Theme Uniformity**: Capture screenshots consistently in either Light Mode or Dark Mode.
 4. **Asset Format**: Save images as standard `.png` files to maintain clean text edges and transparent rounded borders.
