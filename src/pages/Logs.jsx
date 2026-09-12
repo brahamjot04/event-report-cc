@@ -38,6 +38,7 @@ export default function Logs() {
   }, []);
 
   useEffect(() => {
+    document.title = "System Activity Logs | CC GNDEC";
     fetchLogs();
   }, [fetchLogs]);
 
@@ -59,14 +60,14 @@ export default function Logs() {
 
   return (
     <Layout>
-      <div className="d-flex justify-content-between align-items-center mb-4">
+      <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
         <div>
           <h3 className="fw-bold mb-0">System Activity Logs</h3>
-          <p className="text-muted small">
+          <p className="text-muted small mb-0">
             Audit trail of all actions performed in the portal
           </p>
         </div>
-        <div style={{ width: "300px" }}>
+        <div className="w-100 w-sm-auto" style={{ maxWidth: "320px" }}>
           <InputGroup>
             <InputGroup.Text
               style={{ backgroundColor: "var(--soft-hover)", borderRight: 0 }}

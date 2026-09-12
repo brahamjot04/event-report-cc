@@ -80,6 +80,7 @@ export default function Users() {
   };
 
   useEffect(() => {
+    document.title = "User Management | CC GNDEC";
     fetchUsers();
   }, []);
 
@@ -226,14 +227,14 @@ export default function Users() {
 
   return (
     <Layout>
-      <div className="d-flex justify-content-between align-items-center mb-5">
+      <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4 mb-md-5">
         <div>
           <h2 className="fw-bold mb-0">User Management</h2>
-          <p className="text-muted small">Manage system access and roles</p>
+          <p className="text-muted small mb-0">Manage system access and roles</p>
         </div>
         <Button
           variant="primary"
-          className="rounded-pill px-4"
+          className="rounded-pill px-4 w-100 w-sm-auto"
           onClick={() => setShowCreateModal(true)}
         >
           <i className="bi bi-person-plus-fill me-2"></i> Add User

@@ -624,41 +624,86 @@ body {
 }
 
 /* =========================================
-   6. FLOATING THEME TOGGLE BUTTON
+   6. FLOATING SCROLL TO TOP BUTTON & THEME NAV
    ========================================= */
 
-.theme-toggle-btn {
+.scroll-to-top-btn {
     position: fixed;
     bottom: 30px;
     right: 30px;
-    width: 50px;
-    height: 50px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.25);
     background-color: #0d6efd;
-    color: white;
-    font-size: 1.5rem;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    color: #ffffff;
+    font-size: 1.35rem;
+    box-shadow: 0 4px 14px rgba(13, 110, 253, 0.4);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     z-index: 1050;
-    transition: transform 0.2s;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s, box-shadow 0.2s;
+    animation: fadeInScale 0.2s ease-out;
 }
 
-.theme-toggle-btn:hover {
-    transform: scale(1.1);
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.scroll-to-top-btn:hover {
+    transform: translateY(-3px) scale(1.08);
+    background-color: #0b5ed7;
+    color: #ffffff;
+    box-shadow: 0 6px 20px rgba(13, 110, 253, 0.55);
+}
+
+.scroll-to-top-btn:active {
+    transform: translateY(0) scale(0.95);
+}
+
+/* Dark Mode Standout Enhancement */
+[data-bs-theme="dark"] .scroll-to-top-btn,
+[data-theme="dark"] .scroll-to-top-btn {
+    background: linear-gradient(135deg, #0d6efd, #0b5ed7);
+    color: #ffffff;
+    border: 1.5px solid rgba(255, 255, 255, 0.35);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), 0 0 16px rgba(13, 110, 253, 0.55);
+}
+
+[data-bs-theme="dark"] .scroll-to-top-btn:hover,
+[data-theme="dark"] .scroll-to-top-btn:hover {
+    background: linear-gradient(135deg, #1a77f8, #0d6efd);
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.8), 0 0 22px rgba(13, 110, 253, 0.75);
 }
 
 @media (max-width: 767.98px) {
-    .theme-toggle-btn {
+    .scroll-to-top-btn {
         bottom: 74px;
         right: 18px;
         width: 44px;
         height: 44px;
-        font-size: 1.25rem;
+        font-size: 1.2rem;
     }
+}
+
+.theme-nav-btn {
+    transition: all 0.2s ease;
+}
+
+.theme-nav-btn:hover {
+    border-color: var(--bs-primary) !important;
+    background-color: rgba(13, 110, 253, 0.08) !important;
+    transform: scale(1.05);
 }
 
 /* Date & Time picker native dropdown styling */
@@ -1143,5 +1188,81 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 @media (min-width: 992px) {
     .w-lg-auto {
         width: auto !important;
+    }
+}
+
+/* =========================================
+   13. PRINT / PDF STYLES
+   ========================================= */
+
+@media print {
+    /* Hide interactive elements, sidebars, navigation, modals, floating buttons */
+    .sidebar,
+    .mobile-bottom-nav,
+    .top-navbar,
+    .theme-nav-btn,
+    .scroll-to-top-btn,
+    .theme-toggle-btn,
+    .notification-bell-btn,
+    .notification-popover,
+    .profile-menu-popover,
+    .modal,
+    .modal-backdrop,
+    .toast-container,
+    .no-print,
+    .btn:not(.btn-print-keep) {
+        display: none !important;
+    }
+
+    /* Reset background, colors, layout margins */
+    body,
+    #root,
+    .layout-container,
+    .main-content,
+    .content-area {
+        background: #ffffff !important;
+        color: #000000 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    /* Clean printing for cards and containers */
+    .soft-card,
+    .card {
+        box-shadow: none !important;
+        border: 1px solid #d0d7de !important;
+        background: #ffffff !important;
+        color: #000000 !important;
+        page-break-inside: avoid;
+    }
+
+    /* Clean table printing */
+    table {
+        border-collapse: collapse !important;
+        width: 100% !important;
+        page-break-inside: auto;
+    }
+
+    tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+    }
+
+    th, td {
+        border: 1px solid #d0d7de !important;
+        color: #000000 !important;
+        background: transparent !important;
+    }
+
+    thead {
+        display: table-header-group;
+    }
+
+    /* Force links to look standard and avoid color inversions */
+    a {
+        color: #000000 !important;
+        text-decoration: underline;
     }
 }

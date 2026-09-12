@@ -91,6 +91,32 @@ export default function EventParticipants({
     }
   };
 
+  // Step-by-step Esc key: close item detail view before returning to dashboard
+  useEffect(() => {
+    if (!activeItem) return;
+    const handleKeyDown = (e) => {
+      if (e.key !== "Escape") return;
+      if (document.querySelector(".modal.show")) return;
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          activeEl.isContentEditable)
+      ) {
+        activeEl.blur();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      handleBackToItemsList();
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeItem]);
+
   const [editingIndex, setEditingIndex] = useState(null);
 
   const [partForm, setPartForm] = useState({

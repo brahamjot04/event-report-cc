@@ -1,56 +1,27 @@
-import { useState, useEffect } from "react";
+import { useTheme } from "../context/ThemeContext";
 
-export default function ThemeToggle() {
-  const [darkMode, setDarkMode] = useState(() => {
-    const saved = localStorage.getItem("theme");
-    if (saved === "dark") return true;
-    if (saved === "light") return false;
-    return (
-      window.matchMedia &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches
-    );
-  });
-
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.setAttribute("data-theme", "dark");
-      document.documentElement.setAttribute("data-bs-theme", "dark");
-    } else {
-      document.documentElement.removeAttribute("data-theme");
-      document.documentElement.removeAttribute("data-bs-theme");
-    }
-  }, [darkMode]);
-
-  // Listen to OS system theme changes if user hasn't manually set a preference
-  useEffect(() => {
-    if (!window.matchMedia) return;
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const handleChange = (e) => {
-      if (!localStorage.getItem("theme")) {
-        setDarkMode(e.matches);
-      }
-    };
-    mediaQuery.addEventListener("change", handleChange);
-    return () => mediaQuery.removeEventListener("change", handleChange);
-  }, []);
-
-  const handleToggle = () => {
-    const nextMode = !darkMode;
-    setDarkMode(nextMode);
-    localStorage.setItem("theme", nextMode ? "dark" : "light");
-  };
+export default function ThemeToggle({ className = "" }) {
+  const { darkMode, toggleTheme } = useTheme();
 
   return (
-    <button
-      className="theme-toggle-btn"
-      onClick={handleToggle}
+    <div
+      className={`theme-nav-btn p-2 rounded-circle shadow-sm cursor-pointer d-flex align-items-center justify-content-center ${className}`}
+      style={{
+        width: 40,
+        height: 40,
+        backgroundColor: "var(--bg-card)",
+        border: "1px solid var(--border-color)",
+        transition: "all 0.2s ease",
+      }}
+      onClick={toggleTheme}
       title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+      role="button"
+      tabIndex={0}
+      aria-label={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
     >
-      {darkMode ? (
-        <i className="bi bi-sun-fill"></i>
-      ) : (
-        <i className="bi bi-moon-stars-fill"></i>
-      )}
-    </button>
+      <i
+        className={`bi ${darkMode ? "bi-sun-fill text-warning" : "bi-moon-stars-fill text-secondary"} fs-5`}
+      ></i>
+    </div>
   );
 }

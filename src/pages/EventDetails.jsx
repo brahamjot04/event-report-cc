@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   doc,
   getDoc,
@@ -35,32 +35,103 @@ import EventYouthFestivalVenues from "../components/events/youthFestival/EventYo
 import YouthFestivalResults from "../components/events/youthFestival/YouthFestivalResults";
 import YouthFestivalCheckIn from "../components/events/youthFestival/YouthFestivalCheckIn";
 
+const VALID_VIEWS = new Set([
+  "yf_host",
+  "yf_checkin",
+  "yf_venues",
+  "yf_accommodation",
+  "yf_contingent",
+  "yf_results",
+  "participants",
+  "sponsorship",
+  "attendance_sessions",
+  "teams",
+  "teachers",
+]);
+
+const MODULE_NAMES = {
+  yf_host: "Colleges & Participants",
+  yf_checkin: "Desk Check-in & Arrivals",
+  yf_venues: "Venue Mapping",
+  yf_accommodation: "Accommodation",
+  yf_contingent: "GNDEC Contingent",
+  yf_results: "Results & Trophies",
+  participants: "Participants",
+  sponsorship: "Sponsorship",
+  attendance_sessions: "Meeting Schedule",
+  teams: "Organizing Teams",
+  teachers: "Organizing Teachers",
+};
+
 export default function EventDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { role: userRole, user } = useAuth();
   const { showSuccess, showError, confirm } = useToast();
 
-  const [currentView, setCurrentView] = useState("dashboard");
+  const rawTab = searchParams.get("tab") || "";
+  const currentView = VALID_VIEWS.has(rawTab) ? rawTab : "dashboard";
+
   const [highlightedModule, setHighlightedModule] = useState(null);
   const lastViewedModuleRef = useRef(null);
+  const prevViewRef = useRef(currentView);
+
+  // Synchronize scroll highlight when returning to dashboard (via UI back button or browser back)
+  useEffect(() => {
+    const prevView = prevViewRef.current;
+    if (prevView && prevView !== "dashboard" && currentView === "dashboard") {
+      setHighlightedModule(prevView);
+      const timer = setTimeout(() => {
+        setHighlightedModule(null);
+      }, 2200);
+      return () => clearTimeout(timer);
+    }
+    prevViewRef.current = currentView;
+  }, [currentView]);
 
   const handleNavigateToView = (viewKey) => {
     lastViewedModuleRef.current = viewKey;
-    setCurrentView(viewKey);
+    setSearchParams({ tab: viewKey });
     window.scrollTo({ top: 0, behavior: "instant" });
   };
 
-  const handleBackToDashboard = () => {
-    const fromModule = lastViewedModuleRef.current;
-    setCurrentView("dashboard");
-    if (fromModule) {
+  const handleBackToDashboard = useCallback(() => {
+    const fromModule = currentView !== "dashboard" ? currentView : lastViewedModuleRef.current;
+    if (fromModule && fromModule !== "dashboard") {
+      lastViewedModuleRef.current = fromModule;
       setHighlightedModule(fromModule);
       setTimeout(() => {
         setHighlightedModule(null);
       }, 2200);
     }
-  };
+    setSearchParams({});
+  }, [currentView, setSearchParams]);
+
+  // Global Esc key navigation
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (document.querySelector(".modal.show")) return;
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          activeEl.isContentEditable)
+      ) {
+        activeEl.blur();
+        e.preventDefault();
+        return;
+      }
+      if (currentView !== "dashboard") {
+        handleBackToDashboard();
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentView, handleBackToDashboard]);
 
   const [eventData, setEventData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -171,6 +242,19 @@ export default function EventDetails() {
       () => setLoading(false)
     );
   }, [id, navigate]);
+
+  // Contextual Document Title
+  useEffect(() => {
+    if (!eventData) {
+      document.title = "Loading Event... | CC GNDEC";
+      return;
+    }
+    if (currentView && currentView !== "dashboard" && MODULE_NAMES[currentView]) {
+      document.title = `${MODULE_NAMES[currentView]} — ${eventData.title} | CC GNDEC`;
+    } else {
+      document.title = `${eventData.title} | CC GNDEC`;
+    }
+  }, [eventData, currentView]);
 
   const handleDeleteEvent = async () => {
     const confirmed = await confirm({

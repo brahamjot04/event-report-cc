@@ -304,6 +304,32 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
     }
   };
 
+  // Step-by-step Esc key: close team detail view before returning to dashboard
+  useEffect(() => {
+    if (!activeTeam) return;
+    const handleKeyDown = (e) => {
+      if (e.key !== "Escape") return;
+      if (document.querySelector(".modal.show")) return;
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          activeEl.isContentEditable)
+      ) {
+        activeEl.blur();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      handleBackToTeamsList();
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeTeam]);
+
   // --- MEMBER MANAGEMENT ---
   const handleSaveMember = async () => {
     if (!activeTeam || !memberForm.name) return;

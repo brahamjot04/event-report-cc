@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Container, Row, Col, Card, Badge, Button, Form, InputGroup } from "react-bootstrap";
 import Layout from "../components/Layout";
@@ -94,6 +94,10 @@ export default function Notifications() {
     await quickApproveUser(item.sourceId, item.data);
     setApprovingId(null);
   };
+
+  useEffect(() => {
+    document.title = "Notification Center | CC GNDEC";
+  }, []);
 
   return (
     <Layout>

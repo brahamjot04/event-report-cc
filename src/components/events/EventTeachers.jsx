@@ -57,6 +57,9 @@ const normalizeSelectedFieldList = (fields = []) =>
     .filter((field) => field !== "committee")
     .filter(Boolean);
 
+const getCommitteeDomId = (name) =>
+  `teacher-comm-${String(name || "").replace(/[^a-zA-Z0-9]/g, "_")}`;
+
 export default function EventTeachers({ eventId, goBack, eventTitle }) {
   const { showSuccess, showWarning, confirm } = useToast();
   const [teachers, setTeachers] = useState([]);
@@ -83,9 +86,6 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
   const [highlightedCommittee, setHighlightedCommittee] = useState(null);
   const lastCommitteeRef = useRef(null);
 
-  const getCommitteeDomId = (name) =>
-    `teacher-comm-${String(name || "").replace(/[^a-zA-Z0-9]/g, "_")}`;
-
   const handleOpenCommittee = (committeeName) => {
     lastCommitteeRef.current = committeeName;
     setActiveCommittee(committeeName);
@@ -104,6 +104,32 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
       setTimeout(() => setHighlightedCommittee(null), 2200);
     }
   };
+
+  // Step-by-step Esc key: close committee detail view before returning to dashboard
+  useEffect(() => {
+    if (!activeCommittee) return;
+    const handleKeyDown = (e) => {
+      if (e.key !== "Escape") return;
+      if (document.querySelector(".modal.show")) return;
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          activeEl.isContentEditable)
+      ) {
+        activeEl.blur();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      handleBackToTeachersList();
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeCommittee]);
 
   const [selectedFilter, setSelectedFilter] = useState(null);
   const fileInputRef = useRef(null);

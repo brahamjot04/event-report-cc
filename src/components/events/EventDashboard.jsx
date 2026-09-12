@@ -75,7 +75,12 @@ export default function EventDashboard({
           <Button
             variant="outline-secondary"
             className="rounded-circle shadow-sm flex-shrink-0"
-            onClick={() => navigate("/")}
+            onClick={() => {
+              if (eventData?.id) {
+                sessionStorage.setItem("last_viewed_event_id", eventData.id);
+              }
+              navigate("/");
+            }}
             style={{ width: "42px", height: "42px" }}
             title="Back to Home"
           >

@@ -125,6 +125,32 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
     }
   };
 
+  // Step-by-step Esc key: close meeting session detail view before returning to dashboard
+  useEffect(() => {
+    if (!activeSession) return;
+    const handleKeyDown = (e) => {
+      if (e.key !== "Escape") return;
+      if (document.querySelector(".modal.show")) return;
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          activeEl.isContentEditable)
+      ) {
+        activeEl.blur();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      handleBackToMeetingsList();
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeSession]);
+
   const handleDeleteSession = async (e, sid) => {
     e.stopPropagation(); // Prevent card click
     const ok = await confirm({

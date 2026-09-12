@@ -4,7 +4,9 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { usePwa } from "../context/PwaContext";
 import { useNotifications } from "../context/NotificationContext";
+import { useTheme } from "../context/ThemeContext";
 import ThemeToggle from "./ThemeToggle";
+import ScrollToTop from "./ScrollToTop";
 import CommandPalette from "./CommandPalette";
 import NotificationDropdown from "./NotificationDropdown";
 import IosInstallModal from "./IosInstallModal";
@@ -14,6 +16,7 @@ export default function Layout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, userProfile, role, isAdmin, logout } = useAuth();
+  const { darkMode, toggleTheme } = useTheme();
   const {
     isInstallable,
     isInstalled,
@@ -421,6 +424,9 @@ export default function Layout({ children }) {
                 </button>
               )}
 
+              {/* Theme Toggle in Header */}
+              <ThemeToggle />
+
               {/* Notification Bell with Dropdown Popover */}
               <div className="position-relative">
                 <div
@@ -549,12 +555,12 @@ export default function Layout({ children }) {
                         type="button"
                         className="profile-menu-item"
                         onClick={() => {
-                          const btn = document.querySelector(".theme-toggle-btn");
-                          if (btn) btn.click();
+                          toggleTheme();
+                          setIsProfileMenuOpen(false);
                         }}
                       >
-                        <i className="bi bi-moon-stars text-warning fs-6"></i>
-                        <span>Toggle Theme</span>
+                        <i className={`bi ${darkMode ? "bi-sun text-warning" : "bi-moon-stars text-warning"} fs-6`}></i>
+                        <span>{darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}</span>
                       </button>
                       <button
                         type="button"
@@ -730,8 +736,8 @@ export default function Layout({ children }) {
       {/* IOS INSTALLATION GUIDE MODAL */}
       <IosInstallModal />
 
-      {/* FLOATING DARK MODE BUTTON */}
-      <ThemeToggle />
+      {/* FLOATING SCROLL TO TOP BUTTON */}
+      <ScrollToTop />
     </Container>
   );
 }

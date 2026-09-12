@@ -68,6 +68,32 @@ export default function YouthFestivalHost({ eventId, goBack }) {
     }
   };
 
+  // Step-by-step Esc key: close college detail view before returning to dashboard
+  useEffect(() => {
+    if (!selectedCollegeId) return;
+    const handleKeyDown = (e) => {
+      if (e.key !== "Escape") return;
+      if (document.querySelector(".modal.show")) return;
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          activeEl.isContentEditable)
+      ) {
+        activeEl.blur();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      handleBackToCollegesList();
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedCollegeId]);
+
   const [showCollegeModal, setShowCollegeModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [editingCollege, setEditingCollege] = useState(null);

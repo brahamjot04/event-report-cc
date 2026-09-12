@@ -85,6 +85,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    document.title = "Dashboard & Events | CC GNDEC";
     fetchData();
   }, [fetchData]);
 

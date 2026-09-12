@@ -308,17 +308,20 @@ export default function YouthFestivalCheckIn({ eventId, goBack }) {
   return (
     <div>
       {/* HEADER WITH BACK BUTTON & EXPORT BUTTONS */}
-      <div className="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
-        <div className="d-flex align-items-center gap-3">
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+        <div className="d-flex align-items-center gap-3 flex-shrink-0">
           <Button
             variant="outline-secondary"
-            className="rounded-pill px-3"
+            className="rounded-circle shadow-sm flex-shrink-0"
             onClick={goBack}
+            style={{ width: 45, height: 45 }}
+            title="Back"
+            aria-label="Back"
           >
-            <i className="bi bi-arrow-left me-1"></i> Back
+            <i className="bi bi-arrow-left" />
           </Button>
-          <div>
-            <h3 className="fw-bold mb-0">Desk Check-in & Arrivals</h3>
+          <div className="flex-shrink-0">
+            <h3 className="fw-bold mb-0 text-nowrap">Desk Check-in & Arrivals</h3>
             <p className="text-muted small mb-0">
               Real-time registration desk monitoring, attendance verification & roster exports
             </p>
@@ -326,11 +329,11 @@ export default function YouthFestivalCheckIn({ eventId, goBack }) {
         </div>
 
         {/* Action Export Buttons */}
-        <div className="d-flex gap-2 flex-wrap">
+        <div className="d-flex gap-2 flex-wrap w-100 w-md-auto justify-content-start justify-content-md-end">
           <Button
             variant="outline-primary"
             size="sm"
-            className="rounded-pill px-3"
+            className="rounded-pill px-3 flex-grow-1 flex-md-grow-0"
             onClick={exportCollegeSummaryCsv}
             disabled={colleges.length === 0}
           >
@@ -339,7 +342,7 @@ export default function YouthFestivalCheckIn({ eventId, goBack }) {
           <Button
             variant="success"
             size="sm"
-            className="rounded-pill px-3"
+            className="rounded-pill px-3 flex-grow-1 flex-md-grow-0"
             onClick={exportParticipantRosterCsv}
             disabled={colleges.length === 0}
           >

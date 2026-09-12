@@ -25,6 +25,7 @@ export default function Profile() {
   const role = currentRole || "Member";
 
   useEffect(() => {
+    document.title = "My Profile | CC GNDEC";
     const timer = setTimeout(() => {
       setName(user?.displayName || userProfile?.name || "");
     }, 0);

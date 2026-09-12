@@ -32,6 +32,7 @@ export default function Calendar() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    document.title = "Event Calendar | CC GNDEC";
     loadWithCache(
       "all_events_list",
       async () => {

@@ -125,6 +125,7 @@ export default function CoreTeam() {
   }, [loadMemberImages]);
 
   useEffect(() => {
+    document.title = "Core Team | CC GNDEC";
     fetchMembers();
   }, [fetchMembers]);
 

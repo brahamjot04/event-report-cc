@@ -9,6 +9,7 @@ import { AuthProvider } from './context/AuthContext'
 import { ToastProvider } from './context/ToastContext'
 import { PwaProvider } from './context/PwaContext'
 import { NotificationProvider } from './context/NotificationContext'
+import { ThemeProvider } from './context/ThemeContext'
 
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator) {
@@ -49,15 +50,17 @@ if ('serviceWorker' in navigator) {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
-      <AuthProvider>
-        <PwaProvider>
-          <ToastProvider>
-            <NotificationProvider>
-              <App />
-            </NotificationProvider>
-          </ToastProvider>
-        </PwaProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <PwaProvider>
+            <ToastProvider>
+              <NotificationProvider>
+                <App />
+              </NotificationProvider>
+            </ToastProvider>
+          </PwaProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   </React.StrictMode>,
 )

@@ -236,6 +236,10 @@ export default function Email() {
   }, []);
 
   useEffect(() => {
+    document.title = "Broadcast Email | CC GNDEC";
+  }, []);
+
+  useEffect(() => {
     if (activeTab === "history") {
       fetchSentEmails();
     }

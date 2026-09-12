@@ -73,6 +73,32 @@ export default function YouthFestivalAccommodation({ eventId, goBack }) {
     }
   };
 
+  // Step-by-step Esc key: close college detail view before returning to dashboard
+  useEffect(() => {
+    if (!selectedCollegeId) return;
+    const handleKeyDown = (e) => {
+      if (e.key !== "Escape") return;
+      if (document.querySelector(".modal.show")) return;
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          activeEl.isContentEditable)
+      ) {
+        activeEl.blur();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      handleBackToCollegesList();
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedCollegeId]);
+
   // Manage facility input
   const [newFacilityName, setNewFacilityName] = useState("");
   const [addingFacility, setAddingFacility] = useState(false);

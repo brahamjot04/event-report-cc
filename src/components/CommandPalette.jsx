@@ -6,12 +6,14 @@ import { loadWithCache, invalidateCache } from "../utils/dataCache";
 import { getRecentEvents, recordRecentEvent } from "../utils/eventStatus";
 import { useAuth } from "../context/AuthContext";
 import { usePwa } from "../context/PwaContext";
+import { useTheme } from "../context/ThemeContext";
 import { Modal, Form, Badge } from "react-bootstrap";
 
 export default function CommandPalette({ isOpen, onClose }) {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
   const { isInstallable, isInstalled, promptInstall } = usePwa();
+  const { toggleTheme } = useTheme();
   const [queryText, setQueryText] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [events, setEvents] = useState([]);
@@ -156,8 +158,8 @@ export default function CommandPalette({ isOpen, onClose }) {
         subtitle: "Switch between dark and light appearance",
         icon: "bi-moon-stars-fill text-warning",
         action: () => {
-          const btn = document.querySelector(".theme-toggle-btn");
-          if (btn) btn.click();
+          toggleTheme();
+          onClose();
         },
       },
       {
@@ -220,7 +222,7 @@ export default function CommandPalette({ isOpen, onClose }) {
     }
 
     return items;
-  }, [isAdmin, navigate, isInstalled, isInstallable, promptInstall]);
+  }, [isAdmin, navigate, isInstalled, isInstallable, promptInstall, toggleTheme, onClose]);
 
   // Recently Viewed Items
   const recentItems = useMemo(() => {
