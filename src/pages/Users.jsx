@@ -166,10 +166,14 @@ export default function Users() {
         EMAILJS_SERVICE_ID,
         EMAILJS_TEMPLATE_ID,
         {
+          to_email: newUser.email,
+          to_name: newUser.name,
+          recipient_email: newUser.email,
           name: newUser.name,
           email: newUser.email,
           password: tempPassword,
           url: window.location.origin,
+          reply_to: currentUser?.email || "",
         },
         EMAILJS_PUBLIC_KEY,
       );

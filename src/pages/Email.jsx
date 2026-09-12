@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import {
   Form,
@@ -61,14 +61,35 @@ export default function Email() {
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [targetGroup, setTargetGroup] = useState("self"); // 'self' | 'core_team' | 'approved_users' | 'custom'
+  const [customReplyTo, setCustomReplyTo] = useState("");
   const [customEmailsInput, setCustomEmailsInput] = useState("");
   const [customEmailsValidation, setCustomEmailsValidation] = useState({
     valid: [],
     invalid: [],
   });
-  const [recipients, setRecipients] = useState([]);
+
+  // Automatically initialize customReplyTo with current user's email
+  useEffect(() => {
+    if (user?.email && !customReplyTo) {
+      setCustomReplyTo(user.email);
+    }
+  }, [user, customReplyTo]);
+
+  // Database Recipient Selection States
+  const [availableRecipients, setAvailableRecipients] = useState([]);
+  const [selectedEmails, setSelectedEmails] = useState(new Set());
+  const [missingEmailCount, setMissingEmailCount] = useState(0);
+  const [recipientFilterText, setRecipientFilterText] = useState("");
   const [loadingRecipients, setLoadingRecipients] = useState(false);
   const [sending, setSending] = useState(false);
+
+  // DB Contact Picker Modal (for selecting contacts from DB into custom emails)
+  const [showDbPickerModal, setShowDbPickerModal] = useState(false);
+  const [dbContacts, setDbContacts] = useState([]);
+  const [loadingDbContacts, setLoadingDbContacts] = useState(false);
+  const [dbPickerTab, setDbPickerTab] = useState("all"); // 'all' | 'core_team' | 'users'
+  const [dbPickerSearch, setDbPickerSearch] = useState("");
+  const [dbPickerSelectedEmails, setDbPickerSelectedEmails] = useState(new Set());
 
   // History State
   const [sentEmails, setSentEmails] = useState([]);
@@ -110,45 +131,260 @@ export default function Email() {
     if (targetGroup === "custom") {
       const { valid, invalid } = parseCustomEmails(customEmailsInput);
       setCustomEmailsValidation({ valid, invalid });
-      setRecipients(valid.map((em) => ({ name: em.split("@")[0], email: em })));
     }
   }, [targetGroup, customEmailsInput]);
+
+  // Derived list of recipients to actually dispatch emails to
+  const activeRecipients = useMemo(() => {
+    if (targetGroup === "self") {
+      return user?.email
+        ? [
+            {
+              id: "self",
+              name: user?.displayName || "Admin",
+              email: user.email,
+            },
+          ]
+        : [];
+    }
+    if (targetGroup === "custom") {
+      return customEmailsValidation.valid.map((em) => ({
+        id: em,
+        name: em.split("@")[0],
+        email: em,
+      }));
+    }
+    return availableRecipients.filter((r) => selectedEmails.has(r.email));
+  }, [
+    targetGroup,
+    user,
+    customEmailsValidation.valid,
+    availableRecipients,
+    selectedEmails,
+  ]);
+
+  // Filtered available recipients for the in-compose checklist
+  const filteredAvailableRecipients = useMemo(() => {
+    const q = recipientFilterText.toLowerCase().trim();
+    if (!q) return availableRecipients;
+    return availableRecipients.filter(
+      (r) =>
+        r.name.toLowerCase().includes(q) ||
+        r.email.toLowerCase().includes(q) ||
+        (r.designation && r.designation.toLowerCase().includes(q))
+    );
+  }, [availableRecipients, recipientFilterText]);
+
+  const handleToggleRecipient = (email) => {
+    setSelectedEmails((prev) => {
+      const next = new Set(prev);
+      if (next.has(email)) {
+        next.delete(email);
+      } else {
+        next.add(email);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllRecipients = () => {
+    setSelectedEmails((prev) => {
+      const next = new Set(prev);
+      filteredAvailableRecipients.forEach((r) => next.add(r.email));
+      return next;
+    });
+  };
+
+  const handleDeselectAllRecipients = () => {
+    if (recipientFilterText.trim()) {
+      setSelectedEmails((prev) => {
+        const next = new Set(prev);
+        filteredAvailableRecipients.forEach((r) => next.delete(r.email));
+        return next;
+      });
+    } else {
+      setSelectedEmails(new Set());
+    }
+  };
+
+  // Open Database Contact Picker Modal
+  const openDbPickerModal = async () => {
+    setShowDbPickerModal(true);
+    setLoadingDbContacts(true);
+    setDbPickerSearch("");
+    setDbPickerSelectedEmails(new Set());
+    try {
+      const [coreSnap, usersSnap] = await Promise.all([
+        getDocs(collection(db, "global_core_team")),
+        getDocs(query(collection(db, "users"), where("status", "==", "approved"))),
+      ]);
+
+      const contacts = [];
+      coreSnap.docs.forEach((d) => {
+        const data = d.data();
+        const em = (data.email || "").trim().toLowerCase();
+        if (em && em.includes("@")) {
+          contacts.push({
+            id: `core-${d.id}`,
+            name: data.name || "Core Team Member",
+            email: em,
+            designation: data.designation || "Core Team",
+            group: "core_team",
+            groupLabel: "Core Team",
+          });
+        }
+      });
+
+      usersSnap.docs.forEach((d) => {
+        const data = d.data();
+        const em = (data.email || "").trim().toLowerCase();
+        if (em && em.includes("@")) {
+          contacts.push({
+            id: `user-${d.id}`,
+            name: data.name || "User",
+            email: em,
+            designation: data.role
+              ? `${data.role.charAt(0).toUpperCase() + data.role.slice(1)}`
+              : "User",
+            group: "users",
+            groupLabel: "Approved User",
+          });
+        }
+      });
+
+      contacts.sort((a, b) => a.name.localeCompare(b.name));
+      setDbContacts(contacts);
+    } catch (err) {
+      console.error("Failed to load contacts from DB:", err);
+      showError("Failed to load contacts from DB: " + err.message);
+    } finally {
+      setLoadingDbContacts(false);
+    }
+  };
+
+  const filteredDbContacts = useMemo(() => {
+    return dbContacts.filter((c) => {
+      if (dbPickerTab !== "all" && c.group !== dbPickerTab) return false;
+      const q = dbPickerSearch.toLowerCase().trim();
+      if (!q) return true;
+      return (
+        c.name.toLowerCase().includes(q) ||
+        c.email.toLowerCase().includes(q) ||
+        (c.designation && c.designation.toLowerCase().includes(q))
+      );
+    });
+  }, [dbContacts, dbPickerTab, dbPickerSearch]);
+
+  const handleToggleDbContact = (email) => {
+    setDbPickerSelectedEmails((prev) => {
+      const next = new Set(prev);
+      if (next.has(email)) {
+        next.delete(email);
+      } else {
+        next.add(email);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllDbContacts = () => {
+    setDbPickerSelectedEmails((prev) => {
+      const next = new Set(prev);
+      filteredDbContacts.forEach((c) => next.add(c.email));
+      return next;
+    });
+  };
+
+  const handleDeselectAllDbContacts = () => {
+    if (dbPickerSearch.trim() || dbPickerTab !== "all") {
+      setDbPickerSelectedEmails((prev) => {
+        const next = new Set(prev);
+        filteredDbContacts.forEach((c) => next.delete(c.email));
+        return next;
+      });
+    } else {
+      setDbPickerSelectedEmails(new Set());
+    }
+  };
+
+  const handleInsertSelectedDbEmails = () => {
+    if (dbPickerSelectedEmails.size === 0) return;
+    const currentList = customEmailsInput
+      .split(/[\n,;]+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+    const set = new Set(currentList);
+    let addedCount = 0;
+    dbPickerSelectedEmails.forEach((email) => {
+      if (!set.has(email)) {
+        set.add(email);
+        addedCount += 1;
+      }
+    });
+    setCustomEmailsInput(Array.from(set).join(", "));
+    setShowDbPickerModal(false);
+    showSuccess(`Added ${addedCount} email(s) from database.`);
+  };
 
   // Fetch recipients whenever targetGroup changes
   const loadRecipients = useCallback(async () => {
     if (targetGroup === "custom") {
       const { valid, invalid } = parseCustomEmails(customEmailsInput);
       setCustomEmailsValidation({ valid, invalid });
-      setRecipients(valid.map((em) => ({ name: em.split("@")[0], email: em })));
       return;
     }
 
     if (targetGroup === "self") {
-      setRecipients([
-        {
-          name: user?.displayName || "Admin",
-          email: user?.email || "",
-        },
-      ]);
+      setAvailableRecipients(
+        user?.email
+          ? [
+              {
+                id: "self",
+                name: user?.displayName || "Admin",
+                email: user.email,
+                designation: "Current User",
+              },
+            ]
+          : []
+      );
+      setSelectedEmails(new Set(user?.email ? [user.email] : []));
+      setMissingEmailCount(0);
       return;
     }
 
     setLoadingRecipients(true);
+    setRecipientFilterText("");
     try {
       if (targetGroup === "core_team") {
         await loadWithCache(
           "email_recipients_core_team",
           async () => {
             const snap = await getDocs(collection(db, "global_core_team"));
-            return snap.docs
-              .map((d) => ({
-                name: d.data().name || "Core Team Member",
-                email: d.data().email || d.data().phone || "",
-              }))
-              .filter((m) => m.email && m.email.includes("@"));
+            const valid = [];
+            let missing = 0;
+            snap.docs.forEach((d) => {
+              const data = d.data();
+              const email = (data.email || "").trim().toLowerCase();
+              if (email && email.includes("@")) {
+                valid.push({
+                  id: d.id,
+                  name: data.name || "Core Team Member",
+                  email: email,
+                  designation: data.designation || "Core Team",
+                  group: "core_team",
+                });
+              } else {
+                missing += 1;
+              }
+            });
+            valid.sort((a, b) => a.name.localeCompare(b.name));
+            return { valid, missing };
           },
-          (list, isCached) => {
-            setRecipients(list);
+          (result, isCached) => {
+            const list = result?.valid || [];
+            setAvailableRecipients(list);
+            setSelectedEmails(new Set(list.map((r) => r.email)));
+            setMissingEmailCount(result?.missing || 0);
             if (isCached) setLoadingRecipients(false);
           },
           (error) => {
@@ -162,18 +398,36 @@ export default function Email() {
           async () => {
             const q = query(
               collection(db, "users"),
-              where("status", "==", "approved"),
+              where("status", "==", "approved")
             );
             const snap = await getDocs(q);
-            return snap.docs
-              .map((d) => ({
-                name: d.data().name || "Member",
-                email: d.data().email || "",
-              }))
-              .filter((u) => u.email && u.email.includes("@"));
+            const valid = [];
+            let missing = 0;
+            snap.docs.forEach((d) => {
+              const data = d.data();
+              const email = (data.email || "").trim().toLowerCase();
+              if (email && email.includes("@")) {
+                valid.push({
+                  id: d.id,
+                  name: data.name || "Member",
+                  email: email,
+                  designation: data.role
+                    ? `${data.role.charAt(0).toUpperCase() + data.role.slice(1)}`
+                    : "Approved User",
+                  group: "approved_users",
+                });
+              } else {
+                missing += 1;
+              }
+            });
+            valid.sort((a, b) => a.name.localeCompare(b.name));
+            return { valid, missing };
           },
-          (list, isCached) => {
-            setRecipients(list);
+          (result, isCached) => {
+            const list = Array.isArray(result) ? result : result?.valid || [];
+            setAvailableRecipients(list);
+            setSelectedEmails(new Set(list.map((r) => r.email)));
+            setMissingEmailCount(Array.isArray(result) ? 0 : result?.missing || 0);
             if (isCached) setLoadingRecipients(false);
           },
           (error) => {
@@ -295,20 +549,30 @@ export default function Email() {
       return;
     }
 
-    if (recipients.length === 0) {
-      showError("No valid recipients found for the selected audience.");
+    if (activeRecipients.length === 0) {
+      showError("Please select at least one valid recipient for the broadcast.");
       return;
     }
 
     // Confirmation if sending to multiple recipients
-    if (recipients.length > 1) {
+    if (activeRecipients.length > 1) {
       const ok = await confirm({
         title: "Confirm Email Broadcast",
-        message: `You are about to send this announcement to ${recipients.length} recipients. Do you wish to proceed?`,
-        confirmText: `Send to ${recipients.length} Recipients`,
+        message: `You are about to send this announcement to ${activeRecipients.length} recipients. Do you wish to proceed?`,
+        confirmText: `Send to ${activeRecipients.length} Recipients`,
         variant: "primary",
       });
       if (!ok) return;
+    }
+
+    // Reply-To resolution and validation
+    const finalReplyTo = (customReplyTo || "").trim() || user?.email || "";
+    if (customReplyTo && customReplyTo.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(customReplyTo.trim())) {
+        showError("Please enter a valid email address in the Reply-To field.");
+        return;
+      }
     }
 
     setSending(true);
@@ -318,11 +582,25 @@ export default function Email() {
       let failedCount = 0;
       const recipientResults = [];
 
-      for (const recipient of recipients) {
+      const adminName = user?.displayName || "Cultural Committee Admin";
+
+      for (const recipient of activeRecipients) {
         const templateParams = {
-          name: recipient.name || "Member",
+          to_email: recipient.email,
+          to_name: recipient.name || "Member",
+          recipient_email: recipient.email,
+          recipient_name: recipient.name || "Member",
           email: recipient.email,
+          reply_to: finalReplyTo,
+          from_email: finalReplyTo,
+          from_name: user?.displayName
+            ? `${user.displayName} (Cultural Committee GNDEC)`
+            : "Cultural Committee GNDEC",
+          sender_name: adminName,
+          admin_name: adminName,
+          name: adminName, // Matches template's 'From Name: {{name}}' and 'Sent by: {{name}} (Admin)'
           title: subject,
+          subject: subject,
           message: message,
           url: window.location.origin,
         };
@@ -366,18 +644,19 @@ export default function Email() {
         failedCount: failedCount,
         status: overallStatus,
         sender: user,
+        replyTo: finalReplyTo,
       });
 
       // Also log general activity
       await logAction(
         "SEND_EMAIL",
-        `Sent broadcast announcement "${subject}" to ${sentCount}/${recipients.length} recipient(s) [Audience: ${targetGroup}, Status: ${overallStatus}]`,
+        `Sent broadcast announcement "${subject}" to ${sentCount}/${activeRecipients.length} recipient(s) [Audience: ${targetGroup}, Status: ${overallStatus}]`,
         user
       );
 
       if (sentCount > 0) {
         showSuccess(
-          `Announcement successfully sent to ${sentCount} recipient${sentCount > 1 ? "s" : ""}${failedCount > 0 ? ` (${failedCount} failed)` : ""}!`,
+          `Announcement successfully sent to ${sentCount} recipient${sentCount > 1 ? "s" : ""}${failedCount > 0 ? ` (${failedCount} failed)` : ""}!`
         );
         setSubject("");
         setMessage("");
@@ -495,6 +774,17 @@ export default function Email() {
     return matchSubject || matchMessage || matchSender || matchAudience || matchRecipient;
   });
 
+  const modalRecipients = useMemo(() => {
+    if (!selectedEmail?.recipients) return [];
+    const q = recipientSearch.toLowerCase().trim();
+    if (!q) return selectedEmail.recipients;
+    return selectedEmail.recipients.filter(
+      (r) =>
+        (r.name || "").toLowerCase().includes(q) ||
+        (r.email || "").toLowerCase().includes(q)
+    );
+  }, [selectedEmail, recipientSearch]);
+
   return (
     <Layout>
       <div className="d-flex align-items-center mb-4">
@@ -570,29 +860,161 @@ export default function Email() {
                         </Button>
                       </div>
 
-                      <div className="d-flex align-items-center gap-2">
-                        <small className="text-muted">
-                          Target count:{" "}
-                          {loadingRecipients ? (
-                            <Spinner animation="border" size="sm" />
-                          ) : (
+                      {/* Audience Recipient Info / Interactive Selection */}
+                      {targetGroup === "self" && (
+                        <div className="d-flex align-items-center gap-2">
+                          <small className="text-muted">
+                            Target count:{" "}
                             <Badge bg="info" className="text-dark">
-                              {recipients.length} Recipient{recipients.length !== 1 ? "s" : ""}
-                            </Badge>
+                              1 Recipient
+                            </Badge>{" "}
+                            ({user?.email || "No email"})
+                          </small>
+                        </div>
+                      )}
+
+                      {(targetGroup === "core_team" || targetGroup === "approved_users") && (
+                        <div className="mt-3">
+                          {missingEmailCount > 0 && targetGroup === "core_team" && (
+                            <div className="alert alert-warning py-2 px-3 small d-flex align-items-center gap-2 mb-2">
+                              <i className="bi bi-exclamation-triangle-fill flex-shrink-0"></i>
+                              <div>
+                                <strong>{missingEmailCount} member{missingEmailCount > 1 ? "s" : ""}</strong> in Core Team {missingEmailCount > 1 ? "do" : "does"} not have an email address recorded. You can add their emails in the <a href="/core-team" className="alert-link">Core Team</a> page.
+                              </div>
+                            </div>
                           )}
-                        </small>
-                        {targetGroup === "self" && (
-                          <small className="text-muted">({user?.email})</small>
-                        )}
-                      </div>
+
+                          <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                            <div className="small">
+                              <span className="text-muted">Selected: </span>
+                              <Badge bg={activeRecipients.length > 0 ? "primary" : "secondary"}>
+                                {activeRecipients.length} of {availableRecipients.length} Recipient{availableRecipients.length !== 1 ? "s" : ""}
+                              </Badge>
+                            </div>
+                            <div className="d-flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline-primary"
+                                className="py-0 px-2 small rounded-pill"
+                                style={{ fontSize: "12px" }}
+                                onClick={handleSelectAllRecipients}
+                                disabled={availableRecipients.length === 0}
+                              >
+                                Select All
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline-secondary"
+                                className="py-0 px-2 small rounded-pill"
+                                style={{ fontSize: "12px" }}
+                                onClick={handleDeselectAllRecipients}
+                                disabled={selectedEmails.size === 0}
+                              >
+                                Deselect All
+                              </Button>
+                            </div>
+                          </div>
+
+                          {availableRecipients.length > 4 && (
+                            <Form.Control
+                              size="sm"
+                              type="search"
+                              placeholder="Filter members by name, role, or email..."
+                              value={recipientFilterText}
+                              onChange={(e) => setRecipientFilterText(e.target.value)}
+                              style={inputStyle}
+                              className="mb-2"
+                            />
+                          )}
+
+                          {/* Scrollable Recipient Checklist */}
+                          <div
+                            className="border rounded p-2 mb-2"
+                            style={{
+                              maxHeight: "220px",
+                              overflowY: "auto",
+                              backgroundColor: "var(--bg-main)",
+                              borderColor: "var(--border-color)",
+                            }}
+                          >
+                            {loadingRecipients ? (
+                              <div className="text-center py-3 text-muted small">
+                                <Spinner animation="border" size="sm" className="me-2" />
+                                Loading recipients...
+                              </div>
+                            ) : availableRecipients.length === 0 ? (
+                              <div className="text-center py-3 text-muted small">
+                                No members with registered email addresses found.
+                              </div>
+                            ) : filteredAvailableRecipients.length === 0 ? (
+                              <div className="text-center py-3 text-muted small">
+                                No matching recipients found for &quot;{recipientFilterText}&quot;.
+                              </div>
+                            ) : (
+                              filteredAvailableRecipients.map((r) => {
+                                const isChecked = selectedEmails.has(r.email);
+                                return (
+                                  <div
+                                    key={r.email}
+                                    className={`d-flex align-items-center justify-content-between p-2 rounded mb-1 ${
+                                      isChecked ? "bg-primary-subtle" : ""
+                                    }`}
+                                    style={{
+                                      cursor: "pointer",
+                                      transition: "background-color 0.15s ease",
+                                    }}
+                                    onClick={() => handleToggleRecipient(r.email)}
+                                  >
+                                    <div className="d-flex align-items-center gap-2 text-truncate me-2">
+                                      <Form.Check
+                                        type="checkbox"
+                                        id={`recip-${r.id || r.email}`}
+                                        checked={isChecked}
+                                        onChange={() => handleToggleRecipient(r.email)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="mb-0"
+                                      />
+                                      <span className="fw-semibold text-truncate small">{r.name}</span>
+                                      {r.designation && (
+                                        <Badge
+                                          bg="secondary"
+                                          className="fw-normal text-truncate small"
+                                          style={{ maxWidth: "160px" }}
+                                        >
+                                          {r.designation}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <small className="text-muted text-truncate font-monospace" style={{ fontSize: "11px" }}>
+                                      {r.email}
+                                    </small>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </Form.Group>
 
                     {/* Custom Email Address Input */}
                     {targetGroup === "custom" && (
                       <Form.Group className="mb-3">
-                        <Form.Label className="fw-bold">
-                          Recipient Email Address(es)
-                        </Form.Label>
+                        <div className="d-flex justify-content-between align-items-center mb-1">
+                          <Form.Label className="fw-bold mb-0">
+                            Recipient Email Address(es)
+                          </Form.Label>
+                          <Button
+                            type="button"
+                            variant="outline-primary"
+                            size="sm"
+                            className="rounded-pill py-0 px-2 small"
+                            style={{ fontSize: "12px" }}
+                            onClick={openDbPickerModal}
+                          >
+                            <i className="bi bi-person-plus-fill me-1"></i> Select from DB
+                          </Button>
+                        </div>
                         <Form.Control
                           as="textarea"
                           rows={2}
@@ -602,9 +1024,17 @@ export default function Email() {
                           style={inputStyle}
                           required
                         />
-                        <Form.Text className="text-muted d-block mt-1">
-                          Enter single or multiple email addresses separated by commas, semicolons, or newlines.
-                        </Form.Text>
+                        <div className="d-flex justify-content-between align-items-center mt-1">
+                          <Form.Text className="text-muted small">
+                            Separate multiple addresses with commas, semicolons, or newlines.
+                          </Form.Text>
+                          <small className="text-muted">
+                            Target count:{" "}
+                            <Badge bg="info" className="text-dark">
+                              {activeRecipients.length} Recipient{activeRecipients.length !== 1 ? "s" : ""}
+                            </Badge>
+                          </small>
+                        </div>
                         {customEmailsValidation.invalid.length > 0 && (
                           <div className="mt-2 text-danger small">
                             <i className="bi bi-exclamation-triangle-fill me-1"></i>
@@ -663,6 +1093,39 @@ export default function Email() {
                       </Form.Text>
                     </Form.Group>
 
+                    {/* Reply-To Address Field */}
+                    <Form.Group className="mb-3">
+                      <div className="d-flex justify-content-between align-items-center mb-1">
+                        <Form.Label className="fw-bold mb-0">
+                          <i className="bi bi-reply me-1 text-primary"></i>
+                          Reply-To Address
+                        </Form.Label>
+                        {user?.email && customReplyTo !== user.email && (
+                          <Button
+                            type="button"
+                            variant="outline-secondary"
+                            size="sm"
+                            className="rounded-pill py-0 px-2 small"
+                            style={{ fontSize: "12px" }}
+                            onClick={() => setCustomReplyTo(user.email)}
+                          >
+                            <i className="bi bi-arrow-counterclockwise me-1"></i> Reset to my email
+                          </Button>
+                        )}
+                      </div>
+                      <Form.Control
+                        type="email"
+                        placeholder="e.g. your-email@gndec.ac.in"
+                        value={customReplyTo}
+                        onChange={(e) => setCustomReplyTo(e.target.value)}
+                        style={inputStyle}
+                        required
+                      />
+                      <Form.Text className="text-muted small">
+                        Recipient replies will be delivered to this address. Defaults to your admin email ({user?.email || "logged-in account"}).
+                      </Form.Text>
+                    </Form.Group>
+
                     {/* Subject Field */}
                     <Form.Group className="mb-3">
                       <Form.Label className="fw-bold">Subject</Form.Label>
@@ -703,6 +1166,16 @@ export default function Email() {
                           <i className="bi bi-eye me-1"></i> Live Email Preview
                         </Card.Header>
                         <Card.Body>
+                          <div className="small text-muted mb-2 border-bottom pb-2">
+                            <div>
+                              <span>From: </span>
+                              <strong>{user?.displayName || "Admin"}</strong> (via Cultural Committee System)
+                            </div>
+                            <div>
+                              <span>Reply-To: </span>
+                              <strong className="text-primary">{customReplyTo || user?.email || "(none)"}</strong>
+                            </div>
+                          </div>
                           <h6 className="fw-bold text-primary mb-2">
                             {subject || "(No Subject)"}
                           </h6>
@@ -724,7 +1197,7 @@ export default function Email() {
                         disabled={
                           sending ||
                           loadingRecipients ||
-                          recipients.length === 0 ||
+                          activeRecipients.length === 0 ||
                           (targetGroup === "custom" &&
                             customEmailsValidation.invalid.length > 0)
                         }
@@ -739,7 +1212,7 @@ export default function Email() {
                             <i className="bi bi-send-fill me-2"></i>
                             {targetGroup === "self"
                               ? "Send Test Announcement"
-                              : `Broadcast to ${recipients.length} Recipient${recipients.length !== 1 ? "s" : ""}`}
+                              : `Broadcast to ${activeRecipients.length} Selected Recipient${activeRecipients.length !== 1 ? "s" : ""}`}
                           </>
                         )}
                       </Button>
@@ -886,6 +1359,7 @@ export default function Email() {
         onHide={() => setShowDetailsModal(false)}
         size="lg"
         centered
+        scrollable
       >
         <div
           className="soft-card border-0"
@@ -932,6 +1406,11 @@ export default function Email() {
                       <span className="text-muted">Dispatched By:</span>{" "}
                       <strong>{selectedEmail.sender?.name}</strong> (
                       {selectedEmail.sender?.email})
+                      {selectedEmail.replyTo && (
+                        <span className="ms-2 text-muted">
+                          • Reply-To: <strong className="text-body">{selectedEmail.replyTo}</strong>
+                        </span>
+                      )}
                     </Col>
                   </Row>
                 </div>
@@ -973,37 +1452,43 @@ export default function Email() {
                   </div>
 
                   <div
-                    className="rounded overflow-hidden border"
+                    className="rounded border"
                     style={{
                       borderColor: "var(--border-color)",
-                      maxHeight: "220px",
+                      maxHeight: "260px",
                       overflowY: "auto",
                     }}
                   >
                     <Table hover size="sm" className="mb-0 align-middle">
-                      <thead style={{ backgroundColor: "var(--soft-hover)" }}>
+                      <thead
+                        style={{
+                          position: "sticky",
+                          top: 0,
+                          zIndex: 2,
+                        }}
+                      >
                         <tr className="small text-muted">
-                          <th className="ps-3 py-2">Name</th>
-                          <th>Email Address</th>
-                          <th className="text-center">Delivery</th>
+                          <th className="ps-3 py-2" style={{ backgroundColor: "var(--soft-hover)" }}>Name</th>
+                          <th style={{ backgroundColor: "var(--soft-hover)" }}>Email Address</th>
+                          <th className="text-center" style={{ backgroundColor: "var(--soft-hover)" }}>Delivery</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {(selectedEmail.recipients || [])
-                          .filter((r) => {
-                            const q = recipientSearch.toLowerCase().trim();
-                            if (!q) return true;
-                            return (
-                              (r.name || "").toLowerCase().includes(q) ||
-                              (r.email || "").toLowerCase().includes(q)
-                            );
-                          })
-                          .map((rec, idx) => (
+                        {modalRecipients.length === 0 ? (
+                          <tr>
+                            <td colSpan={3} className="text-center py-3 text-muted small">
+                              {recipientSearch.trim()
+                                ? `No recipients found matching "${recipientSearch}"`
+                                : "No recipients recorded for this dispatch."}
+                            </td>
+                          </tr>
+                        ) : (
+                          modalRecipients.map((rec, idx) => (
                             <tr key={idx}>
                               <td className="ps-3 py-2 text-body fw-semibold small">
                                 {rec.name || "Recipient"}
                               </td>
-                              <td className="small text-muted">{rec.email}</td>
+                              <td className="small text-muted font-monospace">{rec.email}</td>
                               <td className="text-center">
                                 {rec.status === "sent" ? (
                                   <Badge
@@ -1023,7 +1508,8 @@ export default function Email() {
                                 )}
                               </td>
                             </tr>
-                          ))}
+                          ))
+                        )}
                       </tbody>
                     </Table>
                   </div>
@@ -1039,6 +1525,183 @@ export default function Email() {
             >
               Close
             </Button>
+          </Modal.Footer>
+        </div>
+      </Modal>
+
+      {/* SELECT FROM DB MODAL */}
+      <Modal
+        show={showDbPickerModal}
+        onHide={() => setShowDbPickerModal(false)}
+        size="lg"
+        centered
+      >
+        <div
+          style={{
+            backgroundColor: "var(--bg-card)",
+            color: "var(--text-primary)",
+          }}
+        >
+          <Modal.Header closeButton className="border-0 pb-0">
+            <Modal.Title className="fw-bold fs-5">
+              <i className="bi bi-database-check text-primary me-2"></i>
+              Select Contacts from Database
+            </Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <p className="text-muted small mb-3">
+              Select contacts from Core Team or Approved Users to insert into your custom recipient list.
+            </p>
+
+            {/* Filter Tabs */}
+            <div className="d-flex flex-wrap gap-2 mb-3">
+              <Button
+                size="sm"
+                variant={dbPickerTab === "all" ? "primary" : "outline-secondary"}
+                className="rounded-pill px-3"
+                onClick={() => setDbPickerTab("all")}
+              >
+                All Contacts ({dbContacts.length})
+              </Button>
+              <Button
+                size="sm"
+                variant={dbPickerTab === "core_team" ? "primary" : "outline-secondary"}
+                className="rounded-pill px-3"
+                onClick={() => setDbPickerTab("core_team")}
+              >
+                Core Team ({dbContacts.filter((c) => c.group === "core_team").length})
+              </Button>
+              <Button
+                size="sm"
+                variant={dbPickerTab === "users" ? "primary" : "outline-secondary"}
+                className="rounded-pill px-3"
+                onClick={() => setDbPickerTab("users")}
+              >
+                Approved Users ({dbContacts.filter((c) => c.group === "users").length})
+              </Button>
+            </div>
+
+            {/* Search & Bulk Selection */}
+            <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+              <div className="flex-grow-1" style={{ maxWidth: "360px" }}>
+                <Form.Control
+                  size="sm"
+                  type="search"
+                  placeholder="Search by name, role, or email..."
+                  value={dbPickerSearch}
+                  onChange={(e) => setDbPickerSearch(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+              <div className="d-flex gap-2 align-items-center">
+                <Button
+                  size="sm"
+                  variant="outline-primary"
+                  className="rounded-pill px-2 py-0 small"
+                  style={{ fontSize: "12px" }}
+                  onClick={handleSelectAllDbContacts}
+                  disabled={filteredDbContacts.length === 0}
+                >
+                  Select All ({filteredDbContacts.length})
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline-secondary"
+                  className="rounded-pill px-2 py-0 small"
+                  style={{ fontSize: "12px" }}
+                  onClick={handleDeselectAllDbContacts}
+                  disabled={dbPickerSelectedEmails.size === 0}
+                >
+                  Deselect All
+                </Button>
+              </div>
+            </div>
+
+            {/* Contacts Checklist */}
+            <div
+              className="border rounded p-2"
+              style={{
+                maxHeight: "320px",
+                overflowY: "auto",
+                backgroundColor: "var(--bg-main)",
+                borderColor: "var(--border-color)",
+              }}
+            >
+              {loadingDbContacts ? (
+                <div className="text-center py-4 text-muted small">
+                  <Spinner animation="border" size="sm" className="me-2" />
+                  Loading database contacts...
+                </div>
+              ) : filteredDbContacts.length === 0 ? (
+                <div className="text-center py-4 text-muted small">
+                  No contacts found.
+                </div>
+              ) : (
+                filteredDbContacts.map((c) => {
+                  const isChecked = dbPickerSelectedEmails.has(c.email);
+                  return (
+                    <div
+                      key={c.id}
+                      className={`d-flex align-items-center justify-content-between p-2 rounded mb-1 ${
+                        isChecked ? "bg-primary-subtle" : ""
+                      }`}
+                      style={{
+                        cursor: "pointer",
+                        transition: "background-color 0.15s ease",
+                      }}
+                      onClick={() => handleToggleDbContact(c.email)}
+                    >
+                      <div className="d-flex align-items-center gap-2 text-truncate me-2">
+                        <Form.Check
+                          type="checkbox"
+                          id={`picker-${c.id}`}
+                          checked={isChecked}
+                          onChange={() => handleToggleDbContact(c.email)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="mb-0"
+                        />
+                        <span className="fw-semibold text-truncate small">{c.name}</span>
+                        <Badge
+                          bg={c.group === "core_team" ? "primary" : "info"}
+                          className={`small fw-normal text-truncate ${
+                            c.group === "users" ? "text-dark" : ""
+                          }`}
+                          style={{ maxWidth: "140px" }}
+                        >
+                          {c.designation}
+                        </Badge>
+                      </div>
+                      <small className="text-muted font-monospace text-truncate" style={{ fontSize: "11px" }}>
+                        {c.email}
+                      </small>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </Modal.Body>
+          <Modal.Footer className="border-0 pt-0 d-flex justify-content-between align-items-center">
+            <span className="small text-muted">
+              {dbPickerSelectedEmails.size} contact{dbPickerSelectedEmails.size !== 1 ? "s" : ""} selected
+            </span>
+            <div className="d-flex gap-2">
+              <Button
+                variant="outline-secondary"
+                className="rounded-pill px-3"
+                onClick={() => setShowDbPickerModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                className="rounded-pill px-4"
+                disabled={dbPickerSelectedEmails.size === 0}
+                onClick={handleInsertSelectedDbEmails}
+              >
+                <i className="bi bi-check-lg me-1"></i>
+                Insert {dbPickerSelectedEmails.size} Selected
+              </Button>
+            </div>
           </Modal.Footer>
         </div>
       </Modal>

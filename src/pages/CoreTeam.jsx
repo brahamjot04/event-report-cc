@@ -25,20 +25,6 @@ import { useAuth } from "../context/AuthContext";
 import { loadWithCache, invalidateCache } from "../utils/dataCache";
 import { logAction } from "../utils/logger";
 
-// Custom Toggle for the Three-Dot Menu
-const CustomToggle = ({ children, onClick }) => (
-  <span
-    onClick={(e) => {
-      e.preventDefault();
-      onClick(e);
-    }}
-    style={{ cursor: "pointer" }}
-    className="text-secondary p-2"
-  >
-    {children}
-  </span>
-);
-
 export default function CoreTeam() {
   const { user } = useAuth();
   const [members, setMembers] = useState([]);
@@ -58,6 +44,7 @@ export default function CoreTeam() {
     name: "",
     urn: "",
     phone: "",
+    email: "",
     branch: "",
     designation: "",
     imageUrl: "",
@@ -162,7 +149,12 @@ export default function CoreTeam() {
       }
 
       const memberData = {
-        ...formData,
+        name: formData.name.trim(),
+        urn: formData.urn?.trim() || "",
+        phone: formData.phone?.trim() || "",
+        email: formData.email ? formData.email.trim().toLowerCase() : "",
+        branch: formData.branch?.trim() || "",
+        designation: formData.designation?.trim() || "",
         imageUrl: uploadedImageUrl,
       };
 
@@ -235,6 +227,7 @@ export default function CoreTeam() {
       name: member.name || "",
       urn: member.urn || "",
       phone: member.phone || "",
+      email: member.email || "",
       branch: member.branch || "",
       designation: member.designation || "",
       imageUrl: member.imageUrl || "",
@@ -253,6 +246,7 @@ export default function CoreTeam() {
       name: "",
       urn: "",
       phone: "",
+      email: "",
       branch: "",
       designation: "",
       imageUrl: "",
@@ -306,51 +300,43 @@ export default function CoreTeam() {
             <div className="soft-card position-relative h-100 d-flex flex-column">
               {/* THREE DOT MENU (Top Right) */}
               <div
-                className="position-absolute end-0 p-2"
-                style={{ top: "8px", zIndex: 1000 }}
+                className="position-absolute top-0 end-0 p-2"
+                style={{ zIndex: 10 }}
+                onClick={(e) => e.stopPropagation()}
               >
                 <Dropdown align="end">
-                  <Dropdown.Toggle as={CustomToggle}>
+                  <Dropdown.Toggle
+                    as="button"
+                    className="btn p-0 border-0 event-card-dropdown-toggle shadow-none"
+                    title="Member Actions"
+                    aria-label="Member Actions"
+                  >
                     <i className="bi bi-three-dots-vertical fs-5"></i>
                   </Dropdown.Toggle>
 
                   <Dropdown.Menu
+                    align="end"
                     style={{
                       minWidth: "8rem",
                       backgroundColor: "var(--bg-card)",
-                      border: "1px solid var(--border-color)",
-                      zIndex: 1001,
+                      borderColor: "var(--border-color)",
+                      boxShadow: "var(--shadow)",
+                      zIndex: 1050,
                     }}
                   >
                     <Dropdown.Item
                       onClick={() => handleEditClick(member)}
-                      style={{
-                        backgroundColor: "transparent",
-                        color: "var(--text-primary)",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.target.style.backgroundColor = "var(--soft-hover)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.backgroundColor = "transparent";
-                      }}
+                      className="d-flex align-items-center gap-2 py-2 text-primary"
                     >
-                      <i className="bi bi-pencil me-2 text-primary"></i> Edit
+                      <i className="bi bi-pencil"></i>
+                      <span>Edit</span>
                     </Dropdown.Item>
                     <Dropdown.Item
                       onClick={() => handleDeleteMember(member.id)}
-                      style={{
-                        backgroundColor: "transparent",
-                        color: "var(--text-primary)",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.target.style.backgroundColor = "var(--soft-hover)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.backgroundColor = "transparent";
-                      }}
+                      className="d-flex align-items-center gap-2 py-2 text-danger"
                     >
-                      <i className="bi bi-trash me-2 text-danger"></i> Delete
+                      <i className="bi bi-trash"></i>
+                      <span>Delete</span>
                     </Dropdown.Item>
                   </Dropdown.Menu>
                 </Dropdown>
@@ -406,10 +392,23 @@ export default function CoreTeam() {
                   <span className="text-muted">Branch:</span>
                   <span className="fw-semibold">{member.branch || "N/A"}</span>
                 </div>
-                <div className="d-flex justify-content-between">
+                <div className="d-flex justify-content-between mb-1">
                   <span className="text-muted">Phone:</span>
                   <span className="fw-semibold">{member.phone || "N/A"}</span>
                 </div>
+                {member.email && (
+                  <div className="d-flex justify-content-between">
+                    <span className="text-muted">Email:</span>
+                    <a
+                      href={`mailto:${member.email}`}
+                      className="fw-semibold text-truncate ms-2 text-decoration-none"
+                      style={{ maxWidth: "160px" }}
+                      title={member.email}
+                    >
+                      {member.email}
+                    </a>
+                  </div>
+                )}
               </div>
             </div>
           </Col>
@@ -463,26 +462,12 @@ export default function CoreTeam() {
                     setFormData({ ...formData, name: e.target.value })
                   }
                   style={inputStyle}
+                  required
                 />
               </Form.Group>
 
               <Row>
-                <Col>
-                  <Form.Group>
-                    <Form.Label className="text-muted small fw-bold">
-                      URN
-                    </Form.Label>
-                    <Form.Control
-                      placeholder="e.g. 2101234"
-                      value={formData.urn}
-                      onChange={(e) =>
-                        setFormData({ ...formData, urn: e.target.value })
-                      }
-                      style={inputStyle}
-                    />
-                  </Form.Group>
-                </Col>
-                <Col>
+                <Col md={6}>
                   <Form.Group>
                     <Form.Label className="text-muted small fw-bold">
                       PHONE
@@ -497,10 +482,41 @@ export default function CoreTeam() {
                     />
                   </Form.Group>
                 </Col>
+                <Col md={6}>
+                  <Form.Group>
+                    <Form.Label className="text-muted small fw-bold">
+                      EMAIL
+                    </Form.Label>
+                    <Form.Control
+                      type="email"
+                      placeholder="e.g. member@gndec.ac.in"
+                      value={formData.email}
+                      onChange={(e) =>
+                        setFormData({ ...formData, email: e.target.value })
+                      }
+                      style={inputStyle}
+                    />
+                  </Form.Group>
+                </Col>
               </Row>
 
               <Row>
-                <Col>
+                <Col md={6}>
+                  <Form.Group>
+                    <Form.Label className="text-muted small fw-bold">
+                      URN
+                    </Form.Label>
+                    <Form.Control
+                      placeholder="e.g. 2101234"
+                      value={formData.urn}
+                      onChange={(e) =>
+                        setFormData({ ...formData, urn: e.target.value })
+                      }
+                      style={inputStyle}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
                   <Form.Group>
                     <Form.Label className="text-muted small fw-bold">
                       BRANCH
@@ -515,25 +531,25 @@ export default function CoreTeam() {
                     />
                   </Form.Group>
                 </Col>
-                <Col>
-                  <Form.Group>
-                    <Form.Label className="text-muted small fw-bold">
-                      DESIGNATION
-                    </Form.Label>
-                    <Form.Control
-                      placeholder="e.g. Secretary"
-                      value={formData.designation}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          designation: e.target.value,
-                        })
-                      }
-                      style={inputStyle}
-                    />
-                  </Form.Group>
-                </Col>
               </Row>
+
+              <Form.Group>
+                <Form.Label className="text-muted small fw-bold">
+                  DESIGNATION
+                </Form.Label>
+                <Form.Control
+                  placeholder="e.g. Secretary"
+                  value={formData.designation}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      designation: e.target.value,
+                    })
+                  }
+                  style={inputStyle}
+                  required
+                />
+              </Form.Group>
             </Form>
           </Modal.Body>
           <Modal.Footer className="border-0">
