@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   collection,
   getDocs,
@@ -46,6 +46,27 @@ export default function YouthFestivalHost({ eventId, goBack }) {
   // Store only the ID — selectedCollege is derived so it always reflects latest state
   const [selectedCollegeId, setSelectedCollegeId] = useState(null);
   const selectedCollege = colleges.find((c) => c.id === selectedCollegeId) || null;
+  const [highlightedCollegeId, setHighlightedCollegeId] = useState(null);
+  const lastCollegeIdRef = useRef(null);
+
+  const handleOpenCollege = (collegeId) => {
+    lastCollegeIdRef.current = collegeId;
+    setSelectedCollegeId(collegeId);
+    window.scrollTo({ top: 0, behavior: "instant" });
+  };
+
+  const handleBackToCollegesList = () => {
+    const fromId = lastCollegeIdRef.current;
+    setSelectedCollegeId(null);
+    if (fromId) {
+      setHighlightedCollegeId(fromId);
+      setTimeout(() => {
+        const el = document.getElementById(`college-card-${fromId}`);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 60);
+      setTimeout(() => setHighlightedCollegeId(null), 2200);
+    }
+  };
 
   const [showCollegeModal, setShowCollegeModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -420,36 +441,40 @@ export default function YouthFestivalHost({ eventId, goBack }) {
     return (
       <div>
         {/* Breadcrumb */}
-        <div className="d-flex align-items-center gap-2 mb-4">
-          <Button
-            variant="outline-secondary"
-            size="sm"
-            onClick={() => setSelectedCollegeId(null)}
-          >
-            <i className="bi bi-arrow-left me-1" />
-            All Colleges
-          </Button>
-          <h5 className="fw-bold mb-0">{c.name}</h5>
-          {c.needsAccommodation && (
-            <Badge bg="primary">
-              <i className="bi bi-house-fill me-1" />
-              Accommodation
+        <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+          <div className="d-flex flex-wrap align-items-center gap-2">
+            <Button
+              variant="outline-secondary"
+              size="sm"
+              onClick={handleBackToCollegesList}
+            >
+              <i className="bi bi-arrow-left me-1" />
+              All Colleges
+            </Button>
+            <h5 className="fw-bold mb-0">{c.name}</h5>
+            {c.needsAccommodation && (
+              <Badge bg="primary">
+                <i className="bi bi-house-fill me-1" />
+                Accommodation
+              </Badge>
+            )}
+            <Badge bg="secondary">
+              {totalParticipants} participant{totalParticipants !== 1 ? "s" : ""}
             </Badge>
-          )}
-          <Badge bg="secondary" className="ms-auto">
-            {totalParticipants} participant{totalParticipants !== 1 ? "s" : ""}
-          </Badge>
-          <Button
-            variant="outline-secondary"
-            size="sm"
-            onClick={() => {
-              setEditingCollege(c);
-              setShowCollegeModal(true);
-            }}
-          >
-            <i className="bi bi-pencil me-1" />
-            Edit College
-          </Button>
+          </div>
+          <div>
+            <Button
+              variant="outline-secondary"
+              size="sm"
+              onClick={() => {
+                setEditingCollege(c);
+                setShowCollegeModal(true);
+              }}
+            >
+              <i className="bi bi-pencil me-1" />
+              Edit College
+            </Button>
+          </div>
         </div>
 
         {/* Incharges */}
@@ -704,13 +729,14 @@ export default function YouthFestivalHost({ eventId, goBack }) {
         colleges.map((c) => (
           <div
             key={c.id}
-            className="p-3 rounded mb-2"
+            id={`college-card-${c.id}`}
+            className={`p-3 rounded mb-2 ${highlightedCollegeId === c.id ? "card-return-highlight" : ""}`}
             style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}
           >
             <div className="d-flex align-items-start justify-content-between gap-2">
               <div
                 style={{ cursor: "pointer" }}
-                onClick={() => setSelectedCollegeId(c.id)}
+                onClick={() => handleOpenCollege(c.id)}
                 className="flex-grow-1"
               >
                 <div className="fw-bold">{c.name}</div>
@@ -827,7 +853,7 @@ export default function YouthFestivalHost({ eventId, goBack }) {
                               className="fw-bold small mb-1 text-muted"
                               style={{ cursor: "pointer" }}
                               onClick={() => {
-                                setSelectedCollegeId(c.id);
+                                handleOpenCollege(c.id);
                                 setActiveTab("colleges");
                               }}
                             >
@@ -884,7 +910,7 @@ export default function YouthFestivalHost({ eventId, goBack }) {
                     cursor: "pointer",
                   }}
                   onClick={() => {
-                    setSelectedCollegeId(c.id);
+                    handleOpenCollege(c.id);
                     setActiveTab("colleges");
                     setSearchQuery("");
                   }}

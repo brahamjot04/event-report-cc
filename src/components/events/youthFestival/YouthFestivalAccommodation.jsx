@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   collection,
   getDocs,
@@ -51,6 +51,27 @@ export default function YouthFestivalAccommodation({ eventId, goBack }) {
   // Selected college ID for reactivity
   const [selectedCollegeId, setSelectedCollegeId] = useState(null);
   const selectedCollege = colleges.find((c) => c.id === selectedCollegeId) || null;
+  const [highlightedCollegeId, setHighlightedCollegeId] = useState(null);
+  const lastCollegeIdRef = useRef(null);
+
+  const handleOpenCollege = (collegeId) => {
+    lastCollegeIdRef.current = collegeId;
+    setSelectedCollegeId(collegeId);
+    window.scrollTo({ top: 0, behavior: "instant" });
+  };
+
+  const handleBackToCollegesList = () => {
+    const fromId = lastCollegeIdRef.current;
+    setSelectedCollegeId(null);
+    if (fromId) {
+      setHighlightedCollegeId(fromId);
+      setTimeout(() => {
+        const el = document.getElementById(`acc-college-card-${fromId}`);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 60);
+      setTimeout(() => setHighlightedCollegeId(null), 2200);
+    }
+  };
 
   // Manage facility input
   const [newFacilityName, setNewFacilityName] = useState("");
@@ -312,13 +333,14 @@ export default function YouthFestivalAccommodation({ eventId, goBack }) {
           return (
             <div
               key={c.id}
-              className="p-3 rounded mb-2"
+              id={`acc-college-card-${c.id}`}
+              className={`p-3 rounded mb-2 ${highlightedCollegeId === c.id ? "card-return-highlight" : ""}`}
               style={{
                 background: "var(--bg-card)",
                 border: "1px solid var(--border-color)",
                 cursor: "pointer",
               }}
-              onClick={() => setSelectedCollegeId(c.id)}
+              onClick={() => handleOpenCollege(c.id)}
             >
               <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
                 <div>
@@ -365,11 +387,11 @@ export default function YouthFestivalAccommodation({ eventId, goBack }) {
     return (
       <div>
         {/* Header */}
-        <div className="d-flex align-items-center gap-2 mb-4">
+        <div className="d-flex flex-wrap align-items-center gap-2 mb-4">
           <Button
             variant="outline-secondary"
             size="sm"
-            onClick={() => setSelectedCollegeId(null)}
+            onClick={handleBackToCollegesList}
           >
             <i className="bi bi-arrow-left me-1" />
             All Colleges

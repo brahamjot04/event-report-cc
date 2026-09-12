@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   doc,
   updateDoc,
@@ -69,6 +69,28 @@ export default function EventParticipants({
   const [editingItemId, setEditingItemId] = useState(null);
 
   const [activeItem, setActiveItem] = useState(null);
+  const [highlightedItemId, setHighlightedItemId] = useState(null);
+  const lastItemIdRef = useRef(null);
+
+  const handleOpenItem = (item) => {
+    lastItemIdRef.current = item.id;
+    setActiveItem(item);
+    window.scrollTo({ top: 0, behavior: "instant" });
+  };
+
+  const handleBackToItemsList = () => {
+    const fromId = lastItemIdRef.current;
+    setActiveItem(null);
+    if (fromId) {
+      setHighlightedItemId(fromId);
+      setTimeout(() => {
+        const el = document.getElementById(`item-card-${fromId}`);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 60);
+      setTimeout(() => setHighlightedItemId(null), 2200);
+    }
+  };
+
   const [editingIndex, setEditingIndex] = useState(null);
 
   const [partForm, setPartForm] = useState({
@@ -550,38 +572,40 @@ export default function EventParticipants({
     );
     return (
       <>
-        <div className="d-flex align-items-center mb-4 gap-3">
-          <Button
-            variant="outline-secondary"
-            className="me-3 rounded-circle shadow-sm"
-            style={{
-              width: "40px",
-              height: "40px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-            onClick={() => setActiveItem(null)}
-          >
-            <i className="bi bi-arrow-left"></i>
-          </Button>
-          <div>
-            <h3 className="fw-bold mb-0">{activeItem.name}</h3>
-            <span className="text-muted small">
-              <Badge
-                className="category-badge me-2"
-                style={{
-                  backgroundColor: "var(--soft-hover)",
-                  color: "var(--text-primary)",
-                  border: "1px solid var(--border-color)",
-                }}
-              >
-                {activeItem.category || "General"}
-              </Badge>
-              {activeItem.participants?.length || 0} Participants
-            </span>
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+          <div className="d-flex align-items-start align-items-sm-center gap-3">
+            <Button
+              variant="outline-secondary"
+              className="rounded-circle shadow-sm flex-shrink-0"
+              style={{
+                width: "40px",
+                height: "40px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              onClick={handleBackToItemsList}
+            >
+              <i className="bi bi-arrow-left"></i>
+            </Button>
+            <div>
+              <h3 className="fw-bold mb-0">{activeItem.name}</h3>
+              <span className="text-muted small">
+                <Badge
+                  className="category-badge me-2"
+                  style={{
+                    backgroundColor: "var(--soft-hover)",
+                    color: "var(--text-primary)",
+                    border: "1px solid var(--border-color)",
+                  }}
+                >
+                  {activeItem.category || "General"}
+                </Badge>
+                {activeItem.participants?.length || 0} Participants
+              </span>
+            </div>
           </div>
-          <div className="ms-auto d-flex gap-2">
+          <div className="d-flex flex-wrap gap-2 w-100 w-md-auto justify-content-start justify-content-md-end">
             {activeItem.isGroupEvent ? (
               <Button
                 variant="outline-secondary"
@@ -933,29 +957,31 @@ export default function EventParticipants({
   // --- RENDER: SUB-EVENT GRID VIEW ---
   return (
     <>
-      <div className="d-flex align-items-center mb-4">
-        <Button
-          variant="outline-secondary"
-          className="me-3 rounded-circle shadow-sm"
-          style={{
-            width: "40px",
-            height: "40px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-          onClick={goBack}
-        >
-          <i className="bi bi-arrow-left"></i>
-        </Button>
-        <div>
-          <h3 className="fw-bold mb-0">Event Participants</h3>
-          <p className="text-muted small mb-0">
-            Manage sub-events and student lists
-          </p>
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+        <div className="d-flex align-items-start align-items-sm-center gap-3">
+          <Button
+            variant="outline-secondary"
+            className="rounded-circle shadow-sm flex-shrink-0"
+            style={{
+              width: "40px",
+              height: "40px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onClick={goBack}
+          >
+            <i className="bi bi-arrow-left"></i>
+          </Button>
+          <div>
+            <h3 className="fw-bold mb-0">Event Participants</h3>
+            <p className="text-muted small mb-0">
+              Manage sub-events and student lists
+            </p>
+          </div>
         </div>
 
-        <div className="ms-auto d-flex gap-2">
+        <div className="d-flex flex-wrap gap-2 w-100 w-md-auto justify-content-start justify-content-md-end">
           <Button
             variant="outline-success"
             onClick={() => setShowProofModal(true)}
@@ -1060,11 +1086,11 @@ export default function EventParticipants({
               selectedCategory === null || item.category === selectedCategory,
           )
           .map((item) => (
-            <Col md={6} lg={4} key={item.id}>
+            <Col md={6} lg={4} key={item.id} id={`item-card-${item.id}`}>
               <div
-                className="soft-card h-100 d-flex flex-column position-relative text-start"
+                className={`soft-card h-100 d-flex flex-column position-relative text-start ${highlightedItemId === item.id ? "card-return-highlight" : ""}`}
                 style={{ cursor: "pointer", minHeight: "180px" }}
-                onClick={() => setActiveItem(item)}
+                onClick={() => handleOpenItem(item)}
               >
                 <div className="d-flex justify-content-between align-items-start mb-3">
                   <Badge

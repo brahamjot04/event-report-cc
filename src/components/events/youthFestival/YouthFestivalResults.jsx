@@ -266,38 +266,43 @@ export default function YouthFestivalResults({ eventId, goBack }) {
   return (
     <>
       {/* Page Header */}
-      <div className="d-flex align-items-center gap-3 mb-4">
-        <Button
-          variant="outline-secondary"
-          className="rounded-circle shadow-sm flex-shrink-0"
-          onClick={goBack}
-          style={{ width: 45, height: 45 }}
-        >
-          <i className="bi bi-arrow-left" />
-        </Button>
-        <div className="flex-grow-1">
-          <small className="text-muted text-uppercase fw-bold">
-            Youth Festival — Prize Distribution
-          </small>
-          <h4 className="fw-bold mb-0">Results &amp; Overall Trophies</h4>
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+        <div className="d-flex align-items-start align-items-sm-center gap-3">
+          <Button
+            variant="outline-secondary"
+            className="rounded-circle shadow-sm flex-shrink-0"
+            onClick={goBack}
+            style={{ width: 45, height: 45 }}
+          >
+            <i className="bi bi-arrow-left" />
+          </Button>
+          <div>
+            <small className="text-muted text-uppercase fw-bold">
+              Youth Festival — Prize Distribution
+            </small>
+            <h4 className="fw-bold mb-0">Results &amp; Overall Trophies</h4>
+          </div>
         </div>
-        <div className="d-flex gap-2">
+        <div className="d-flex align-items-center gap-2 w-100 w-md-auto justify-content-start justify-content-md-end">
           <Button
             variant="outline-primary"
-            className="px-3"
+            className="px-2 px-sm-3 flex-grow-1 flex-md-grow-0 d-flex align-items-center justify-content-center text-nowrap"
             onClick={() => exportResultsPdf(results, colleges, eventId)}
             disabled={colleges.length === 0}
+            style={{ height: "38px" }}
           >
-            <i className="bi bi-file-earmark-pdf me-2" />
-            Export Results PDF
+            <i className="bi bi-file-earmark-pdf me-1" />
+            <span className="d-none d-sm-inline">Export Results PDF</span>
+            <span className="d-sm-none">Export PDF</span>
           </Button>
           <Button
             variant="primary"
-            className="px-4"
+            className="px-3 px-sm-4 flex-grow-1 flex-md-grow-0 d-flex align-items-center justify-content-center text-nowrap"
             onClick={handleSaveResults}
             disabled={saving}
+            style={{ height: "38px" }}
           >
-            <i className="bi bi-save me-2" />
+            <i className="bi bi-save me-1" />
             {saving ? "Saving…" : "Save Results"}
           </Button>
         </div>

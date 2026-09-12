@@ -80,6 +80,31 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
   const [customCommitteeName, setCustomCommitteeName] = useState("");
 
   const [activeCommittee, setActiveCommittee] = useState(null);
+  const [highlightedCommittee, setHighlightedCommittee] = useState(null);
+  const lastCommitteeRef = useRef(null);
+
+  const getCommitteeDomId = (name) =>
+    `teacher-comm-${String(name || "").replace(/[^a-zA-Z0-9]/g, "_")}`;
+
+  const handleOpenCommittee = (committeeName) => {
+    lastCommitteeRef.current = committeeName;
+    setActiveCommittee(committeeName);
+    window.scrollTo({ top: 0, behavior: "instant" });
+  };
+
+  const handleBackToTeachersList = () => {
+    const fromComm = lastCommitteeRef.current;
+    setActiveCommittee(null);
+    if (fromComm) {
+      setHighlightedCommittee(fromComm);
+      setTimeout(() => {
+        const el = document.getElementById(getCommitteeDomId(fromComm));
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 60);
+      setTimeout(() => setHighlightedCommittee(null), 2200);
+    }
+  };
+
   const [selectedFilter, setSelectedFilter] = useState(null);
   const fileInputRef = useRef(null);
 
@@ -846,31 +871,33 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
     <>
       {activeCommitteeData ? (
         <>
-          <div className="d-flex align-items-center mb-4 gap-3">
-            <Button
-              variant="outline-secondary"
-              className="me-3 rounded-circle shadow-sm"
-              style={{
-                width: "40px",
-                height: "40px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-              onClick={() => setActiveCommittee(null)}
-            >
-              <i className="bi bi-arrow-left"></i>
-            </Button>
+          <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+            <div className="d-flex align-items-start align-items-sm-center gap-3">
+              <Button
+                variant="outline-secondary"
+                className="rounded-circle shadow-sm flex-shrink-0"
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                onClick={handleBackToTeachersList}
+              >
+                <i className="bi bi-arrow-left"></i>
+              </Button>
 
-            <div>
-              <h3 className="fw-bold mb-0">{activeCommitteeData.committee}</h3>
-              <p className="text-muted small mb-0">
-                {activeCommitteeData.members.length} Members •{" "}
-                {getInchargeCount(activeCommitteeData.members)} Incharge
-              </p>
+              <div>
+                <h3 className="fw-bold mb-0">{activeCommitteeData.committee}</h3>
+                <p className="text-muted small mb-0">
+                  {activeCommitteeData.members.length} Members •{" "}
+                  {getInchargeCount(activeCommitteeData.members)} Incharge
+                </p>
+              </div>
             </div>
 
-            <div className="ms-auto d-flex gap-2">
+            <div className="d-flex flex-wrap gap-2 w-100 w-md-auto justify-content-start justify-content-md-end">
               <Dropdown align="end" autoClose="outside">
                 <Dropdown.Toggle variant="outline-primary" size="sm">
                   <i className="bi bi-layout-three-columns me-2"></i>
@@ -1023,29 +1050,31 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
         </>
       ) : (
         <>
-          <div className="d-flex align-items-center mb-4">
-            <Button
-              variant="outline-secondary"
-              className="me-3 rounded-circle shadow-sm"
-              style={{
-                width: "40px",
-                height: "40px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-              onClick={goBack}
-            >
-              <i className="bi bi-arrow-left"></i>
-            </Button>
-            <div>
-              <h3 className="fw-bold mb-0">Organizing Teachers</h3>
-              <p className="text-muted small mb-0">
-                Manage committees and members • {groupedTeachers.length}{" "}
-                Committees • {teachers.length} Total Teachers
-              </p>
+          <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+            <div className="d-flex align-items-start align-items-sm-center gap-3">
+              <Button
+                variant="outline-secondary"
+                className="rounded-circle shadow-sm flex-shrink-0"
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                onClick={goBack}
+              >
+                <i className="bi bi-arrow-left"></i>
+              </Button>
+              <div>
+                <h3 className="fw-bold mb-0">Organizing Teachers</h3>
+                <p className="text-muted small mb-0">
+                  Manage committees and members • {groupedTeachers.length}{" "}
+                  Committees • {teachers.length} Total Teachers
+                </p>
+              </div>
             </div>
-            <div className="ms-auto d-flex gap-2">
+            <div className="d-flex flex-wrap gap-2 w-100 w-md-auto justify-content-start justify-content-md-end">
               <input
                 type="file"
                 ref={fileInputRef}
@@ -1149,11 +1178,11 @@ export default function EventTeachers({ eventId, goBack, eventTitle }) {
             </Col>
 
             {filteredCommittees.map((group) => (
-              <Col md={6} lg={4} key={group.committee}>
+              <Col md={6} lg={4} key={group.committee} id={getCommitteeDomId(group.committee)}>
                 <div
-                  className="soft-card h-100 d-flex flex-column position-relative"
+                  className={`soft-card h-100 d-flex flex-column position-relative ${highlightedCommittee === group.committee ? "card-return-highlight" : ""}`}
                   style={{ minHeight: "180px", cursor: "pointer" }}
-                  onClick={() => setActiveCommittee(group.committee)}
+                  onClick={() => handleOpenCommittee(group.committee)}
                 >
                   <div className="position-absolute top-0 end-0 p-3">
                     <Dropdown onClick={(e) => e.stopPropagation()}>

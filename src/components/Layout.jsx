@@ -460,7 +460,7 @@ export default function Layout({ children }) {
               {/* Profile Menu Trigger & Popover */}
               <div ref={profileMenuRef} className="position-relative">
                 <div
-                  className="px-3 py-2 rounded-pill shadow-sm d-flex align-items-center gap-2 cursor-pointer"
+                  className="p-1 p-sm-2 ps-sm-2 pe-sm-3 rounded-pill shadow-sm d-flex align-items-center gap-2 cursor-pointer"
                   style={{
                     backgroundColor: isProfileMenuOpen ? "rgba(13, 110, 253, 0.08)" : "var(--bg-card)",
                     border: isProfileMenuOpen ? "1px solid var(--bs-primary)" : "1px solid var(--border-color)",
@@ -472,18 +472,32 @@ export default function Layout({ children }) {
                   title="Account Menu"
                 >
                   <div
-                    className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center fw-bold"
-                    style={{ width: 32, height: 32 }}
+                    className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
+                    style={{
+                      width: 32,
+                      height: 32,
+                      minWidth: 32,
+                      minHeight: 32,
+                      aspectRatio: "1 / 1",
+                      fontSize: "14px",
+                    }}
                   >
                     {userInitial}
                   </div>
                   <div
-                    className="d-flex flex-column"
-                    style={{ lineHeight: "1.1" }}
+                    className="d-none d-sm-flex flex-column overflow-hidden"
+                    style={{ lineHeight: "1.1", maxWidth: "160px" }}
                   >
-                    <span className="fw-bold small" style={{ color: "var(--text-primary)" }}>{userName}</span>
+                    <span
+                      className="fw-bold small text-truncate text-nowrap"
+                      style={{ color: "var(--text-primary)" }}
+                    >
+                      {userName}
+                    </span>
                   </div>
-                  <i className={`bi ${isProfileMenuOpen ? "bi-chevron-up" : "bi-chevron-down"} small text-muted ms-1`}></i>
+                  <i
+                    className={`bi ${isProfileMenuOpen ? "bi-chevron-up" : "bi-chevron-down"} small text-muted ms-1 d-none d-sm-inline`}
+                  ></i>
                 </div>
 
                 {isProfileMenuOpen && (

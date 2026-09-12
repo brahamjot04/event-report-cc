@@ -255,11 +255,11 @@ export default function EventSponsorship({
   return (
     <>
       {/* HEADER */}
-      <div className="d-flex align-items-center mb-4 justify-content-between">
-        <div className="d-flex align-items-center">
+      <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
+        <div className="d-flex align-items-start align-items-sm-center gap-3">
           <Button
             variant="outline-secondary"
-            className="me-3 rounded-circle shadow-sm"
+            className="rounded-circle shadow-sm flex-shrink-0"
             style={{
               width: "40px",
               height: "40px",
@@ -278,20 +278,22 @@ export default function EventSponsorship({
             </p>
           </div>
         </div>
-        <div className="d-flex gap-2">
+        <div className="d-flex flex-wrap align-items-center gap-2 w-100 w-sm-auto justify-content-start justify-content-sm-end">
           <Button
+            variant="primary"
+            size="sm"
+            className="d-flex align-items-center justify-content-center gap-1 flex-grow-1 flex-sm-grow-0"
+            style={{ height: "38px" }}
             onClick={() => {
               setEditingId(null);
               setForm({});
               setShowModal(true);
             }}
-            size="sm"
-            className="d-flex align-items-center"
           >
-            <i className="bi bi-plus-lg me-2"></i> Add Record
+            <i className="bi bi-plus-lg me-1"></i> Add Record
           </Button>
 
-          <div className="d-inline-block">
+          <div className="d-inline-block flex-grow-1 flex-sm-grow-0">
             <input
               type="file"
               id="spon-file"
@@ -301,9 +303,10 @@ export default function EventSponsorship({
             />
             <label
               htmlFor="spon-file"
-              className="btn btn-success text-white mb-0 btn-sm d-flex align-items-center h-100"
+              className="btn btn-success text-white mb-0 btn-sm d-flex align-items-center justify-content-center gap-1 w-100 cursor-pointer"
+              style={{ height: "38px" }}
             >
-              <i className="bi bi-file-earmark-spreadsheet-fill me-2"></i>{" "}
+              <i className="bi bi-file-earmark-spreadsheet-fill me-1"></i>{" "}
               Import Excel
             </label>
           </div>
@@ -316,9 +319,10 @@ export default function EventSponsorship({
               variant="outline-danger"
               onClick={generateSponsorshipPDF}
               size="sm"
-              className="d-flex align-items-center"
+              className="d-flex align-items-center justify-content-center flex-shrink-0"
+              style={{ width: "38px", height: "38px", padding: 0 }}
             >
-              <i className="bi bi-file-earmark-pdf-fill"></i>
+              <i className="bi bi-file-earmark-pdf-fill fs-6"></i>
             </Button>
           </OverlayTrigger>
         </div>

@@ -35,15 +35,19 @@ export default function Home() {
   const [editingEventId, setEditingEventId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ ...BLANK_FORM });
+  const [highlightedEventId, setHighlightedEventId] = useState(null);
 
   const navigate = useNavigate();
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(() => {
     loadWithCache(
       "all_events_list",
       async () => {
-        const eventSnap = await getDocs(collection(db, "events"));
-        return eventSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const querySnapshot = await getDocs(collection(db, "events"));
+        return querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
       },
       (data, isCached) => {
         setEvents(data);
@@ -57,6 +61,24 @@ export default function Home() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (!loading && events.length > 0) {
+      const lastEventId = sessionStorage.getItem("last_viewed_event_id");
+      if (lastEventId) {
+        sessionStorage.removeItem("last_viewed_event_id");
+        const timer = setTimeout(() => {
+          const el = document.getElementById(`event-card-${lastEventId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            setHighlightedEventId(lastEventId);
+            setTimeout(() => setHighlightedEventId(null), 2200);
+          }
+        }, 120);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [loading, events]);
 
   const setField = (field, value) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -260,10 +282,13 @@ export default function Home() {
 
         <Row className="g-3">
           {filteredEvents.map((ev) => (
-            <Col key={ev.id} xs={12} sm={6} md={4} lg={3}>
+            <Col key={ev.id} xs={12} sm={6} md={4} lg={3} id={`event-card-${ev.id}`}>
               <div
-                className="soft-card position-relative"
-                onClick={() => navigate(`/event/${ev.id}`)}
+                className={`soft-card position-relative ${highlightedEventId === ev.id ? "card-return-highlight" : ""}`}
+                onClick={() => {
+                  sessionStorage.setItem("last_viewed_event_id", ev.id);
+                  navigate(`/event/${ev.id}`);
+                }}
               >
                 {/* Admin 3-dots action menu */}
                 {isAdmin && (

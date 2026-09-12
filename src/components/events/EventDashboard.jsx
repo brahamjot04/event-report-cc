@@ -1,11 +1,20 @@
+import { useEffect } from "react";
 import { Button, Row, Col } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
 
 // Helper Component for consistent Soft UI cards
-const DashboardCard = ({ title, subtitle, icon, colorClass, onClick }) => (
-  <Col md={4}>
+const DashboardCard = ({
+  id,
+  title,
+  subtitle,
+  icon,
+  colorClass,
+  onClick,
+  isHighlighted,
+}) => (
+  <Col md={4} id={id}>
     <div
-      className="soft-card h-100 d-flex flex-column align-items-center justify-content-center p-4"
+      className={`soft-card h-100 d-flex flex-column align-items-center justify-content-center p-4 ${isHighlighted ? "card-return-highlight" : ""}`}
       onClick={onClick}
     >
       <div
@@ -29,8 +38,22 @@ export default function EventDashboard({
   hasProofLink,
   onExportReport,
   exportingReport,
+  highlightedModule,
 }) {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (highlightedModule) {
+      const targetId = `module-card-${highlightedModule}`;
+      const element = document.getElementById(targetId);
+      if (element) {
+        const timer = setTimeout(() => {
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 60);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [highlightedModule]);
 
   const formatDate = (dateString) => {
     if (!dateString) return "";
@@ -40,57 +63,82 @@ export default function EventDashboard({
       : dateString;
   };
 
+  if (!eventData) {
+    return null;
+  }
+
   return (
     <>
       {/* HEADER SECTION */}
-      <div className="d-flex align-items-center mb-5">
-        <Button
-          variant="outline-secondary"
-          className="me-3 rounded-circle shadow-sm"
-          onClick={() => navigate("/")}
-          style={{ width: "45px", height: "45px" }}
-        >
-          <i className="bi bi-arrow-left"></i>
-        </Button>
-        <div>
-          <h2 className="fw-bold mb-0">{eventData.title}</h2>
-          <span className="text-muted small fw-medium">
-            <i className="bi bi-geo-alt-fill text-danger me-1"></i>{" "}
-            {eventData.venue}
-            <span className="mx-2">&bull;</span>
-            <i className="bi bi-calendar-check-fill text-primary me-1"></i>{" "}
-            {eventData.isYouthFestival && eventData.startDate
-              ? `${formatDate(eventData.startDate)} – ${formatDate(eventData.endDate) || "?"}`
-              : formatDate(eventData.date)}
-          </span>
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4 mb-md-5">
+        <div className="d-flex align-items-start align-items-sm-center gap-3">
+          <Button
+            variant="outline-secondary"
+            className="rounded-circle shadow-sm flex-shrink-0"
+            onClick={() => navigate("/")}
+            style={{ width: "42px", height: "42px" }}
+            title="Back to Home"
+          >
+            <i className="bi bi-arrow-left"></i>
+          </Button>
+          <div>
+            <h2 className="fw-bold mb-1 fs-3 fs-md-2">{eventData.title}</h2>
+            <div className="text-muted small fw-medium d-flex flex-wrap align-items-center gap-1">
+              <span>
+                <i className="bi bi-geo-alt-fill text-danger me-1"></i>{" "}
+                {eventData.venue}
+              </span>
+              <span className="mx-1 d-none d-sm-inline">&bull;</span>
+              <span>
+                <i className="bi bi-calendar-check-fill text-primary me-1"></i>{" "}
+                {eventData.isYouthFestival && eventData.startDate
+                  ? `${formatDate(eventData.startDate)} – ${formatDate(eventData.endDate) || "?"}`
+                  : formatDate(eventData.date)}
+              </span>
+            </div>
+          </div>
         </div>
-        <div className="ms-auto d-flex align-items-center gap-2">
+        <div className="d-flex flex-wrap align-items-center gap-2 w-100 w-md-auto justify-content-start justify-content-md-end">
           {(userRole === "admin" || userRole === "super_admin") && onEdit && (
             <Button
               variant="outline-primary"
-              className="px-3"
+              className="px-2 px-sm-3 flex-grow-1 flex-md-grow-0 d-flex align-items-center justify-content-center text-nowrap"
+              style={{ height: "38px" }}
               onClick={onEdit}
             >
-              <i className="bi bi-pencil-fill me-2"></i>
-              Edit Event
+              <i className="bi bi-pencil-fill me-1"></i>
+              <span className="d-none d-sm-inline">Edit Event</span>
+              <span className="d-sm-none">Edit</span>
             </Button>
           )}
           <Button
             variant={hasProofLink ? "outline-success" : "outline-secondary"}
-            className="px-4"
+            className="px-2 px-sm-3 flex-grow-1 flex-md-grow-0 d-flex align-items-center justify-content-center text-nowrap"
+            style={{ height: "38px" }}
             onClick={onManageProofLink}
           >
-            <i className="bi bi-link-45deg me-2"></i>
-            {hasProofLink ? "Edit Proof Link" : "Upload Proof Link"}
+            <i className="bi bi-link-45deg me-1"></i>
+            <span className="d-none d-sm-inline">
+              {hasProofLink ? "Edit Proof Link" : "Upload Proof Link"}
+            </span>
+            <span className="d-sm-none">
+              {hasProofLink ? "Edit Proof" : "Proof Link"}
+            </span>
           </Button>
           <Button
             variant="primary"
-            className="px-4"
+            className="px-2 px-sm-3 flex-grow-1 flex-md-grow-0 d-flex align-items-center justify-content-center text-nowrap"
+            style={{ height: "38px" }}
             onClick={onExportReport}
             disabled={!!exportingReport}
           >
-            <i className="bi bi-download me-2"></i>
-            {exportingReport ? "Exporting..." : "Export Event Report"}
+            <i className="bi bi-download me-1"></i>
+            <span className="d-none d-sm-inline">
+              {exportingReport ? "Exporting..." : "Export Event Report"}
+            </span>
+            <span className="d-sm-none">
+              {exportingReport ? "Exporting..." : "Export Report"}
+            </span>
           </Button>
         </div>
       </div>
@@ -101,6 +149,8 @@ export default function EventDashboard({
         {eventData.isYouthFestival && eventData.isHostCollege && (
           <>
             <DashboardCard
+              id="module-card-yf_host"
+              isHighlighted={highlightedModule === "yf_host"}
               title="Colleges & Participants"
               subtitle="Manage colleges, participants & search"
               icon="bi-building"
@@ -108,6 +158,8 @@ export default function EventDashboard({
               onClick={() => setView("yf_host")}
             />
             <DashboardCard
+              id="module-card-yf_checkin"
+              isHighlighted={highlightedModule === "yf_checkin"}
               title="Desk Check-in & Arrivals"
               subtitle="Gate reception, arrival status & CSV rosters"
               icon="bi-person-check-fill"
@@ -115,6 +167,8 @@ export default function EventDashboard({
               onClick={() => setView("yf_checkin")}
             />
             <DashboardCard
+              id="module-card-yf_venues"
+              isHighlighted={highlightedModule === "yf_venues"}
               title="Venue Mapping"
               subtitle="Assign venues, days & times to events"
               icon="bi-geo-alt-fill"
@@ -122,6 +176,8 @@ export default function EventDashboard({
               onClick={() => setView("yf_venues")}
             />
             <DashboardCard
+              id="module-card-yf_accommodation"
+              isHighlighted={highlightedModule === "yf_accommodation"}
               title="Accommodation"
               subtitle="Room allotment & check-in tracking"
               icon="bi-house-fill"
@@ -129,6 +185,8 @@ export default function EventDashboard({
               onClick={() => setView("yf_accommodation")}
             />
             <DashboardCard
+              id="module-card-yf_results"
+              isHighlighted={highlightedModule === "yf_results"}
               title="Results & Trophies"
               subtitle="Positions, point scoring & overall trophies"
               icon="bi-trophy-fill"
@@ -141,6 +199,8 @@ export default function EventDashboard({
         {/* Youth Festival non-host (GNDEC contingent) */}
         {eventData.isYouthFestival && !eventData.isHostCollege && (
           <DashboardCard
+            id="module-card-yf_contingent"
+            isHighlighted={highlightedModule === "yf_contingent"}
             title="GNDEC Contingent"
             subtitle="Manage our participation roster"
             icon="bi-people-fill"
@@ -151,6 +211,8 @@ export default function EventDashboard({
 
         {/* Standard cards (always shown) */}
         <DashboardCard
+          id="module-card-attendance_sessions"
+          isHighlighted={highlightedModule === "attendance_sessions"}
           title="Meetings"
           subtitle="Track committee attendance"
           icon="bi-calendar-check-fill"
@@ -159,6 +221,8 @@ export default function EventDashboard({
         />
 
         <DashboardCard
+          id="module-card-teams"
+          isHighlighted={highlightedModule === "teams"}
           title="Teams"
           subtitle="Manage committees & members"
           icon="bi-diagram-3-fill"
@@ -167,6 +231,8 @@ export default function EventDashboard({
         />
 
         <DashboardCard
+          id="module-card-teachers"
+          isHighlighted={highlightedModule === "teachers"}
           title="Teachers"
           subtitle="Manage teacher entries"
           icon="bi-person-vcard-fill"
@@ -175,6 +241,8 @@ export default function EventDashboard({
         />
 
         <DashboardCard
+          id="module-card-sponsorship"
+          isHighlighted={highlightedModule === "sponsorship"}
           title="Sponsorship"
           subtitle="Manage sponsors & funds"
           icon="bi-briefcase-fill"
@@ -185,6 +253,8 @@ export default function EventDashboard({
         {/* Participants card only for non-YF events */}
         {!eventData.isYouthFestival && (
           <DashboardCard
+            id="module-card-participants"
+            isHighlighted={highlightedModule === "participants"}
             title="Participants"
             subtitle="Manage items, students & categories"
             icon="bi-people-fill"

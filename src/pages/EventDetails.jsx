@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   doc,
@@ -41,6 +41,26 @@ export default function EventDetails() {
   const { showSuccess, showError, confirm } = useToast();
 
   const [currentView, setCurrentView] = useState("dashboard");
+  const [highlightedModule, setHighlightedModule] = useState(null);
+  const lastViewedModuleRef = useRef(null);
+
+  const handleNavigateToView = (viewKey) => {
+    lastViewedModuleRef.current = viewKey;
+    setCurrentView(viewKey);
+    window.scrollTo({ top: 0, behavior: "instant" });
+  };
+
+  const handleBackToDashboard = () => {
+    const fromModule = lastViewedModuleRef.current;
+    setCurrentView("dashboard");
+    if (fromModule) {
+      setHighlightedModule(fromModule);
+      setTimeout(() => {
+        setHighlightedModule(null);
+      }, 2200);
+    }
+  };
+
   const [eventData, setEventData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [exportingReport, setExportingReport] = useState(false);
@@ -126,8 +146,9 @@ export default function EventDetails() {
     }
   };
 
-  // --- INITIAL DATA FETCHING (INSTANT CACHE - NO LOADING SCREEN) ---
+  // --- INITIAL DATA FETCHING (INSTANT CACHE - NO BLANK SCREEN) ---
   useEffect(() => {
+    setLoading(true);
     loadWithCache(
       `event_details_${id}`,
       async () => {
@@ -137,17 +158,16 @@ export default function EventDetails() {
         }
         return null;
       },
-      (data, isCached) => {
+      (data) => {
         if (data) {
           setEventData(data);
-          if (isCached) setLoading(false);
-        } else if (!isCached) {
+          setLoading(false);
+        } else {
           navigate("/");
         }
       },
       () => setLoading(false)
     );
-    setLoading(false);
   }, [id, navigate]);
 
   const handleDeleteEvent = async () => {
@@ -669,21 +689,79 @@ export default function EventDetails() {
     }
   };
 
+  // --- SHIMMER SKELETON LOADER ---
+  const renderSkeleton = () => (
+    <div className="placeholder-glow">
+      {/* Header Skeleton */}
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-5">
+        <div className="d-flex align-items-center gap-3">
+          <div
+            className="placeholder rounded-circle"
+            style={{ width: "45px", height: "45px" }}
+          ></div>
+          <div>
+            <span
+              className="placeholder col-8 d-block rounded mb-2"
+              style={{ width: "240px", height: "30px" }}
+            ></span>
+            <span
+              className="placeholder col-6 d-block rounded"
+              style={{ width: "160px", height: "18px" }}
+            ></span>
+          </div>
+        </div>
+        <div className="d-flex gap-2">
+          <span
+            className="placeholder rounded"
+            style={{ width: "110px", height: "38px" }}
+          ></span>
+          <span
+            className="placeholder rounded"
+            style={{ width: "140px", height: "38px" }}
+          ></span>
+          <span
+            className="placeholder rounded"
+            style={{ width: "150px", height: "38px" }}
+          ></span>
+        </div>
+      </div>
+
+      {/* Grid Skeletons */}
+      <Row className="g-4">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <Col md={4} key={i}>
+            <div className="soft-card h-100 d-flex flex-column align-items-center justify-content-center p-4">
+              <div
+                className="placeholder rounded-circle mb-3"
+                style={{ width: "60px", height: "60px" }}
+              ></div>
+              <span
+                className="placeholder rounded mb-2"
+                style={{ width: "130px", height: "20px" }}
+              ></span>
+              <span
+                className="placeholder rounded"
+                style={{ width: "180px", height: "14px" }}
+              ></span>
+            </div>
+          </Col>
+        ))}
+      </Row>
+    </div>
+  );
+
   // --- VIEW ROUTER ---
   const renderView = () => {
-    if (loading)
-      return (
-        <div className="vh-100 d-flex justify-content-center align-items-center">
-          <Spinner animation="border" variant="primary" />
-        </div>
-      );
+    if (loading || !eventData) {
+      return renderSkeleton();
+    }
 
     switch (currentView) {
       case "yf_host":
         return (
           <YouthFestivalHost
             eventId={id}
-            goBack={() => setCurrentView("dashboard")}
+            goBack={handleBackToDashboard}
           />
         );
 
@@ -691,7 +769,7 @@ export default function EventDetails() {
         return (
           <YouthFestivalCheckIn
             eventId={id}
-            goBack={() => setCurrentView("dashboard")}
+            goBack={handleBackToDashboard}
           />
         );
 
@@ -699,7 +777,7 @@ export default function EventDetails() {
         return (
           <EventYouthFestivalVenues
             eventId={id}
-            goBack={() => setCurrentView("dashboard")}
+            goBack={handleBackToDashboard}
           />
         );
 
@@ -707,7 +785,7 @@ export default function EventDetails() {
         return (
           <YouthFestivalAccommodation
             eventId={id}
-            goBack={() => setCurrentView("dashboard")}
+            goBack={handleBackToDashboard}
           />
         );
 
@@ -715,7 +793,7 @@ export default function EventDetails() {
         return (
           <YouthFestivalContingent
             eventId={id}
-            goBack={() => setCurrentView("dashboard")}
+            goBack={handleBackToDashboard}
           />
         );
 
@@ -723,7 +801,7 @@ export default function EventDetails() {
         return (
           <YouthFestivalResults
             eventId={id}
-            goBack={() => setCurrentView("dashboard")}
+            goBack={handleBackToDashboard}
           />
         );
 
@@ -732,7 +810,7 @@ export default function EventDetails() {
           <EventParticipants
             eventId={id}
             initialEventData={eventData}
-            goBack={() => setCurrentView("dashboard")}
+            goBack={handleBackToDashboard}
           />
         );
 
@@ -741,7 +819,7 @@ export default function EventDetails() {
           <EventSponsorship
             eventId={id}
             eventTitle={eventData.title}
-            goBack={() => setCurrentView("dashboard")}
+            goBack={handleBackToDashboard}
           />
         );
 
@@ -750,7 +828,7 @@ export default function EventDetails() {
           <EventMeetings
             eventId={id}
             eventTitle={eventData.title}
-            goBack={() => setCurrentView("dashboard")}
+            goBack={handleBackToDashboard}
           />
         );
 
@@ -759,7 +837,7 @@ export default function EventDetails() {
           <EventTeams
             eventId={id}
             eventTitle={eventData.title}
-            goBack={() => setCurrentView("dashboard")}
+            goBack={handleBackToDashboard}
           />
         );
 
@@ -768,7 +846,7 @@ export default function EventDetails() {
           <EventTeachers
             eventId={id}
             eventTitle={eventData.title}
-            goBack={() => setCurrentView("dashboard")}
+            goBack={handleBackToDashboard}
           />
         );
 
@@ -777,7 +855,7 @@ export default function EventDetails() {
         return (
           <EventDashboard
             eventData={eventData}
-            setView={setCurrentView}
+            setView={handleNavigateToView}
             userRole={userRole}
             onEdit={handleOpenEditModal}
             onDelete={handleDeleteEvent}
@@ -785,6 +863,7 @@ export default function EventDetails() {
             hasProofLink={!!String(eventData?.proofUrl || "").trim()}
             onExportReport={handleExportEventReport}
             exportingReport={exportingReport}
+            highlightedModule={highlightedModule}
           />
         );
     }

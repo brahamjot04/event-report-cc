@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   collection,
   getDocs,
@@ -47,6 +47,8 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
   const [editingTeamId, setEditingTeamId] = useState(null);
 
   const [activeTeam, setActiveTeam] = useState(null);
+  const [highlightedTeamId, setHighlightedTeamId] = useState(null);
+  const lastTeamIdRef = useRef(null);
   const [editingMemberIndex, setEditingMemberIndex] = useState(null);
   const [editingHeadMemberIndex, setEditingHeadMemberIndex] = useState(null);
 
@@ -284,7 +286,22 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
   };
 
   const openTeamDetails = (team) => {
+    lastTeamIdRef.current = team.id;
     setActiveTeam(team);
+    window.scrollTo({ top: 0, behavior: "instant" });
+  };
+
+  const handleBackToTeamsList = () => {
+    const fromId = lastTeamIdRef.current;
+    setActiveTeam(null);
+    if (fromId) {
+      setHighlightedTeamId(fromId);
+      setTimeout(() => {
+        const el = document.getElementById(`team-card-${fromId}`);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 60);
+      setTimeout(() => setHighlightedTeamId(null), 2200);
+    }
   };
 
   // --- MEMBER MANAGEMENT ---
@@ -899,35 +916,37 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
   if (activeTeam) {
     return (
       <>
-        <div className="d-flex align-items-center mb-4 gap-3">
-          <Button
-            variant="outline-secondary"
-            className="me-3 rounded-circle shadow-sm"
-            style={{
-              width: "40px",
-              height: "40px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-            onClick={() => setActiveTeam(null)}
-          >
-            <i className="bi bi-arrow-left"></i>
-          </Button>
-          <div>
-            <h3 className="fw-bold mb-0">{activeTeam.name}</h3>
-            <p className="text-muted small mb-0">
-              {getTeamMembersCount(activeTeam)} Members •{" "}
-              {getTeamExecutivesCount(activeTeam)} Executives •{" "}
-              {getTeamHeadsCount(activeTeam)} Heads
-            </p>
-            {activeTeam.teamHead?.name && (
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+          <div className="d-flex align-items-start align-items-sm-center gap-3">
+            <Button
+              variant="outline-secondary"
+              className="rounded-circle shadow-sm flex-shrink-0"
+              style={{
+                width: "40px",
+                height: "40px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              onClick={handleBackToTeamsList}
+            >
+              <i className="bi bi-arrow-left"></i>
+            </Button>
+            <div>
+              <h3 className="fw-bold mb-0">{activeTeam.name}</h3>
               <p className="text-muted small mb-0">
-                Head: {activeTeam.teamHead.name}
+                {getTeamMembersCount(activeTeam)} Members •{" "}
+                {getTeamExecutivesCount(activeTeam)} Executives •{" "}
+                {getTeamHeadsCount(activeTeam)} Heads
               </p>
-            )}
+              {activeTeam.teamHead?.name && (
+                <p className="text-muted small mb-0">
+                  Head: {activeTeam.teamHead.name}
+                </p>
+              )}
+            </div>
           </div>
-          <div className="ms-auto d-flex gap-2">
+          <div className="d-flex flex-wrap gap-2 w-100 w-md-auto justify-content-start justify-content-md-end">
             <Button
               variant="outline-primary"
               onClick={() => openEditTeamModal(activeTeam)}
@@ -1556,29 +1575,31 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
   // --- RENDER: TEAMS GRID VIEW ---
   return (
     <>
-      <div className="d-flex align-items-center mb-4">
-        <Button
-          variant="outline-secondary"
-          className="me-3 rounded-circle shadow-sm"
-          style={{
-            width: "40px",
-            height: "40px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-          onClick={goBack}
-        >
-          <i className="bi bi-arrow-left"></i>
-        </Button>
-        <div>
-          <h3 className="fw-bold mb-0">Organizing Teams</h3>
-          <p className="text-muted small mb-0">
-            Manage committees and members • {overallStats.totalCoreMembers} Core
-            Members • {overallStats.totalMembers} Total Members
-          </p>
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+        <div className="d-flex align-items-start align-items-sm-center gap-3">
+          <Button
+            variant="outline-secondary"
+            className="rounded-circle shadow-sm flex-shrink-0"
+            style={{
+              width: "40px",
+              height: "40px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onClick={goBack}
+          >
+            <i className="bi bi-arrow-left"></i>
+          </Button>
+          <div>
+            <h3 className="fw-bold mb-0">Organizing Teams</h3>
+            <p className="text-muted small mb-0">
+              Manage committees and members • {overallStats.totalCoreMembers} Core
+              Members • {overallStats.totalMembers} Total Members
+            </p>
+          </div>
         </div>
-        <div className="ms-auto d-flex gap-2">
+        <div className="d-flex flex-wrap gap-2 w-100 w-md-auto justify-content-start justify-content-md-end">
           <Button
             variant="outline-danger"
             onClick={handleExportPDFClick}
@@ -1667,10 +1688,10 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
               selectedTeamFilter === null || team.id === selectedTeamFilter,
           )
           .map((team) => (
-            <Col md={6} lg={4} key={team.id}>
+            <Col md={6} lg={4} key={team.id} id={`team-card-${team.id}`}>
               {/* FIX: Moved onClick from button to the whole card */}
               <div
-                className="soft-card h-100 d-flex flex-column position-relative"
+                className={`soft-card h-100 d-flex flex-column position-relative ${highlightedTeamId === team.id ? "card-return-highlight" : ""}`}
                 style={{ minHeight: "180px", cursor: "pointer" }}
                 onClick={() => openTeamDetails(team)}
               >

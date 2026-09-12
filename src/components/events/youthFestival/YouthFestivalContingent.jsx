@@ -121,23 +121,25 @@ export default function YouthFestivalContingent({ eventId, goBack }) {
   return (
     <>
       {/* Header */}
-      <div className="d-flex align-items-center gap-3 mb-4">
-        <Button
-          variant="outline-secondary"
-          className="rounded-circle shadow-sm flex-shrink-0"
-          onClick={goBack}
-          style={{ width: 45, height: 45 }}
-        >
-          <i className="bi bi-arrow-left" />
-        </Button>
-        <div className="flex-grow-1">
-          <small className="text-muted text-uppercase fw-bold">
-            Youth Festival — GNDEC Contingent
-          </small>
-          <h4 className="fw-bold mb-0">Our Participation Roster</h4>
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+        <div className="d-flex align-items-start align-items-sm-center gap-3">
+          <Button
+            variant="outline-secondary"
+            className="rounded-circle shadow-sm flex-shrink-0"
+            onClick={goBack}
+            style={{ width: 45, height: 45 }}
+          >
+            <i className="bi bi-arrow-left" />
+          </Button>
+          <div>
+            <small className="text-muted text-uppercase fw-bold">
+              Youth Festival — GNDEC Contingent
+            </small>
+            <h4 className="fw-bold mb-0">Our Participation Roster</h4>
+          </div>
         </div>
-        <div className="d-flex align-items-center gap-2">
-          <Badge bg="primary">{totalRegistered} students entered</Badge>
+        <div className="d-flex flex-wrap align-items-center gap-2 w-100 w-md-auto justify-content-start justify-content-md-end">
+          <Badge bg="primary" className="p-2">{totalRegistered} students entered</Badge>
           <Button
             variant="primary"
             className="px-4"

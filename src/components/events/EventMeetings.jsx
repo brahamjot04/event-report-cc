@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   collection,
   query,
@@ -32,6 +32,8 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
   const { showSuccess, confirm } = useToast();
   const [sessions, setSessions] = useState([]);
   const [activeSession, setActiveSession] = useState(null);
+  const [highlightedSessionId, setHighlightedSessionId] = useState(null);
+  const lastSessionIdRef = useRef(null);
   const [sessionStudents, setSessionStudents] = useState([]);
 
   // Forms
@@ -104,8 +106,23 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
   };
 
   const handleOpenSession = (s) => {
+    lastSessionIdRef.current = s.id;
     setActiveSession(s);
     fetchSessionStudents(s.id);
+    window.scrollTo({ top: 0, behavior: "instant" });
+  };
+
+  const handleBackToMeetingsList = () => {
+    const fromId = lastSessionIdRef.current;
+    setActiveSession(null);
+    if (fromId) {
+      setHighlightedSessionId(fromId);
+      setTimeout(() => {
+        const el = document.getElementById(`meeting-card-${fromId}`);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 60);
+      setTimeout(() => setHighlightedSessionId(null), 2200);
+    }
   };
 
   const handleDeleteSession = async (e, sid) => {
@@ -261,29 +278,31 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
   if (!activeSession) {
     return (
       <>
-        <div className="d-flex align-items-center mb-4">
-          <Button
-            variant="outline-secondary"
-            className="me-3 rounded-circle shadow-sm"
-            style={{
-              width: "40px",
-              height: "40px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-            onClick={goBack}
-          >
-            <i className="bi bi-arrow-left"></i>
-          </Button>
-          <div>
-            <h3 className="fw-bold mb-0">Meeting Schedule</h3>
-            <p className="text-muted small mb-0">Manage attendance & agendas</p>
+        <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
+          <div className="d-flex align-items-start align-items-sm-center gap-3">
+            <Button
+              variant="outline-secondary"
+              className="rounded-circle shadow-sm flex-shrink-0"
+              style={{
+                width: "40px",
+                height: "40px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              onClick={goBack}
+            >
+              <i className="bi bi-arrow-left"></i>
+            </Button>
+            <div>
+              <h3 className="fw-bold mb-0">Meeting Schedule</h3>
+              <p className="text-muted small mb-0">Manage attendance & agendas</p>
+            </div>
           </div>
-          <div className="ms-auto">
+          <div className="w-100 w-sm-auto">
             <Button
               variant="primary"
-              className="px-4"
+              className="px-4 w-100 w-sm-auto"
               onClick={() => {
                 setEditingSessionId(null);
                 setSessionForm({});
@@ -537,9 +556,9 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
           {sessions
             .filter((s) => selectedDate === null || s.date === selectedDate)
             .map((s, idx) => (
-              <Col md={6} lg={4} key={s.id}>
+              <Col md={6} lg={4} key={s.id} id={`meeting-card-${s.id}`}>
                 <div
-                  className="soft-card h-100 d-flex flex-column position-relative overflow-hidden"
+                  className={`soft-card h-100 d-flex flex-column position-relative overflow-hidden ${highlightedSessionId === s.id ? "card-return-highlight" : ""}`}
                   style={{ cursor: "pointer", minHeight: "200px" }}
                   onClick={() => handleOpenSession(s)}
                 >
@@ -814,44 +833,50 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
   // --- RENDER DETAIL VIEW (List of Students) ---
   return (
     <>
-      <div className="d-flex align-items-center mb-4 gap-3">
-        <Button
-          variant="outline-secondary"
-          className="me-3 rounded-circle shadow-sm"
-          style={{
-            width: "40px",
-            height: "40px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-          onClick={() => setActiveSession(null)}
-        >
-          <i className="bi bi-arrow-left"></i>
-        </Button>
-        <div className="d-flex align-items-center gap-3 flex-grow-1">
-          <span className="text-muted small d-flex align-items-center">
-            <i className="bi bi-calendar-event me-2"></i> {activeSession.date}
-            <span className="mx-2">•</span>
-            <i className="bi bi-geo-alt me-1"></i>{" "}
-            {activeSession.venue || "No Venue"}
-          </span>
-          <h3
-            className="fw-bold mb-0 text-truncate"
-            style={{ maxWidth: "400px" }}
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+        <div className="d-flex align-items-start align-items-sm-center gap-3">
+          <Button
+            variant="outline-secondary"
+            className="rounded-circle shadow-sm flex-shrink-0"
+            style={{
+              width: "40px",
+              height: "40px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onClick={handleBackToMeetingsList}
           >
-            {activeSession.agenda || "Meeting Details"}
-          </h3>
+            <i className="bi bi-arrow-left"></i>
+          </Button>
+          <div>
+            <h3
+              className="fw-bold mb-1 fs-4"
+            >
+              {activeSession.agenda || "Meeting Details"}
+            </h3>
+            <span className="text-muted small d-flex flex-wrap align-items-center gap-2">
+              <span>
+                <i className="bi bi-calendar-event me-1 text-primary"></i> {activeSession.date}
+              </span>
+              <span>•</span>
+              <span>
+                <i className="bi bi-geo-alt me-1 text-danger"></i>{" "}
+                {activeSession.venue || "No Venue"}
+              </span>
+            </span>
+          </div>
         </div>
-        <div className="ms-auto d-flex gap-2">
+        <div className="d-flex flex-wrap gap-2 w-100 w-md-auto justify-content-start justify-content-md-end">
           <OverlayTrigger
             placement="bottom"
             overlay={<Tooltip>Download PDF Report</Tooltip>}
           >
             <Button
               variant="outline-danger"
-              className="d-flex align-items-center"
+              className="d-flex align-items-center justify-content-center"
               onClick={generatePDF}
+              style={{ minWidth: "40px", height: "38px" }}
             >
               <i className="bi bi-file-earmark-pdf fs-5"></i>
             </Button>
@@ -867,7 +892,7 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
             }}
           >
             <i className="bi bi-person-plus-fill"></i>{" "}
-            <span className="d-none d-md-inline">Add Student</span>
+            <span>Add Student</span>
           </Button>
 
           <div className="d-inline-block">
@@ -880,11 +905,11 @@ export default function EventMeetings({ eventId, eventTitle, goBack }) {
             />
             <label
               htmlFor="att-file"
-              className="btn btn-success text-white mb-0 d-flex align-items-center gap-2"
-              style={{ height: "100%" }}
+              className="btn btn-success text-white mb-0 d-flex align-items-center gap-2 cursor-pointer"
+              style={{ height: "38px" }}
             >
               <i className="bi bi-file-earmark-spreadsheet-fill"></i>{" "}
-              <span className="d-none d-md-inline">Import Excel</span>
+              <span>Import Excel</span>
             </label>
           </div>
         </div>
