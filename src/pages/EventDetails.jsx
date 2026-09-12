@@ -10,6 +10,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { loadWithCache, invalidateCache } from "../utils/dataCache";
+import { recordRecentEvent } from "../utils/eventStatus";
 import { logAction } from "../utils/logger";
 import { Spinner, Modal, Form, Button, Row, Col } from "react-bootstrap";
 import jsPDF from "jspdf";
@@ -161,6 +162,7 @@ export default function EventDetails() {
       (data) => {
         if (data) {
           setEventData(data);
+          recordRecentEvent(data);
           setLoading(false);
         } else {
           navigate("/");

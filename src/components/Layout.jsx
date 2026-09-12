@@ -149,6 +149,8 @@ export default function Layout({ children }) {
   };
 
   const isMobileOpen = sidebarOpen && !sidebarAnimatingOut;
+  const isEventPage = location.pathname.startsWith("/event/");
+  const showMobileBottomNav = !isEventPage;
 
   const [footerHovered, setFooterHovered] = useState(false);
 
@@ -637,11 +639,11 @@ export default function Layout({ children }) {
             </div>
           )}
 
-          <div className="flex-grow-1">{children}</div>
+          <div className={`flex-grow-1 ${showMobileBottomNav ? "has-bottom-nav" : ""}`}>{children}</div>
 
           {/* --- FOOTER --- */}
           <footer
-            className="mt-5 pt-4 text-center text-muted small border-top"
+            className={`mt-5 pt-4 text-center text-muted small border-top ${showMobileBottomNav ? "has-bottom-nav" : ""}`}
             style={{
               borderColor: "var(--border-color)",
               fontSize: "0.85rem",
@@ -667,6 +669,57 @@ export default function Layout({ children }) {
           </footer>
         </Col>
       </Row>
+
+      {/* MOBILE BOTTOM NAVIGATION BAR */}
+      {showMobileBottomNav && (
+        <nav className="mobile-bottom-nav d-md-none" aria-label="Mobile Navigation">
+          <button
+            type="button"
+            className={`mobile-bottom-nav-item ${location.pathname === "/" ? "active" : ""}`}
+            onClick={() => handleNavClick("/")}
+            title="Dashboard"
+          >
+            <i className="bi bi-grid-1x2-fill"></i>
+            <span>Dashboard</span>
+          </button>
+          <button
+            type="button"
+            className={`mobile-bottom-nav-item ${location.pathname === "/calendar" ? "active" : ""}`}
+            onClick={() => handleNavClick("/calendar")}
+            title="Calendar"
+          >
+            <i className="bi bi-calendar3"></i>
+            <span>Calendar</span>
+          </button>
+          <button
+            type="button"
+            className="mobile-bottom-nav-item"
+            onClick={() => setIsCommandPaletteOpen(true)}
+            title="Search (Ctrl+K)"
+          >
+            <i className="bi bi-search"></i>
+            <span>Search</span>
+          </button>
+          <button
+            type="button"
+            className={`mobile-bottom-nav-item ${location.pathname === "/core-team" ? "active" : ""}`}
+            onClick={() => handleNavClick("/core-team")}
+            title="Core Team"
+          >
+            <i className="bi bi-people-fill"></i>
+            <span>Team</span>
+          </button>
+          <button
+            type="button"
+            className={`mobile-bottom-nav-item ${location.pathname === "/profile" ? "active" : ""}`}
+            onClick={() => handleNavClick("/profile")}
+            title="Profile"
+          >
+            <i className="bi bi-person-circle"></i>
+            <span>Profile</span>
+          </button>
+        </nav>
+      )}
 
       {/* COMMAND PALETTE */}
       <CommandPalette

@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
-import { loadWithCache } from "../utils/dataCache";
+import { loadWithCache, invalidateCache } from "../utils/dataCache";
+import { getRecentEvents, recordRecentEvent } from "../utils/eventStatus";
 import { useAuth } from "../context/AuthContext";
 import { usePwa } from "../context/PwaContext";
 import { Modal, Form, Badge } from "react-bootstrap";
@@ -14,6 +15,7 @@ export default function CommandPalette({ isOpen, onClose }) {
   const [queryText, setQueryText] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [events, setEvents] = useState([]);
+  const [recentList, setRecentList] = useState([]);
   const inputRef = useRef(null);
   const listRef = useRef(null);
 
@@ -33,6 +35,7 @@ export default function CommandPalette({ isOpen, onClose }) {
   useEffect(() => {
     if (isOpen) {
       fetchEvents();
+      setRecentList(getRecentEvents(5));
       setQueryText("");
       setSelectedIndex(0);
       setTimeout(() => inputRef.current?.focus(), 50);
@@ -158,24 +161,51 @@ export default function CommandPalette({ isOpen, onClose }) {
         },
       },
       {
+        id: "act-sync",
+        category: "Quick Actions",
+        title: "Sync & Refresh Data",
+        subtitle: "Clear cached data and reload freshest data from server",
+        icon: "bi-arrow-clockwise text-primary",
+        action: () => {
+          invalidateCache("all_events_list");
+          window.location.reload();
+        },
+      },
+      {
         id: "act-cal",
         category: "Quick Actions",
         title: "Go to Calendar",
-        subtitle: "Jump to chronological event view",
+        subtitle: "Jump to chronological event timeline",
         icon: "bi-calendar-event text-primary",
         action: () => navigate("/calendar"),
       },
     ];
 
     if (isAdmin) {
-      items.unshift({
-        id: "act-email",
-        category: "Quick Actions",
-        title: "Compose Broadcast Email",
-        subtitle: "Jump to announcement compose form",
-        icon: "bi-send-fill text-danger",
-        action: () => navigate("/email"),
-      });
+      items.unshift(
+        {
+          id: "act-create-event",
+          category: "Quick Actions",
+          title: "Create New Event",
+          subtitle: "Quickly open event creation modal",
+          icon: "bi-plus-circle-fill text-success",
+          action: () => {
+            navigate("/");
+            setTimeout(() => {
+              const btn = document.querySelector(".add-card, button:has(.bi-plus-lg)");
+              if (btn) btn.click();
+            }, 180);
+          },
+        },
+        {
+          id: "act-email",
+          category: "Quick Actions",
+          title: "Compose Broadcast Email",
+          subtitle: "Jump to announcement compose form",
+          icon: "bi-send-fill text-danger",
+          action: () => navigate("/email"),
+        }
+      );
     }
 
     if (!isInstalled && isInstallable) {
@@ -192,6 +222,22 @@ export default function CommandPalette({ isOpen, onClose }) {
     return items;
   }, [isAdmin, navigate, isInstalled, isInstallable, promptInstall]);
 
+  // Recently Viewed Items
+  const recentItems = useMemo(() => {
+    return recentList.map((ev) => ({
+      id: `recent-${ev.id}`,
+      category: "Recently Viewed",
+      title: ev.title || "Untitled Event",
+      subtitle: `${ev.venue ? `${ev.venue} · ` : ""}${ev.date || ""}`,
+      icon: "bi-clock-history text-primary",
+      badge: "Recent",
+      action: () => {
+        recordRecentEvent(ev);
+        navigate(`/event/${ev.id}`);
+      },
+    }));
+  }, [recentList, navigate]);
+
   // Filtered Event Items
   const eventItems = useMemo(() => {
     return events.map((ev) => ({
@@ -201,22 +247,32 @@ export default function CommandPalette({ isOpen, onClose }) {
       subtitle: `${ev.isYouthFestival ? "Youth Festival · " : ""}${ev.venue || "Venue TBD"}${ev.date ? ` · ${ev.date}` : ""}`,
       icon: ev.isYouthFestival ? "bi-trophy-fill text-warning" : "bi-calendar-check text-success",
       badge: ev.isYouthFestival ? "Youth Festival" : null,
-      action: () => navigate(`/event/${ev.id}`),
+      action: () => {
+        recordRecentEvent(ev);
+        navigate(`/event/${ev.id}`);
+      },
     }));
   }, [events, navigate]);
 
   // Filter and group
   const filteredFlatList = useMemo(() => {
     const q = queryText.toLowerCase().trim();
-    const all = [...navItems, ...eventItems, ...actionItems];
-    if (!q) return all;
-    return all.filter(
-      (item) =>
+    if (!q) {
+      return [...recentItems, ...navItems, ...actionItems, ...eventItems];
+    }
+    const all = [...recentItems, ...navItems, ...eventItems, ...actionItems];
+    const seen = new Set();
+    return all.filter((item) => {
+      const dedupeKey = item.id.replace(/^recent-/, "ev-");
+      if (seen.has(dedupeKey)) return false;
+      seen.add(dedupeKey);
+      return (
         item.title.toLowerCase().includes(q) ||
         item.subtitle.toLowerCase().includes(q) ||
         item.category.toLowerCase().includes(q)
-    );
-  }, [queryText, navItems, eventItems, actionItems]);
+      );
+    });
+  }, [queryText, recentItems, navItems, eventItems, actionItems]);
 
   // Handle keyboard navigation
   const handleKeyDown = (e) => {
@@ -243,14 +299,22 @@ export default function CommandPalette({ isOpen, onClose }) {
     }
   };
 
-  // Group by category for visual rendering
+  // Group by category for visual rendering with intentional order
   const groupedResults = useMemo(() => {
     const map = {};
+    const categoryOrder = ["Recently Viewed", "Quick Actions", "Navigation", "Events"];
     filteredFlatList.forEach((item, flatIdx) => {
       if (!map[item.category]) map[item.category] = [];
       map[item.category].push({ ...item, flatIdx });
     });
-    return map;
+    const sortedMap = {};
+    categoryOrder.forEach((cat) => {
+      if (map[cat]) sortedMap[cat] = map[cat];
+    });
+    Object.keys(map).forEach((cat) => {
+      if (!sortedMap[cat]) sortedMap[cat] = map[cat];
+    });
+    return sortedMap;
   }, [filteredFlatList]);
 
   return (
@@ -364,7 +428,11 @@ export default function CommandPalette({ isOpen, onClose }) {
 
                       <div className="d-flex align-items-center gap-2 flex-shrink-0 ms-2">
                         {item.badge && (
-                          <Badge bg="warning" text="dark" style={{ fontSize: "10px" }}>
+                          <Badge
+                            bg={item.badge === "Recent" ? "primary" : "warning"}
+                            text={item.badge === "Recent" ? "white" : "dark"}
+                            style={{ fontSize: "10px" }}
+                          >
                             {item.badge}
                           </Badge>
                         )}

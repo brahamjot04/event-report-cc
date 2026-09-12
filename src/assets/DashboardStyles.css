@@ -651,6 +651,16 @@ body {
     transform: scale(1.1);
 }
 
+@media (max-width: 767.98px) {
+    .theme-toggle-btn {
+        bottom: 74px;
+        right: 18px;
+        width: 44px;
+        height: 44px;
+        font-size: 1.25rem;
+    }
+}
+
 /* Date & Time picker native dropdown styling */
 input[type="date"],
 input[type="time"] {
@@ -1028,4 +1038,110 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
 .event-card-dropdown-toggle::after {
     display: none !important;
+}
+
+/* =========================================
+   11. ROTATION ANIMATION & MOBILE BOTTOM NAV
+   ========================================= */
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.spin-animation {
+    animation: spin 0.8s linear infinite;
+    display: inline-block;
+}
+
+/* Mobile Bottom Navigation Bar */
+.mobile-bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background-color: var(--bg-card);
+    border-top: 1px solid var(--border-color);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 1020;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 0.5rem;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.mobile-bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    height: 100%;
+    color: var(--text-secondary);
+    text-decoration: none;
+    background: transparent;
+    border: none;
+    padding: 4px 0;
+    font-size: 0.7rem;
+    font-weight: 500;
+    transition: all 0.15s ease-in-out;
+    cursor: pointer;
+    user-select: none;
+}
+
+.mobile-bottom-nav-item i {
+    font-size: 1.25rem;
+    line-height: 1.2;
+    margin-bottom: 2px;
+    transition: transform 0.15s ease;
+}
+
+.mobile-bottom-nav-item:hover,
+.mobile-bottom-nav-item:focus {
+    color: var(--bs-primary);
+}
+
+.mobile-bottom-nav-item.active {
+    color: var(--bs-primary);
+    font-weight: 700;
+}
+
+.mobile-bottom-nav-item.active i {
+    transform: scale(1.1);
+}
+
+/* Safe bottom spacing on mobile when bottom nav is active */
+@media (max-width: 767.98px) {
+    .has-bottom-nav {
+        padding-bottom: 75px !important;
+    }
+}
+
+/* =========================================
+   12. RESPONSIVE WIDTH UTILITIES
+   ========================================= */
+
+@media (min-width: 576px) {
+    .w-sm-auto {
+        width: auto !important;
+    }
+}
+
+@media (min-width: 768px) {
+    .w-md-auto {
+        width: auto !important;
+    }
+}
+
+@media (min-width: 992px) {
+    .w-lg-auto {
+        width: auto !important;
+    }
 }

@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { loadWithCache, invalidateCache } from "../utils/dataCache";
+import { getEventStatusInfo, recordRecentEvent } from "../utils/eventStatus";
 import { logAction } from "../utils/logger";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { Row, Col, Modal, Form, Button, Spinner, Dropdown } from "react-bootstrap";
+import { Row, Col, Modal, Form, Button, Dropdown } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 
@@ -20,11 +21,29 @@ const BLANK_FORM = {
   isHostCollege: false,
 };
 
+const EventCardSkeleton = () => (
+  <Col xs={12} sm={6} md={4} lg={3}>
+    <div className="soft-card position-relative placeholder-glow p-3 text-center h-100">
+      <div
+        className="placeholder rounded-circle mb-3 mx-auto"
+        style={{ width: "64px", height: "64px", display: "block" }}
+      />
+      <div className="placeholder col-9 mb-2 mx-auto d-block rounded" style={{ height: "16px" }} />
+      <div className="placeholder col-6 mb-3 mx-auto d-block rounded" style={{ height: "12px" }} />
+      <div className="d-flex justify-content-center gap-1 mt-2">
+        <span className="placeholder rounded-pill" style={{ width: "80px", height: "20px" }} />
+        <span className="placeholder rounded-pill" style={{ width: "60px", height: "20px" }} />
+      </div>
+    </div>
+  </Col>
+);
+
 export default function Home() {
   const { user, isAdmin } = useAuth();
   const { showSuccess, showError, confirm } = useToast();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -39,7 +58,11 @@ export default function Home() {
 
   const navigate = useNavigate();
 
-  const fetchData = useCallback(() => {
+  const fetchData = useCallback((forceRefresh = false) => {
+    if (forceRefresh) {
+      invalidateCache("all_events_list");
+      setIsSyncing(true);
+    }
     loadWithCache(
       "all_events_list",
       async () => {
@@ -49,13 +72,16 @@ export default function Home() {
           ...doc.data(),
         }));
       },
-      (data, isCached) => {
+      (data) => {
         setEvents(data);
-        if (isCached) setLoading(false);
+        setLoading(false);
+        setIsSyncing(false);
       },
-      () => setLoading(false)
+      () => {
+        setLoading(false);
+        setIsSyncing(false);
+      }
     );
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -207,15 +233,6 @@ export default function Home() {
     borderColor: "var(--border-color)",
   };
 
-  if (loading)
-    return (
-      <Layout>
-        <div className="vh-100 d-flex justify-content-center align-items-center">
-          <Spinner animation="border" variant="primary" />
-        </div>
-      </Layout>
-    );
-
   return (
     <Layout>
       {/* PAGE TITLE */}
@@ -228,11 +245,36 @@ export default function Home() {
       <div className="mb-5">
         <div className="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
           <div>
-            <h5 className="fw-bold mb-1">All Events</h5>
+            <div className="d-flex align-items-center gap-2">
+              <h5 className="fw-bold mb-0">All Events</h5>
+              <button
+                className="btn btn-sm btn-link p-1 text-muted text-decoration-none shadow-none"
+                onClick={() => fetchData(true)}
+                title="Refresh & Sync Events from Server"
+                disabled={isSyncing || loading}
+                style={{ lineHeight: 1 }}
+              >
+                <i
+                  className={`bi bi-arrow-clockwise fs-5 ${
+                    isSyncing ? "spin-animation text-primary" : ""
+                  }`}
+                />
+              </button>
+            </div>
             <p className="text-muted small mb-0">
               Select an event to manage participants, sponsors, and meetings.
             </p>
           </div>
+          {isAdmin && (
+            <Button
+              variant="primary"
+              className="d-flex align-items-center gap-2 shadow-sm rounded-pill px-3"
+              onClick={handleOpenCreateModal}
+            >
+              <i className="bi bi-plus-lg" />
+              <span>Create Event</span>
+            </Button>
+          )}
         </div>
 
         {/* Search & Filter Bar */}
@@ -281,126 +323,150 @@ export default function Home() {
         </Row>
 
         <Row className="g-3">
-          {filteredEvents.map((ev) => (
-            <Col key={ev.id} xs={12} sm={6} md={4} lg={3} id={`event-card-${ev.id}`}>
-              <div
-                className={`soft-card position-relative ${highlightedEventId === ev.id ? "card-return-highlight" : ""}`}
-                onClick={() => {
-                  sessionStorage.setItem("last_viewed_event_id", ev.id);
-                  navigate(`/event/${ev.id}`);
-                }}
-              >
-                {/* Admin 3-dots action menu */}
-                {isAdmin && (
-                  <div
-                    className="position-absolute top-0 end-0 p-2"
-                    style={{ zIndex: 10 }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Dropdown align="end">
-                      <Dropdown.Toggle
-                        as="button"
-                        className="btn p-0 border-0 text-decoration-none event-card-dropdown-toggle shadow-none"
-                        title="Event Actions"
-                        aria-label="Event Actions"
-                      >
-                        <i className="bi bi-three-dots-vertical fs-6"></i>
-                      </Dropdown.Toggle>
-                      <Dropdown.Menu
-                        style={{
-                          backgroundColor: "var(--bg-card)",
-                          borderColor: "var(--border-color)",
-                          boxShadow: "var(--shadow)",
-                          minWidth: "10rem",
-                        }}
-                      >
-                        <Dropdown.Item
-                          onClick={(e) => handleOpenEditModal(e, ev)}
-                          className="d-flex align-items-center gap-2 py-2 text-primary"
-                        >
-                          <i className="bi bi-pencil-fill"></i>
-                          <span className="fw-medium">Edit Event</span>
-                        </Dropdown.Item>
-                        <Dropdown.Divider style={{ borderColor: "var(--border-color)" }} />
-                        <Dropdown.Item
-                          onClick={(e) => handleDeleteEvent(e, ev)}
-                          className="d-flex align-items-center gap-2 py-2 text-danger"
-                        >
-                          <i className="bi bi-trash3-fill"></i>
-                          <span className="fw-medium">Delete Event</span>
-                        </Dropdown.Item>
-                      </Dropdown.Menu>
-                    </Dropdown>
-                  </div>
-                )}
-
-                <div
-                  className={`avatar-circle ${
-                    ev.isYouthFestival
-                      ? "text-warning bg-warning-subtle"
-                      : "text-danger bg-danger-subtle"
-                  }`}
-                >
-                  <i
-                    className={`bi ${
-                      ev.isYouthFestival ? "bi-trophy-fill" : "bi-calendar-check"
-                    }`}
-                    style={{ fontSize: "1.4rem", lineHeight: 1 }}
-                  />
-                </div>
-                <h6 className="fw-bold mb-1" style={{ wordBreak: "break-word" }}>
-                  {ev.title}
-                </h6>
-                <small className="text-muted d-block mb-2">
-                  {ev.isYouthFestival && ev.startDate
-                    ? `${ev.startDate} – ${ev.endDate || "?"}`
-                    : ev.date}{" "}
-                  &bull; {ev.venue}
-                </small>
-
-                <div className="d-flex flex-wrap gap-1 justify-content-center align-items-center mt-2">
-                  <span
-                    className={`status-badge ${
-                      new Date(ev.date || ev.startDate) < new Date()
-                        ? "status-past"
-                        : "status-upcoming"
-                    }`}
-                  >
-                    {new Date(ev.date || ev.startDate) < new Date()
-                      ? "Completed"
-                      : "Upcoming"}
-                  </span>
-                  {ev.isYouthFestival && (
-                    <span className="yf-badge yf-badge-warning">
-                      <i className="bi bi-trophy-fill me-1" />
-                      Youth Festival
-                    </span>
-                  )}
-                  {ev.isYouthFestival && ev.isHostCollege && (
-                    <span className="yf-badge yf-badge-success">
-                      Host
-                    </span>
-                  )}
-                  {ev.isYouthFestival && !ev.isHostCollege && (
-                    <span className="yf-badge yf-badge-info">
-                      Contingent
-                    </span>
-                  )}
-                </div>
+          {loading ? (
+            Array.from({ length: 8 }).map((_, i) => (
+              <EventCardSkeleton key={i} />
+            ))
+          ) : filteredEvents.length === 0 ? (
+            <Col xs={12}>
+              <div className="text-center py-5 text-muted">
+                <i className="bi bi-calendar-x display-4 text-secondary opacity-50 d-block mb-3" />
+                <h6 className="fw-bold">No events found</h6>
+                <p className="small mb-0">
+                  {searchQuery
+                    ? `No events matching "${searchQuery}"`
+                    : "There are no events registered under this category."}
+                </p>
               </div>
             </Col>
-          ))}
+          ) : (
+            filteredEvents.map((ev) => (
+              <Col key={ev.id} xs={12} sm={6} md={4} lg={3} id={`event-card-${ev.id}`}>
+                <div
+                  className={`soft-card position-relative ${highlightedEventId === ev.id ? "card-return-highlight" : ""}`}
+                  onClick={() => {
+                    recordRecentEvent(ev);
+                    sessionStorage.setItem("last_viewed_event_id", ev.id);
+                    navigate(`/event/${ev.id}`);
+                  }}
+                >
+                  {/* Admin 3-dots action menu */}
+                  {isAdmin && (
+                    <div
+                      className="position-absolute top-0 end-0 p-2"
+                      style={{ zIndex: 10 }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Dropdown align="end">
+                        <Dropdown.Toggle
+                          as="button"
+                          className="btn p-0 border-0 text-decoration-none event-card-dropdown-toggle shadow-none"
+                          title="Event Actions"
+                          aria-label="Event Actions"
+                        >
+                          <i className="bi bi-three-dots-vertical fs-6"></i>
+                        </Dropdown.Toggle>
+                        <Dropdown.Menu
+                          style={{
+                            backgroundColor: "var(--bg-card)",
+                            borderColor: "var(--border-color)",
+                            boxShadow: "var(--shadow)",
+                            minWidth: "10rem",
+                          }}
+                        >
+                          <Dropdown.Item
+                            onClick={(e) => handleOpenEditModal(e, ev)}
+                            className="d-flex align-items-center gap-2 py-2 text-primary"
+                          >
+                            <i className="bi bi-pencil-fill"></i>
+                            <span className="fw-medium">Edit Event</span>
+                          </Dropdown.Item>
+                          <Dropdown.Divider style={{ borderColor: "var(--border-color)" }} />
+                          <Dropdown.Item
+                            onClick={(e) => handleDeleteEvent(e, ev)}
+                            className="d-flex align-items-center gap-2 py-2 text-danger"
+                          >
+                            <i className="bi bi-trash3-fill"></i>
+                            <span className="fw-medium">Delete Event</span>
+                          </Dropdown.Item>
+                        </Dropdown.Menu>
+                      </Dropdown>
+                    </div>
+                  )}
+
+                  <div
+                    className={`avatar-circle ${
+                      ev.isYouthFestival
+                        ? "text-warning bg-warning-subtle"
+                        : "text-danger bg-danger-subtle"
+                    }`}
+                  >
+                    <i
+                      className={`bi ${
+                        ev.isYouthFestival ? "bi-trophy-fill" : "bi-calendar-check"
+                      }`}
+                      style={{ fontSize: "1.4rem", lineHeight: 1 }}
+                    />
+                  </div>
+                  <h6 className="fw-bold mb-1" style={{ wordBreak: "break-word" }}>
+                    {ev.title}
+                  </h6>
+                  <small className="text-muted d-block mb-2">
+                    {ev.isYouthFestival && ev.startDate
+                      ? `${ev.startDate} – ${ev.endDate || "?"}`
+                      : ev.date}{" "}
+                    &bull; {ev.venue}
+                  </small>
+
+                  <div className="d-flex flex-wrap gap-1 justify-content-center align-items-center mt-2">
+                    {(() => {
+                      const status = getEventStatusInfo(ev);
+                      let badgeClass = "status-badge status-upcoming";
+                      if (status.isPast) badgeClass = "status-badge status-past";
+                      else if (status.isCurrent) badgeClass = "status-badge bg-success text-white";
+
+                      return (
+                        <span className={badgeClass}>
+                          {status.icon && <i className={`bi ${status.icon} me-1`} />}
+                          {status.label}
+                        </span>
+                      );
+                    })()}
+                    {ev.isYouthFestival && (
+                      <span className="yf-badge yf-badge-warning">
+                        <i className="bi bi-trophy-fill me-1" />
+                        Youth Festival
+                      </span>
+                    )}
+                    {ev.isYouthFestival && ev.isHostCollege && (
+                      <span className="yf-badge yf-badge-success">
+                        <i className="bi bi-building-check me-1" />
+                        Host
+                      </span>
+                    )}
+                    {ev.isYouthFestival && !ev.isHostCollege && (
+                      <span className="yf-badge yf-badge-info">
+                        Contingent
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </Col>
+            ))
+          )}
 
           {/* Add Event Card */}
-          <Col xs={12} sm={6} md={4} lg={3}>
-            <div
-              className="soft-card add-card"
-              onClick={handleOpenCreateModal}
-            >
-              <i className="bi bi-plus-circle-fill fs-3 mb-2" />
-              <span className="fw-bold">Create Event</span>
-            </div>
-          </Col>
+          {!loading && isAdmin && (
+            <Col xs={12} sm={6} md={4} lg={3}>
+              <div
+                className="soft-card add-card"
+                onClick={handleOpenCreateModal}
+              >
+                <i className="bi bi-plus-circle-fill fs-3 mb-2" />
+                <span className="fw-bold">Create Event</span>
+              </div>
+            </Col>
+          )}
         </Row>
       </div>
 

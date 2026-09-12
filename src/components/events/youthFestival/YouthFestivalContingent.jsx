@@ -122,7 +122,7 @@ export default function YouthFestivalContingent({ eventId, goBack }) {
     <>
       {/* Header */}
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
-        <div className="d-flex align-items-start align-items-sm-center gap-3">
+        <div className="d-flex align-items-start align-items-sm-center gap-3 flex-shrink-0">
           <Button
             variant="outline-secondary"
             className="rounded-circle shadow-sm flex-shrink-0"
@@ -135,7 +135,7 @@ export default function YouthFestivalContingent({ eventId, goBack }) {
             <small className="text-muted text-uppercase fw-bold">
               Youth Festival — GNDEC Contingent
             </small>
-            <h4 className="fw-bold mb-0">Our Participation Roster</h4>
+            <h4 className="fw-bold mb-0 text-nowrap">Our Participation Roster</h4>
           </div>
         </div>
         <div className="d-flex flex-wrap align-items-center gap-2 w-100 w-md-auto justify-content-start justify-content-md-end">

@@ -917,7 +917,7 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
     return (
       <>
         <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
-          <div className="d-flex align-items-start align-items-sm-center gap-3">
+          <div className="d-flex align-items-start align-items-sm-center gap-3 flex-shrink-0">
             <Button
               variant="outline-secondary"
               className="rounded-circle shadow-sm flex-shrink-0"
@@ -933,7 +933,7 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
               <i className="bi bi-arrow-left"></i>
             </Button>
             <div>
-              <h3 className="fw-bold mb-0">{activeTeam.name}</h3>
+              <h3 className="fw-bold mb-0 text-nowrap">{activeTeam.name}</h3>
               <p className="text-muted small mb-0">
                 {getTeamMembersCount(activeTeam)} Members •{" "}
                 {getTeamExecutivesCount(activeTeam)} Executives •{" "}
@@ -1576,7 +1576,7 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
   return (
     <>
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
-        <div className="d-flex align-items-start align-items-sm-center gap-3">
+        <div className="d-flex align-items-start align-items-sm-center gap-3 flex-shrink-0">
           <Button
             variant="outline-secondary"
             className="rounded-circle shadow-sm flex-shrink-0"
@@ -1592,7 +1592,7 @@ export default function EventTeams({ eventId, eventTitle, goBack }) {
             <i className="bi bi-arrow-left"></i>
           </Button>
           <div>
-            <h3 className="fw-bold mb-0">Organizing Teams</h3>
+            <h3 className="fw-bold mb-0 text-nowrap">Organizing Teams</h3>
             <p className="text-muted small mb-0">
               Manage committees and members • {overallStats.totalCoreMembers} Core
               Members • {overallStats.totalMembers} Total Members

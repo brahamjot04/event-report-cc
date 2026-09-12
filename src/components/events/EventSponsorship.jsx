@@ -256,7 +256,7 @@ export default function EventSponsorship({
     <>
       {/* HEADER */}
       <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
-        <div className="d-flex align-items-start align-items-sm-center gap-3">
+        <div className="d-flex align-items-start align-items-sm-center gap-3 flex-shrink-0">
           <Button
             variant="outline-secondary"
             className="rounded-circle shadow-sm flex-shrink-0"
@@ -272,7 +272,7 @@ export default function EventSponsorship({
             <i className="bi bi-arrow-left"></i>
           </Button>
           <div>
-            <h3 className="fw-bold mb-0">Sponsorship</h3>
+            <h3 className="fw-bold mb-0 text-nowrap">Sponsorship</h3>
             <p className="text-muted small mb-0">
               Manage attendance and records
             </p>

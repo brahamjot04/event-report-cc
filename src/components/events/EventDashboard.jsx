@@ -71,7 +71,7 @@ export default function EventDashboard({
     <>
       {/* HEADER SECTION */}
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4 mb-md-5">
-        <div className="d-flex align-items-start align-items-sm-center gap-3">
+        <div className="d-flex align-items-start align-items-sm-center gap-3 flex-shrink-0">
           <Button
             variant="outline-secondary"
             className="rounded-circle shadow-sm flex-shrink-0"

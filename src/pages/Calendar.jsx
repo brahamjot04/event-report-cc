@@ -2,9 +2,29 @@ import { useState, useEffect } from "react";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { db } from "../firebase";
 import { loadWithCache } from "../utils/dataCache";
-import { Card, Badge, Spinner, Row, Col } from "react-bootstrap";
+import { getEventStatusInfo, recordRecentEvent } from "../utils/eventStatus";
+import { Card, Badge, Row, Col } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
+
+const CalendarSkeleton = () => (
+  <div className="placeholder-glow mb-4">
+    <div className="placeholder col-3 mb-3 rounded" style={{ height: "20px" }} />
+    <Row className="g-3">
+      {[1, 2, 3].map((n) => (
+        <Col md={12} key={n}>
+          <div className="soft-card p-3 d-flex align-items-center">
+            <div className="placeholder rounded me-3" style={{ width: "70px", height: "70px" }} />
+            <div className="flex-grow-1">
+              <div className="placeholder col-6 mb-2 rounded" style={{ height: "18px" }} />
+              <div className="placeholder col-4 rounded" style={{ height: "14px" }} />
+            </div>
+          </div>
+        </Col>
+      ))}
+    </Row>
+  </div>
+);
 
 export default function Calendar() {
   const [events, setEvents] = useState([]);
@@ -19,13 +39,12 @@ export default function Calendar() {
         const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       },
-      (data, isCached) => {
+      (data) => {
         setEvents(data);
-        if (isCached) setLoading(false);
+        setLoading(false);
       },
       () => setLoading(false)
     );
-    setLoading(false);
   }, []);
 
   const getEventDateObj = (event) => {
@@ -128,8 +147,10 @@ export default function Calendar() {
       </div>
 
       {loading ? (
-        <div className="text-center p-5">
-          <Spinner animation="border" variant="primary" />
+        <div>
+          {[1, 2].map((n) => (
+            <CalendarSkeleton key={n} />
+          ))}
         </div>
       ) : (
         <>
@@ -163,6 +184,7 @@ export default function Calendar() {
                                   href="#"
                                   onClick={(e) => {
                                     e.preventDefault();
+                                    recordRecentEvent(event);
                                     navigate(`/event/${event.id}`);
                                   }}
                                   className="text-decoration-none stretched-link"
@@ -171,6 +193,18 @@ export default function Calendar() {
                                   {event.title}
                                 </a>
                               </h5>
+                              {(() => {
+                                const status = getEventStatusInfo(event);
+                                let badgeBg = "primary";
+                                if (status.isPast) badgeBg = "secondary";
+                                else if (status.isCurrent) badgeBg = "success";
+                                return (
+                                  <Badge bg={badgeBg} className="rounded-pill">
+                                    {status.icon && <i className={`bi ${status.icon} me-1`} />}
+                                    {status.label}
+                                  </Badge>
+                                );
+                              })()}
                               {event.isYouthFestival && (
                                 <Badge bg="warning" text="dark" className="rounded-pill">
                                   <i className="bi bi-trophy-fill me-1" />
