@@ -83,10 +83,17 @@ export default async function handler(req, res) {
     png: "image/png",
     gif: "image/gif",
     webp: "image/webp",
-    svg: "image/svg+xml",
     pdf: "application/pdf",
   };
-  const contentType = mimeTypes[extension] || "application/octet-stream";
+
+  const contentType = mimeTypes[extension];
+  if (!contentType) {
+    return res.status(403).json({
+      error: `Access forbidden: File type '.${extension}' is not permitted.`,
+    });
+  }
+
+  res.setHeader("X-Content-Type-Options", "nosniff");
 
   try {
     const url = `https://api.github.com/repos/${USERNAME}/${REPO_NAME}/contents/${safePath}`;
@@ -124,6 +131,7 @@ export default async function handler(req, res) {
       const fileBuffer = Buffer.from(cleanBase64, "base64");
 
       res.setHeader("Content-Type", contentType);
+      res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader(
         "Cache-Control",
         "public, max-age=86400, stale-while-revalidate=604800"
@@ -136,6 +144,7 @@ export default async function handler(req, res) {
 
     // Cache image responses in browser and edge CDN for 24 hours
     res.setHeader("Content-Type", contentType);
+    res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader(
       "Cache-Control",
       "public, max-age=86400, stale-while-revalidate=604800"
