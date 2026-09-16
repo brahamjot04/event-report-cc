@@ -1,7 +1,15 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect } from "react";
 import { onAuthStateChanged, signOut, getRedirectResult } from "firebase/auth";
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import {
+  doc,
+  onSnapshot,
+  setDoc,
+  getDocs,
+  collection,
+  query,
+  where,
+} from "firebase/firestore";
 import { auth, db } from "../firebase";
 
 const AuthContext = createContext(null);
@@ -40,30 +48,42 @@ export function AuthProvider({ children }) {
               const normalizedStatus = data.status
                 ? data.status.trim().toLowerCase()
                 : "pending";
+              const normalizedRole = data.role
+                ? data.role.trim().toLowerCase()
+                : "user";
 
               setUserProfile(data);
-              setRole(data.role || "user");
+              setRole(normalizedRole);
               setStatus(normalizedStatus);
             } else {
-              // Create user doc for OAuth users who don't have a profile yet
-              const newProfile = {
-                uid: currentUser.uid,
-                name:
-                  currentUser.displayName ||
-                  currentUser.email?.split("@")[0] ||
-                  "User",
-                email: currentUser.email || "",
-                role: "user",
-                status: "pending",
-                createdAt: new Date(),
-              };
-              setDoc(doc(db, "users", currentUser.uid), newProfile).catch(
-                (err) =>
-                  console.error("Error creating user profile document:", err)
-              );
-              setUserProfile(newProfile);
+              // Check if account was pre-approved by email under a different UID
+              if (currentUser.email) {
+                const q = query(
+                  collection(db, "users"),
+                  where("email", "==", currentUser.email.toLowerCase())
+                );
+                getDocs(q)
+                  .then((emailSnap) => {
+                    if (!emailSnap.empty) {
+                      const existingData = emailSnap.docs[0].data();
+                      setDoc(doc(db, "users", currentUser.uid), {
+                        ...existingData,
+                        uid: currentUser.uid,
+                      }).catch(console.error);
+                    } else {
+                      // Not invited: sign out immediately without creating any document
+                      signOut(auth).catch(console.error);
+                    }
+                  })
+                  .catch(() => {
+                    signOut(auth).catch(console.error);
+                  });
+              } else {
+                signOut(auth).catch(console.error);
+              }
+              setUserProfile(null);
               setRole("user");
-              setStatus("pending");
+              setStatus("uninvited");
             }
             setLoading(false);
           },

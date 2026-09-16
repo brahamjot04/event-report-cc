@@ -218,6 +218,12 @@ body {
 
 /* Desktop sidebar header - centered */
 @media (min-width: 768px) {
+    .sidebar-nav {
+        width: 240px;
+        min-width: 240px;
+        flex-shrink: 0;
+    }
+
     .sidebar-header {
         position: relative;
         justify-content: center !important;
@@ -393,6 +399,7 @@ body {
     .sidebar-nav.sidebar-collapsed {
         min-width: 80px;
         width: 80px;
+        flex-shrink: 0;
         padding-top: 2rem;
         display: flex;
         flex-direction: column;

@@ -14,13 +14,14 @@
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.1",
     "firebase": "^12.8.0",
+    "firebase-admin": "^14.4.0",
     "jspdf": "^4.1.0",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.563.0",
     "react": "^19.2.0",
     "react-bootstrap": "^2.10.10",
     "react-dom": "^19.2.0",
-    "react-router-dom": "^7.13.0",
+    "react-router-dom": "^7.18.4",
     "read-excel-file": "^6.0.3"
   },
   "devDependencies": {
@@ -32,7 +33,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
-    "sharp": "^0.34.5",
-    "vite": "^7.2.4"
+    "sharp": "^0.35.4",
+    "vite": "^7.3.6"
   }
 }

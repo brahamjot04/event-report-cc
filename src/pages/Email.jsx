@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { Navigate } from "react-router-dom";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import {
   Form,
@@ -52,7 +53,7 @@ const EMAIL_TEMPLATES = [
 ];
 
 export default function Email() {
-  const { user } = useAuth();
+  const { user, isAdmin, loading } = useAuth();
   const { showSuccess, showError, confirm } = useToast();
 
   const [activeTab, setActiveTab] = useState("compose"); // 'compose' | 'history'
@@ -784,6 +785,10 @@ export default function Email() {
         (r.email || "").toLowerCase().includes(q)
     );
   }, [selectedEmail, recipientSearch]);
+
+  if (!loading && !isAdmin) {
+    return <Navigate to="/" replace />;
+  }
 
   return (
     <Layout>

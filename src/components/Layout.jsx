@@ -159,10 +159,10 @@ export default function Layout({ children }) {
 
   return (
     <Container fluid className="p-0" style={{ minHeight: "100vh" }}>
-      <Row className="g-0" style={{ minHeight: "100vh" }}>
+      <Row className="g-0 flex-nowrap" style={{ minHeight: "100vh" }}>
         {/* --- SIDEBAR --- */}
         <Col
-          md={2}
+          xs="auto"
           className={`sidebar-nav ${isMobileOpen ? "mobile-sidebar-open" : ""} ${sidebarAnimatingOut ? "mobile-sidebar-closing" : ""} d-md-block ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}
         >
           <div className="sidebar-header px-4 mb-5 d-flex justify-content-between align-items-center">
@@ -242,14 +242,16 @@ export default function Layout({ children }) {
               <i className="bi bi-grid-1x2-fill"></i>
               <span>Dashboard</span>
             </div>
-            <div
-              className={isActive("/users")}
-              onClick={() => handleNavClick("/users")}
-              title="Users"
-            >
-              <i className="bi bi-people-fill"></i>
-              <span>Users</span>
-            </div>
+            {isAdmin && (
+              <div
+                className={isActive("/users")}
+                onClick={() => handleNavClick("/users")}
+                title="Users"
+              >
+                <i className="bi bi-people-fill"></i>
+                <span>Users</span>
+              </div>
+            )}
             <div
               className={isActive("/core-team")}
               onClick={() => handleNavClick("/core-team")}
@@ -266,14 +268,16 @@ export default function Layout({ children }) {
               </div>
             )}
 
-            <div
-              className={isActive("/email")}
-              onClick={() => handleNavClick("/email")}
-              title="Email"
-            >
-              <i className="bi bi-envelope-fill"></i>
-              <span>Email</span>
-            </div>
+            {isAdmin && (
+              <div
+                className={isActive("/email")}
+                onClick={() => handleNavClick("/email")}
+                title="Email"
+              >
+                <i className="bi bi-envelope-fill"></i>
+                <span>Email</span>
+              </div>
+            )}
             <div
               className={isActive("/calendar")}
               onClick={() => handleNavClick("/calendar")}
@@ -282,14 +286,16 @@ export default function Layout({ children }) {
               <i className="bi bi-calendar-event-fill"></i>
               <span>Calendar</span>
             </div>
-            <div
-              className={isActive("/activity-logs")}
-              onClick={() => handleNavClick("/activity-logs")}
-              title="Activity Logs"
-            >
-              <i className="bi bi-clock-history"></i>
-              <span>Activity Logs</span>
-            </div>
+            {isAdmin && (
+              <div
+                className={isActive("/activity-logs")}
+                onClick={() => handleNavClick("/activity-logs")}
+                title="Activity Logs"
+              >
+                <i className="bi bi-clock-history"></i>
+                <span>Activity Logs</span>
+              </div>
+            )}
             <div
               className={isActive("/notifications")}
               onClick={() => handleNavClick("/notifications")}
@@ -339,9 +345,9 @@ export default function Layout({ children }) {
 
         {/* --- MAIN CONTENT --- */}
         <Col
-          md={sidebarCollapsed ? 11 : 10}
-          className="p-4 p-lg-5 d-flex flex-column"
+          className="p-4 p-lg-5 d-flex flex-column flex-grow-1"
           style={{
+            minWidth: 0,
             transition:
               "width 0.4s cubic-bezier(0.4, 0, 0.2, 1), flex 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
             minHeight: "100vh",

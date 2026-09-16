@@ -3,17 +3,17 @@ import { db } from "../firebase";
 import { getAuth } from "firebase/auth";
 import { invalidateCache } from "./dataCache";
 
-export const logAction = async (actionType, description) => {
+export const logAction = async (actionType, description, customUser = null) => {
   const auth = getAuth();
-  const user = auth.currentUser;
+  const user = customUser || auth.currentUser;
 
   try {
     await addDoc(collection(db, "logs"), {
       action: actionType,
       description: description,
-      performedBy: user?.displayName || user?.email?.split("@")[0] || "Admin",
+      performedBy: user?.displayName || user?.name || user?.email?.split("@")[0] || "User",
       email: user?.email || "system@gndec.ac.in",
-      role: "admin",
+      role: user?.role || "user",
       timestamp: new Date(),
     });
     invalidateCache("system_activity_logs");

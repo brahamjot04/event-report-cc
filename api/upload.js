@@ -5,6 +5,13 @@
  * GITHUB_TOKEN environment variable. Tokens are never exposed to browser clients.
  */
 
+// Attempt loading local .env in development
+try {
+  process.loadEnvFile?.();
+} catch (_ERR) {
+  // Ignore in production
+}
+
 export const config = {
   api: {
     bodyParser: {
@@ -14,17 +21,48 @@ export const config = {
 };
 
 export default async function handler(req, res) {
+  // Polyfill helper methods for non-Vercel/bare node environments (e.g. Vite dev)
+  if (!res.status) {
+    res.status = function (code) {
+      res.statusCode = code;
+      return res;
+    };
+  }
+  if (!res.json) {
+    res.json = function (data) {
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify(data));
+      return res;
+    };
+  }
+  if (!res.send) {
+    res.send = function (data) {
+      res.end(data);
+      return res;
+    };
+  }
+
   // Only allow POST requests
   if (req.method !== "POST") {
     res.setHeader("Allow", ["POST"]);
     return res.status(405).json({ error: `Method ${req.method} not allowed` });
   }
 
-  // Server-side environment variables (NEVER use VITE_ prefix for secrets)
-  const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-  const USERNAME = process.env.GITHUB_USERNAME || "brahamjot04";
-  const REPO_NAME = process.env.GITHUB_REPO || "event-report-cc-app-data";
-  const BRANCH = process.env.GITHUB_BRANCH || "main";
+  // Server-side environment variables (supports both GITHUB_TOKEN and VITE_ fallback)
+  const GITHUB_TOKEN =
+    process.env.GITHUB_TOKEN || process.env.VITE_GITHUB_TOKEN;
+  const USERNAME =
+    process.env.GITHUB_USERNAME ||
+    process.env.VITE_GITHUB_USERNAME ||
+    "brahamjot04";
+  const REPO_NAME =
+    process.env.GITHUB_REPO ||
+    process.env.VITE_GITHUB_REPO ||
+    "event-report-cc-app-data";
+  const BRANCH =
+    process.env.GITHUB_BRANCH ||
+    process.env.VITE_GITHUB_BRANCH ||
+    "main";
 
   if (!GITHUB_TOKEN) {
     console.error("Missing GITHUB_TOKEN in server environment variables.");

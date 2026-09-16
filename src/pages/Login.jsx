@@ -3,11 +3,22 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
+  signOut,
   GoogleAuthProvider,
 } from "firebase/auth";
-import { auth } from "../firebase";
+import {
+  doc,
+  getDoc,
+  getDocs,
+  collection,
+  query,
+  where,
+  setDoc,
+} from "firebase/firestore";
+import { auth, db } from "../firebase";
 import { useNavigate, Link } from "react-router-dom";
 import { Container, Form, Button, Alert, Spinner } from "react-bootstrap";
+import { logAction } from "../utils/logger";
 import "../assets/DashboardStyles.css";
 
 export default function Login() {
@@ -37,15 +48,68 @@ export default function Login() {
     setLoading(true);
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      const currentUser = result.user;
+
+      // Gatekeeper: Check if user exists in Firestore
+      const userDocRef = doc(db, "users", currentUser.uid);
+      const userDocSnap = await getDoc(userDocRef);
+
+      let isAllowed = userDocSnap.exists();
+
+      // Check if user was pre-created by email under a different UID
+      if (!isAllowed && currentUser.email) {
+        const q = query(
+          collection(db, "users"),
+          where("email", "==", currentUser.email.toLowerCase())
+        );
+        const emailSnap = await getDocs(q);
+        if (!emailSnap.empty) {
+          const existingData = emailSnap.docs[0].data();
+          await setDoc(userDocRef, {
+            ...existingData,
+            uid: currentUser.uid,
+          });
+          isAllowed = true;
+        }
+      }
+
+      if (!isAllowed) {
+        // Record unauthorized login attempt in audit logs
+        await logAction(
+          "UNAUTHORIZED_LOGIN_ATTEMPT",
+          `Blocked Google sign-in attempt for uninvited email: ${currentUser.email}`,
+          {
+            displayName: currentUser.displayName,
+            email: currentUser.email,
+            role: "uninvited",
+          }
+        );
+
+        // Delete the newly created orphan Google auth account
+        try {
+          await currentUser.delete();
+        } catch (delErr) {
+          console.warn("Could not delete orphan auth user:", delErr);
+        }
+
+        // Sign out immediately
+        await signOut(auth);
+
+        setError(
+          "No account found for this email address. Access to this portal is by invitation only. Please contact an administrator."
+        );
+        setLoading(false);
+        return;
+      }
+
       navigate("/");
     } catch (err) {
       if (err.code === "auth/popup-blocked") {
         // Browser blocked the popup — fall back to full-page redirect
         try {
-          setError(""); // clear error, show spinner while redirecting
+          setError("");
           await signInWithRedirect(auth, provider);
-          // page navigates away; AuthContext handles getRedirectResult on return
         } catch (redirectErr) {
           console.error("Redirect fallback failed:", redirectErr);
           setError("Sign-In failed. Please allow popups for this site and try again.");
@@ -175,10 +239,8 @@ export default function Login() {
             style={{ borderColor: "var(--border-color)" }}
           >
             <p className="small text-muted mb-0 mt-3">
-              Don't have an account?{" "}
-              <Link to="/signup" className="fw-bold text-decoration-none ms-1">
-                Create Account
-              </Link>
+              <i className="bi bi-shield-lock me-1 text-primary"></i>
+              Access is by invitation only. Contact an administrator to request access.
             </p>
           </div>
         </div>

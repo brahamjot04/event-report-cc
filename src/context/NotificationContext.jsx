@@ -129,9 +129,9 @@ export function NotificationProvider({ children }) {
     return () => unsub();
   }, [isAdmin]);
 
-  // 3. Listen for Recent Sent Broadcast Emails
+  // 3. Listen for Recent Sent Broadcast Emails (Admins)
   useEffect(() => {
-    if (!user) {
+    if (!isAdmin) {
       setBroadcastEmails([]);
       return;
     }
@@ -149,7 +149,7 @@ export function NotificationProvider({ children }) {
       (err) => console.error("Broadcasts listener error:", err)
     );
     return () => unsub();
-  }, [user]);
+  }, [isAdmin]);
 
   // Aggregate normalized notifications
   const notifications = useMemo(() => {

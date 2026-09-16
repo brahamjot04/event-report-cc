@@ -7,7 +7,13 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 export default defineConfig([
   globalIgnores(['dist']),
   {
-    files: ['generate-icons.js', 'generate-screenshots.js'],
+    files: [
+      'generate-icons.js',
+      'generate-screenshots.js',
+      'api/**/*.js',
+      'api/*.js',
+      'vite.config.js',
+    ],
     languageOptions: {
       globals: globals.node,
     },
@@ -29,7 +35,13 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      'no-unused-vars': [
+        'error',
+        {
+          varsIgnorePattern: '^[A-Z_]',
+          caughtErrors: 'none',
+        },
+      ],
       'react-hooks/set-state-in-effect': 'off',
     },
   },

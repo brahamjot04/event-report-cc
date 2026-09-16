@@ -4,10 +4,7 @@ import {
   getDocs,
   doc,
   updateDoc,
-  setDoc,
 } from "firebase/firestore";
-import { createUserWithEmailAndPassword, getAuth } from "firebase/auth";
-import { initializeApp, deleteApp } from "firebase/app";
 import { db } from "../firebase";
 import {
   Table,
@@ -27,15 +24,6 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { loadWithCache, invalidateCache } from "../utils/dataCache";
 
-const secondaryFirebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCF_-t-uGCwdX8ee_01T5qHv9nQX3HfxQw",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "event-report-cc.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "event-report-cc",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "event-report-cc.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "1069208650480",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:1069208650480:web:0e2765c0804db227b3f835",
-};
-
 export default function Users() {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
@@ -43,8 +31,8 @@ export default function Users() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [newUser, setNewUser] = useState({ name: "", email: "", role: "user" });
-  const [generatedPass, setGeneratedPass] = useState("");
   const [creating, setCreating] = useState(false);
+  const [resettingUserId, setResettingUserId] = useState(null);
   const [selectedRoleFilter, setSelectedRoleFilter] = useState(null);
   const [selectedStatusFilter, setSelectedStatusFilter] = useState(null);
 
@@ -139,49 +127,60 @@ export default function Users() {
   };
 
   const handleCreateUser = async () => {
+    if (!newUser.name.trim() || !newUser.email.trim()) {
+      showError("Please enter both full name and email address.");
+      return;
+    }
+
     setCreating(true);
-    const tempPassword = Math.random().toString(36).slice(-8) + "1!";
-    setGeneratedPass(tempPassword);
 
     try {
-      const secondaryApp = initializeApp(secondaryFirebaseConfig, "Secondary");
-      const secondaryAuth = getAuth(secondaryApp);
-      const userCredential = await createUserWithEmailAndPassword(
-        secondaryAuth,
-        newUser.email,
-        tempPassword,
-      );
+      // 1. Get authenticated Admin ID Token
+      const idToken = await currentUser.getIdToken();
 
-      await setDoc(doc(db, "users", userCredential.user.uid), {
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role,
-        status: "approved",
-        createdAt: new Date(),
+      // 2. Call serverless backend to create user and generate official password reset link
+      const response = await fetch("/api/invite-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          name: newUser.name.trim(),
+          email: newUser.email.trim(),
+          role: newUser.role,
+        }),
       });
 
-      await deleteApp(secondaryApp);
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to create user invitation.");
+      }
 
+      const resetLink = data.resetLink;
+
+      // 3. Deliver official invitation & password setup link via EmailJS to land in Primary Inbox
       await emailjs.send(
         EMAILJS_SERVICE_ID,
         EMAILJS_TEMPLATE_ID,
         {
-          to_email: newUser.email,
-          to_name: newUser.name,
-          recipient_email: newUser.email,
-          name: newUser.name,
-          email: newUser.email,
-          password: tempPassword,
-          url: window.location.origin,
+          name: newUser.name.trim(),
+          to_name: newUser.name.trim(),
+          email: newUser.email.trim(),
+          to_email: newUser.email.trim(),
+          role: newUser.role,
+          reset_link: resetLink,
+          url: resetLink,
+          action_url: resetLink,
           reply_to: currentUser?.email || "",
         },
-        EMAILJS_PUBLIC_KEY,
+        EMAILJS_PUBLIC_KEY
       );
 
       await logSentEmail({
-        type: "user_credentials",
-        subject: "Your GNDEC Cultural Committee Account Credentials",
-        message: `Account credentials generated for ${newUser.name} (${newUser.email}) with role: ${newUser.role}. Credentials dispatched via email.`,
+        type: "user_invitation",
+        subject: "Cultural Committee Account Invitation & Password Setup",
+        message: `Account created for ${newUser.name} (${newUser.email}) with role: ${newUser.role}. Secure password setup link delivered via EmailJS.`,
         audience: "new_user",
         recipients: [
           {
@@ -204,14 +203,94 @@ export default function Users() {
       fetchUsers(true);
       await logAction(
         "CREATE_USER",
-        `Created user: ${newUser.email} as ${newUser.role}`,
+        `Created user: ${newUser.email} as ${newUser.role} and sent password setup invitation via EmailJS`,
         currentUser,
       );
     } catch (error) {
-      console.error(error);
+      console.error("Create user error:", error);
       showError("Error: " + error.message);
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleSendPasswordReset = async (user) => {
+    const confirmed = await confirm({
+      title: "Send Password Reset Link",
+      message: `Send an official password reset email to ${user?.name || user?.email} (${user?.email})?`,
+      variant: "primary",
+      confirmText: "Send Reset Link",
+    });
+    if (!confirmed) return;
+
+    setResettingUserId(user.id);
+    try {
+      const idToken = await currentUser.getIdToken();
+      const response = await fetch("/api/invite-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          name: user.name || "Member",
+          email: user.email.trim(),
+          role: user.role || "user",
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to generate password reset link.");
+      }
+
+      await emailjs.send(
+        EMAILJS_SERVICE_ID,
+        EMAILJS_TEMPLATE_ID,
+        {
+          name: user?.name || user?.email,
+          to_name: user?.name || user?.email,
+          email: user.email.trim(),
+          to_email: user.email.trim(),
+          role: user.role || "user",
+          reset_link: data.resetLink,
+          url: data.resetLink,
+          action_url: data.resetLink,
+          reply_to: currentUser?.email || "",
+        },
+        EMAILJS_PUBLIC_KEY
+      );
+
+      await logSentEmail({
+        type: "password_reset",
+        subject: "Cultural Committee Password Reset",
+        message: `Password reset link delivered to ${user.name || user.email} (${user.email}) via EmailJS.`,
+        audience: "individual",
+        recipients: [
+          {
+            name: user.name || user.email,
+            email: user.email,
+            status: "sent",
+            sentAt: new Date().toISOString(),
+          },
+        ],
+        successfulCount: 1,
+        failedCount: 0,
+        status: "sent",
+        sender: currentUser,
+      });
+
+      showSuccess(`Password reset link sent to ${user.email} via EmailJS`);
+      await logAction(
+        "PASSWORD_RESET_DISPATCH",
+        `Dispatched password reset email to ${user.email} via EmailJS`,
+        currentUser,
+      );
+    } catch (err) {
+      console.error("Failed to send password reset email:", err);
+      showError("Failed to send reset email: " + err.message);
+    } finally {
+      setResettingUserId(null);
     }
   };
 
@@ -344,11 +423,12 @@ export default function Users() {
             <Table hover responsive className="mb-0 align-middle">
               <thead style={{ backgroundColor: "var(--soft-hover)" }}>
                 <tr className="small text-uppercase text-muted">
-                  <th className="ps-4 py-3 text-start" style={{ width: "40%" }}>
+                  <th className="ps-4 py-3 text-start" style={{ width: "35%" }}>
                     User
                   </th>
                   <th className="text-start">Role</th>
                   <th className="text-start">Status</th>
+                  <th className="text-center">Reset Password</th>
                   <th className="text-center">Make Admin</th>
                   <th className="text-end pe-4">Revoke Access</th>
                 </tr>
@@ -407,6 +487,24 @@ export default function Users() {
                         >
                           {user.status === "approved" ? "Active" : "Suspended"}
                         </Badge>
+                      </td>
+                      <td className="text-center">
+                        <Button
+                          variant="outline-secondary"
+                          size="sm"
+                          className="px-2 py-1 rounded-pill"
+                          title="Send Password Reset Email"
+                          disabled={resettingUserId === user.id}
+                          onClick={() => handleSendPasswordReset(user)}
+                        >
+                          {resettingUserId === user.id ? (
+                            <Spinner animation="border" size="sm" />
+                          ) : (
+                            <>
+                              <i className="bi bi-key me-1"></i>Reset Link
+                            </>
+                          )}
+                        </Button>
                       </td>
                       <td className="text-center">
                         {user.role !== "super_admin" && (
@@ -470,7 +568,7 @@ export default function Users() {
                 ).length === 0 && (
                   <tr>
                     <td
-                      colSpan="5"
+                      colSpan="6"
                       className="text-center py-4 text-muted border-0"
                     >
                       <i className="bi bi-people display-4 opacity-25 d-block mb-3"></i>
@@ -485,34 +583,25 @@ export default function Users() {
           </div>
         </Tab>
 
-        <Tab
-          eventKey="pending"
-          title={`Pending Approvals (${pendingUsers.length})`}
-        >
-          <div
-            className="soft-card p-0 overflow-hidden"
-            style={{ height: "fit-content" }}
+        {pendingUsers.length > 0 && (
+          <Tab
+            eventKey="pending"
+            title={`Pending Approvals (${pendingUsers.length})`}
           >
-            <Table hover responsive className="mb-0 align-middle">
-              <thead style={{ backgroundColor: "var(--soft-hover)" }}>
-                <tr className="small text-uppercase text-muted">
-                  <th className="ps-4 py-3 text-start">Requestor</th>
-                  <th className="text-start">Email</th>
-                  <th className="text-end pe-4">Decision</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pendingUsers.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan="3"
-                      className="text-center py-4 text-muted border-0"
-                    >
-                      No pending user requests.
-                    </td>
+            <div
+              className="soft-card p-0 overflow-hidden"
+              style={{ height: "fit-content" }}
+            >
+              <Table hover responsive className="mb-0 align-middle">
+                <thead style={{ backgroundColor: "var(--soft-hover)" }}>
+                  <tr className="small text-uppercase text-muted">
+                    <th className="ps-4 py-3 text-start">Requestor</th>
+                    <th className="text-start">Email</th>
+                    <th className="text-end pe-4">Decision</th>
                   </tr>
-                ) : (
-                  pendingUsers.map((user) => (
+                </thead>
+                <tbody>
+                  {pendingUsers.map((user) => (
                     <tr
                       key={user.id}
                       style={{ borderBottom: "1px solid var(--border-color)" }}
@@ -520,14 +609,12 @@ export default function Users() {
                       <td className="ps-4 py-3 fw-bold text-start text-body">
                         {user.name}
                       </td>
-                      <td className="text-start text-muted small">
-                        {user.email}
-                      </td>
+                      <td className="text-start text-muted">{user.email}</td>
                       <td className="text-end pe-4">
                         <Button
-                          variant="success"
                           size="sm"
-                          className="me-2 rounded-pill px-3"
+                          variant="success"
+                          className="me-2"
                           onClick={() => {
                             updateStatus(user.id, "approved", "admin");
                           }}
@@ -535,9 +622,8 @@ export default function Users() {
                           Approve as Admin
                         </Button>
                         <Button
-                          variant="outline-primary"
                           size="sm"
-                          className="rounded-pill px-3"
+                          variant="primary"
                           onClick={() => {
                             updateStatus(user.id, "approved", "user");
                           }}
@@ -546,12 +632,12 @@ export default function Users() {
                         </Button>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </Table>
-          </div>
-        </Tab>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
+          </Tab>
+        )}
       </Tabs>
 
       {/* MODALS */}
@@ -661,32 +747,34 @@ export default function Users() {
           }}
         >
           <Modal.Header closeButton className="border-0">
-            <Modal.Title className="text-success fw-bold">Success!</Modal.Title>
+            <Modal.Title className="text-success fw-bold">User Created</Modal.Title>
           </Modal.Header>
           <Modal.Body>
             <div
-              className="avatar-circle bg-success-subtle text-success mx-auto mb-3"
-              style={{ width: 60, height: 60 }}
+              className="avatar-circle bg-success-subtle text-success mx-auto mb-3 d-flex align-items-center justify-content-center rounded-circle"
+              style={{ width: 64, height: 64 }}
             >
-              <i className="bi bi-check-lg fs-2"></i>
+              <i className="bi bi-envelope-check-fill fs-2"></i>
             </div>
-            <p>
-              Temporary password generated for <strong>{newUser.email}</strong>:
+            <h5 className="fw-bold mb-2">Invitation & Setup Link Sent</h5>
+            <p className="text-muted small mb-3">
+              Account successfully registered for <strong>{newUser.name}</strong> ({newUser.email}).
             </p>
             <div
-              className="p-3 rounded border mb-3"
+              className="p-3 rounded border mb-3 text-start small"
               style={{
                 backgroundColor: "var(--soft-hover)",
                 borderColor: "var(--border-color)",
               }}
             >
-              <code className="fs-4 text-danger fw-bold">{generatedPass}</code>
+              <i className="bi bi-shield-check text-success me-2 fs-6"></i>
+              A secure, single-use password setup link has been dispatched to <strong>{newUser.email}</strong> via verified email. The user will be prompted to create their own private password upon opening the link.
             </div>
           </Modal.Body>
           <Modal.Footer className="border-0">
             <Button
-              variant="success"
-              className="w-100 rounded-pill"
+              variant="primary"
+              className="w-100 rounded-pill fw-bold"
               onClick={() => setShowSuccessModal(false)}
             >
               Done

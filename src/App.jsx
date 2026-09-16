@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import SignUp from "./pages/SignUp";
 import Home from "./pages/Home";
@@ -12,6 +12,7 @@ import NotFound from "./pages/NotFound";
 import CoreTeam from "./pages/CoreTeam";
 import PendingApproval from "./pages/PendingApproval";
 import Notifications from "./pages/Notifications";
+import ForgotPassword from "./pages/ForgotPassword";
 import "bootstrap/dist/css/bootstrap.min.css";
 
 // Import the wrappers
@@ -76,7 +77,7 @@ function App() {
       <Route
         path="/email"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute adminOnly={true}>
             <Email />
           </ProtectedRoute>
         }
@@ -108,9 +109,13 @@ function App() {
 
       <Route
         path="/signup"
+        element={<Navigate to="/login" replace />}
+      />
+      <Route
+        path="/forgot-password"
         element={
           <PublicRoute>
-            <SignUp />
+            <ForgotPassword />
           </PublicRoute>
         }
       />

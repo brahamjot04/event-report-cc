@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cc-events-v3';
+const CACHE_NAME = 'cc-events-v4';
 const URLS_TO_CACHE = [
   '/',
   '/index.html',
@@ -10,6 +10,7 @@ const URLS_TO_CACHE = [
 
 // Install event - precache core shell
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(URLS_TO_CACHE).catch(err => {
@@ -19,7 +20,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate event - cleanup stale caches & claim clients
+// Activate event - cleanup stale caches & claim clients immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -50,6 +51,16 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Never cache Firebase Auth, Firestore, or OAuth token endpoints (SEC-07 credential safety)
+  if (
+    url.origin.includes('identitytoolkit.googleapis.com') ||
+    url.origin.includes('securetoken.googleapis.com') ||
+    url.origin.includes('firestore.googleapis.com') ||
+    url.origin.includes('googleapis.com')
+  ) {
+    return; // Pass through directly to network without caching
+  }
+
   // Always use network-first for navigations so / uses fresh index.html
   if (request.mode === 'navigate') {
     event.respondWith(
@@ -68,17 +79,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // For Firebase or external APIs, use network-first strategy with cache fallback
-  if (
-    url.pathname.includes('/api') ||
-    url.origin.includes('firestore.googleapis.com') ||
-    url.origin.includes('identitytoolkit.googleapis.com') ||
-    url.origin !== self.location.origin
-  ) {
+  // For app API endpoints, use network-first strategy with cache fallback
+  if (url.pathname.includes('/api') || url.origin !== self.location.origin) {
     event.respondWith(
       fetch(request)
         .then(response => {
-          // Cache successful responses for GET requests
           if (response && response.status === 200) {
             const clone = response.clone();
             caches.open(CACHE_NAME).then(cache => {

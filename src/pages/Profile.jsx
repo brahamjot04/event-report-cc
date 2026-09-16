@@ -57,10 +57,16 @@ export default function Profile() {
     setIsUpdating(true);
     setMsg({ type: "", text: "" });
 
-    if (newPassword.length < 6) {
+    const hasMinLen = newPassword.length >= 8;
+    const hasUpper = /[A-Z]/.test(newPassword);
+    const hasLower = /[a-z]/.test(newPassword);
+    const hasDigit = /[0-9]/.test(newPassword);
+    const hasSpecial = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(newPassword);
+
+    if (!hasMinLen || !hasUpper || !hasLower || !hasDigit || !hasSpecial) {
       setMsg({
         type: "danger",
-        text: "Password must be at least 6 characters.",
+        text: "Password must be at least 8 characters long and include an uppercase letter, lowercase letter, number, and special character.",
       });
       setIsUpdating(false);
       return;
@@ -216,10 +222,13 @@ export default function Profile() {
                     </Form.Label>
                     <Form.Control
                       type="password"
-                      placeholder="Min. 6 chars"
+                      placeholder="Min. 8 characters"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                     />
+                    <Form.Text className="text-muted small">
+                      Requires 8+ characters, uppercase, lowercase, number, and symbol.
+                    </Form.Text>
                   </Form.Group>
                 </Col>
                 <Col md={6}>
