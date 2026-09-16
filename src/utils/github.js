@@ -1,132 +1,91 @@
-const GITHUB_TOKEN =
-  import.meta.env.VITE_GITHUB_TOKEN || "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";
-const USERNAME = import.meta.env.VITE_GITHUB_USERNAME || "brahamjot04";
-const REPO_NAME = import.meta.env.VITE_GITHUB_REPO || "event-report-cc-app-data";
-const BRANCH = import.meta.env.VITE_GITHUB_BRANCH || "main"; 
+/**
+ * GitHub Storage Adapter (Secure Proxy Mode)
+ *
+ * File uploads and downloads are routed through secure Vercel serverless functions
+ * (/api/upload and /api/image). All sensitive GitHub tokens remain strictly on
+ * the server side and are never exposed in browser bundles or client networks.
+ */
 
-// Cache for loaded images to avoid repeated API calls
+// Cache for loaded image URLs to avoid redundant calls
 const imageCache = new Map();
 
-// ⚠️ THE FIX: Added 'folder' argument with a default value
+/**
+ * Uploads a file via the serverless /api/upload proxy.
+ *
+ * @param {File|Blob} file - The file object to upload
+ * @param {string} fileName - Destination file name
+ * @param {string} [folder="uploads"] - Subdirectory path
+ * @returns {Promise<string|null>} - Returns the uploaded file path (e.g., "core-team/123_photo.jpg") or null
+ */
 export const uploadToGitHub = async (file, fileName, folder = "uploads") => {
   try {
     // 1. Convert File to Base64
-    const toBase64 = (file) =>
+    const toBase64 = (f) =>
       new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(f);
         reader.onload = () => {
-          // Remove "data:*/*;base64," prefix
           const base64String = reader.result.split(",")[1];
           resolve(base64String);
         };
         reader.onerror = (error) => reject(error);
       });
 
-    const content = await toBase64(file);
+    const base64Content = await toBase64(file);
 
-    // 2. Construct the Path (The Bug was likely here!)
-    // We now use the 'folder' variable passed to the function
-    const path = `${folder}/${fileName}`; 
-
-    // 3. Upload via GitHub API
-    const response = await fetch(
-      `https://api.github.com/repos/${USERNAME}/${REPO_NAME}/contents/${path}`,
-      {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${GITHUB_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: `Upload ${fileName}`,
-          content: content,
-          branch: BRANCH,
-        }),
-      }
-    );
+    // 2. Dispatch upload to secure serverless function
+    const response = await fetch("/api/upload", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        fileName,
+        folder,
+        base64Content,
+      }),
+    });
 
     const data = await response.json();
 
     if (response.ok) {
-      // For private repos, store the path - we'll fetch it later via API
-      console.log("Image uploaded successfully:", path);
-      console.log("Full upload response:", data);
-      return path; // Return the path, not the URL
+      console.log("File uploaded successfully via secure proxy:", data.path);
+      return data.path;
     } else {
-      console.error("GitHub Upload Error:", data);
-      alert(`GitHub Upload Failed: ${data.message}`);
+      console.error("Upload Proxy Error:", data);
+      alert(`Upload Failed: ${data.error || "Unknown server error"}`);
       return null;
     }
   } catch (error) {
-    console.error("Upload failed:", error);
+    console.error("Upload to GitHub failed:", error);
+    alert(`Upload Failed: ${error.message}`);
     return null;
   }
 };
 
-// Fetch image from private GitHub repo and convert to data URL
+/**
+ * Resolves a stored image path to a displayable URL.
+ * Routes private repo assets through /api/image?path=...
+ *
+ * @param {string} path - Stored image path or full URL
+ * @returns {Promise<string|null>} - URL to display in <img> src
+ */
 export const fetchImageFromGitHub = async (path) => {
-  // Check cache first
+  if (!path) return null;
+
+  // If already an absolute URL (e.g. data: or https://), return directly
+  if (path.startsWith("http://") || path.startsWith("https://") || path.startsWith("data:")) {
+    return path;
+  }
+
+  // Check cache
   if (imageCache.has(path)) {
-    console.log("Image loaded from cache:", path);
     return imageCache.get(path);
   }
 
-  console.log("Fetching image from GitHub:", path);
+  // Route through secure backend proxy endpoint
+  const proxyUrl = `/api/image?path=${encodeURIComponent(path)}`;
+  imageCache.set(path, proxyUrl);
 
-  try {
-    const url = `https://api.github.com/repos/${USERNAME}/${REPO_NAME}/contents/${path}`;
-    console.log("Request URL:", url);
-    
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${GITHUB_TOKEN}`,
-        Accept: "application/vnd.github.v3+json",
-      },
-    });
-
-    console.log("Response status:", response.status);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Failed to fetch image:", response.status, errorText);
-      return null;
-    }
-
-    const data = await response.json();
-    console.log("GitHub API response data keys:", Object.keys(data));
-    
-    // Check if content exists
-    if (!data.content) {
-      console.error("No content in response:", data);
-      return null;
-    }
-    
-    // GitHub API returns base64 content
-    // Determine mime type from file extension
-    const extension = path.split('.').pop().toLowerCase();
-    const mimeTypes = {
-      'jpg': 'image/jpeg',
-      'jpeg': 'image/jpeg',
-      'png': 'image/png',
-      'gif': 'image/gif',
-      'webp': 'image/webp',
-      'svg': 'image/svg+xml'
-    };
-    const mimeType = mimeTypes[extension] || 'image/jpeg';
-    
-    // Create data URL - remove all newlines and whitespace from base64
-    const cleanBase64 = data.content.replace(/\s/g, '');
-    const dataUrl = `data:${mimeType};base64,${cleanBase64}`;
-    
-    // Cache it
-    imageCache.set(path, dataUrl);
-    
-    console.log("Image fetched and cached successfully:", path);
-    return dataUrl;
-  } catch (error) {
-    console.error("Error fetching image from GitHub:", error);
-    console.error("Error details:", error.message);
-    return null;
-  }
+  return proxyUrl;
 };

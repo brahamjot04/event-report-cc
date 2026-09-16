@@ -5,6 +5,10 @@
       "destination": "https://event-report-cc.firebaseapp.com/__/auth/$1"
     },
     {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

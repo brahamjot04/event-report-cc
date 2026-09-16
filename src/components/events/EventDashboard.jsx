@@ -1,6 +1,7 @@
 import { useEffect } from "react";
-import { Button, Row, Col } from "react-bootstrap";
+import { Button, Row, Col, Badge } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
+import { isModuleEnabled, getApplicableModules } from "../../utils/moduleRegistry";
 
 // Helper Component for consistent Soft UI cards
 const DashboardCard = ({
@@ -39,6 +40,7 @@ export default function EventDashboard({
   onExportReport,
   exportingReport,
   highlightedModule,
+  onManageModules,
 }) {
   const navigate = useNavigate();
 
@@ -116,6 +118,30 @@ export default function EventDashboard({
               <span className="d-sm-none">Edit</span>
             </Button>
           )}
+          {(userRole === "admin" || userRole === "super_admin") && onManageModules && (
+            <Button
+              variant="outline-secondary"
+              className="px-2 px-sm-3 flex-grow-1 flex-md-grow-0 d-flex align-items-center justify-content-center text-nowrap"
+              style={{ height: "38px" }}
+              onClick={onManageModules}
+              title="Configure active modules for this event"
+            >
+              <i className="bi bi-toggles2 me-1"></i>
+              <span className="d-none d-sm-inline">Manage Modules</span>
+              <span className="d-sm-none">Modules</span>
+              {Array.isArray(eventData.disabledModules) &&
+                eventData.disabledModules.length > 0 && (
+                  <Badge
+                    bg="warning"
+                    text="dark"
+                    className="ms-1 rounded-pill"
+                    style={{ fontSize: "10px" }}
+                  >
+                    {eventData.disabledModules.length} hidden
+                  </Badge>
+                )}
+            </Button>
+          )}
           <Button
             variant={hasProofLink ? "outline-success" : "outline-secondary"}
             className="px-2 px-sm-3 flex-grow-1 flex-md-grow-0 d-flex align-items-center justify-content-center text-nowrap"
@@ -153,110 +179,130 @@ export default function EventDashboard({
         {/* Youth Festival–specific cards (host mode) */}
         {eventData.isYouthFestival && eventData.isHostCollege && (
           <>
-            <DashboardCard
-              id="module-card-yf_host"
-              isHighlighted={highlightedModule === "yf_host"}
-              title="Colleges & Participants"
-              subtitle="Manage colleges, participants & search"
-              icon="bi-building"
-              colorClass="warning"
-              onClick={() => setView("yf_host")}
-            />
-            <DashboardCard
-              id="module-card-yf_checkin"
-              isHighlighted={highlightedModule === "yf_checkin"}
-              title="Desk Check-in & Arrivals"
-              subtitle="Gate reception, arrival status & CSV rosters"
-              icon="bi-person-check-fill"
-              colorClass="info"
-              onClick={() => setView("yf_checkin")}
-            />
-            <DashboardCard
-              id="module-card-yf_venues"
-              isHighlighted={highlightedModule === "yf_venues"}
-              title="Venue Mapping"
-              subtitle="Assign venues, days & times to events"
-              icon="bi-geo-alt-fill"
-              colorClass="success"
-              onClick={() => setView("yf_venues")}
-            />
-            <DashboardCard
-              id="module-card-yf_accommodation"
-              isHighlighted={highlightedModule === "yf_accommodation"}
-              title="Accommodation"
-              subtitle="Room allotment & check-in tracking"
-              icon="bi-house-fill"
-              colorClass="primary"
-              onClick={() => setView("yf_accommodation")}
-            />
-            <DashboardCard
-              id="module-card-yf_results"
-              isHighlighted={highlightedModule === "yf_results"}
-              title="Results & Trophies"
-              subtitle="Positions, point scoring & overall trophies"
-              icon="bi-trophy-fill"
-              colorClass="danger"
-              onClick={() => setView("yf_results")}
-            />
+            {isModuleEnabled(eventData, "yf_host") && (
+              <DashboardCard
+                id="module-card-yf_host"
+                isHighlighted={highlightedModule === "yf_host"}
+                title="Colleges & Participants"
+                subtitle="Manage colleges, participants & search"
+                icon="bi-building"
+                colorClass="warning"
+                onClick={() => setView("yf_host")}
+              />
+            )}
+            {isModuleEnabled(eventData, "yf_checkin") && (
+              <DashboardCard
+                id="module-card-yf_checkin"
+                isHighlighted={highlightedModule === "yf_checkin"}
+                title="Desk Check-in & Arrivals"
+                subtitle="Gate reception, arrival status & CSV rosters"
+                icon="bi-person-check-fill"
+                colorClass="info"
+                onClick={() => setView("yf_checkin")}
+              />
+            )}
+            {isModuleEnabled(eventData, "yf_venues") && (
+              <DashboardCard
+                id="module-card-yf_venues"
+                isHighlighted={highlightedModule === "yf_venues"}
+                title="Venue Mapping"
+                subtitle="Assign venues, days & times to events"
+                icon="bi-geo-alt-fill"
+                colorClass="success"
+                onClick={() => setView("yf_venues")}
+              />
+            )}
+            {isModuleEnabled(eventData, "yf_accommodation") && (
+              <DashboardCard
+                id="module-card-yf_accommodation"
+                isHighlighted={highlightedModule === "yf_accommodation"}
+                title="Accommodation"
+                subtitle="Room allotment & check-in tracking"
+                icon="bi-house-fill"
+                colorClass="primary"
+                onClick={() => setView("yf_accommodation")}
+              />
+            )}
+            {isModuleEnabled(eventData, "yf_results") && (
+              <DashboardCard
+                id="module-card-yf_results"
+                isHighlighted={highlightedModule === "yf_results"}
+                title="Results & Trophies"
+                subtitle="Positions, point scoring & overall trophies"
+                icon="bi-trophy-fill"
+                colorClass="danger"
+                onClick={() => setView("yf_results")}
+              />
+            )}
           </>
         )}
 
         {/* Youth Festival non-host (GNDEC contingent) */}
         {eventData.isYouthFestival && !eventData.isHostCollege && (
+          isModuleEnabled(eventData, "yf_contingent") && (
+            <DashboardCard
+              id="module-card-yf_contingent"
+              isHighlighted={highlightedModule === "yf_contingent"}
+              title="GNDEC Contingent"
+              subtitle="Manage our participation roster"
+              icon="bi-people-fill"
+              colorClass="warning"
+              onClick={() => setView("yf_contingent")}
+            />
+          )
+        )}
+
+        {/* Standard cards */}
+        {isModuleEnabled(eventData, "attendance_sessions") && (
           <DashboardCard
-            id="module-card-yf_contingent"
-            isHighlighted={highlightedModule === "yf_contingent"}
-            title="GNDEC Contingent"
-            subtitle="Manage our participation roster"
-            icon="bi-people-fill"
-            colorClass="warning"
-            onClick={() => setView("yf_contingent")}
+            id="module-card-attendance_sessions"
+            isHighlighted={highlightedModule === "attendance_sessions"}
+            title="Meetings"
+            subtitle="Track committee attendance"
+            icon="bi-calendar-check-fill"
+            colorClass="success"
+            onClick={() => setView("attendance_sessions")}
           />
         )}
 
-        {/* Standard cards (always shown) */}
-        <DashboardCard
-          id="module-card-attendance_sessions"
-          isHighlighted={highlightedModule === "attendance_sessions"}
-          title="Meetings"
-          subtitle="Track committee attendance"
-          icon="bi-calendar-check-fill"
-          colorClass="success"
-          onClick={() => setView("attendance_sessions")}
-        />
+        {isModuleEnabled(eventData, "teams") && (
+          <DashboardCard
+            id="module-card-teams"
+            isHighlighted={highlightedModule === "teams"}
+            title="Teams"
+            subtitle="Manage committees & members"
+            icon="bi-diagram-3-fill"
+            colorClass="info"
+            onClick={() => setView("teams")}
+          />
+        )}
 
-        <DashboardCard
-          id="module-card-teams"
-          isHighlighted={highlightedModule === "teams"}
-          title="Teams"
-          subtitle="Manage committees & members"
-          icon="bi-diagram-3-fill"
-          colorClass="info"
-          onClick={() => setView("teams")}
-        />
+        {isModuleEnabled(eventData, "teachers") && (
+          <DashboardCard
+            id="module-card-teachers"
+            isHighlighted={highlightedModule === "teachers"}
+            title="Teachers"
+            subtitle="Manage teacher entries"
+            icon="bi-person-vcard-fill"
+            colorClass="secondary"
+            onClick={() => setView("teachers")}
+          />
+        )}
 
-        <DashboardCard
-          id="module-card-teachers"
-          isHighlighted={highlightedModule === "teachers"}
-          title="Teachers"
-          subtitle="Manage teacher entries"
-          icon="bi-person-vcard-fill"
-          colorClass="secondary"
-          onClick={() => setView("teachers")}
-        />
-
-        <DashboardCard
-          id="module-card-sponsorship"
-          isHighlighted={highlightedModule === "sponsorship"}
-          title="Sponsorship"
-          subtitle="Manage sponsors & funds"
-          icon="bi-briefcase-fill"
-          colorClass="warning"
-          onClick={() => setView("sponsorship")}
-        />
+        {isModuleEnabled(eventData, "sponsorship") && (
+          <DashboardCard
+            id="module-card-sponsorship"
+            isHighlighted={highlightedModule === "sponsorship"}
+            title="Sponsorship"
+            subtitle="Manage sponsors & funds"
+            icon="bi-briefcase-fill"
+            colorClass="warning"
+            onClick={() => setView("sponsorship")}
+          />
+        )}
 
         {/* Participants card only for non-YF events */}
-        {!eventData.isYouthFestival && (
+        {!eventData.isYouthFestival && isModuleEnabled(eventData, "participants") && (
           <DashboardCard
             id="module-card-participants"
             isHighlighted={highlightedModule === "participants"}
@@ -267,6 +313,41 @@ export default function EventDashboard({
             onClick={() => setView("participants")}
           />
         )}
+
+        {/* Empty state when all modules are disabled */}
+        {getApplicableModules(eventData).length > 0 &&
+          getApplicableModules(eventData).every(
+            (m) => !isModuleEnabled(eventData, m.id)
+          ) && (
+            <Col xs={12}>
+              <div
+                className="text-center p-5 rounded border my-3"
+                style={{
+                  backgroundColor: "var(--bg-main)",
+                  borderColor: "var(--border-color)",
+                }}
+              >
+                <div className="avatar-circle bg-secondary-subtle text-secondary mx-auto mb-3">
+                  <i className="bi bi-toggles2 fs-2"></i>
+                </div>
+                <h5 className="fw-bold mb-2">All Modules Are Currently Disabled</h5>
+                <p className="text-muted small mb-3" style={{ maxWidth: "450px", margin: "0 auto" }}>
+                  All dashboard modules for this event have been turned off.
+                  Existing data in the background is preserved and safe.
+                </p>
+                {(userRole === "admin" || userRole === "super_admin") && onManageModules && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="rounded-pill px-4"
+                    onClick={onManageModules}
+                  >
+                    <i className="bi bi-toggles2 me-1"></i> Configure Modules
+                  </Button>
+                )}
+              </div>
+            </Col>
+          )}
       </Row>
 
       {/* ADMIN ACTIONS */}

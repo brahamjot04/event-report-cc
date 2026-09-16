@@ -34,6 +34,8 @@ import YouthFestivalContingent from "../components/events/youthFestival/YouthFes
 import EventYouthFestivalVenues from "../components/events/youthFestival/EventYouthFestivalVenues";
 import YouthFestivalResults from "../components/events/youthFestival/YouthFestivalResults";
 import YouthFestivalCheckIn from "../components/events/youthFestival/YouthFestivalCheckIn";
+import ManageModulesModal from "../components/events/ManageModulesModal";
+import { isModuleEnabled } from "../utils/moduleRegistry";
 
 const VALID_VIEWS = new Set([
   "yf_host",
@@ -139,6 +141,16 @@ export default function EventDetails() {
   const [showProofModal, setShowProofModal] = useState(false);
   const [proofLinkDraft, setProofLinkDraft] = useState("");
   const [savingProofLink, setSavingProofLink] = useState(false);
+  const [showManageModulesModal, setShowManageModulesModal] = useState(false);
+
+  // Guard against navigating directly to disabled modules
+  useEffect(() => {
+    if (!eventData || currentView === "dashboard") return;
+    if (!isModuleEnabled(eventData, currentView)) {
+      showError("This module is currently disabled for this event.");
+      setSearchParams({});
+    }
+  }, [currentView, eventData, showError, setSearchParams]);
 
   // Edit Event Modal State
   const [showEditModal, setShowEditModal] = useState(false);
@@ -450,314 +462,328 @@ export default function EventDetails() {
       };
 
       // Teachers
-      renderSectionTitle("Teachers");
-      const groupedTeachers = teachers.reduce((acc, teacher) => {
-        const committee =
-          (teacher.committee || "General").toString().trim() || "General";
-        if (!acc[committee]) acc[committee] = [];
-        acc[committee].push(teacher);
-        return acc;
-      }, {});
+      if (isModuleEnabled(eventData, "teachers")) {
+        renderSectionTitle("Teachers");
+        const groupedTeachers = teachers.reduce((acc, teacher) => {
+          const committee =
+            (teacher.committee || "General").toString().trim() || "General";
+          if (!acc[committee]) acc[committee] = [];
+          acc[committee].push(teacher);
+          return acc;
+        }, {});
 
-      const committeePriority = (name = "") => {
-        const normalized = name.toLowerCase();
-        if (normalized.includes("organizing")) return 0;
-        if (normalized.includes("guest reception")) return 1;
-        return 2;
-      };
+        const committeePriority = (name = "") => {
+          const normalized = name.toLowerCase();
+          if (normalized.includes("organizing")) return 0;
+          if (normalized.includes("guest reception")) return 1;
+          return 2;
+        };
 
-      const orderedCommittees = Object.keys(groupedTeachers).sort((a, b) => {
-        const pDiff = committeePriority(a) - committeePriority(b);
-        if (pDiff !== 0) return pDiff;
-        return a.localeCompare(b);
-      });
-
-      if (orderedCommittees.length === 0) {
-        renderGridTable(
-          ["S.No", "Name", "Designation", "Department"],
-          [["-", "No records found", "-", "-"]],
-        );
-      } else {
-        orderedCommittees.forEach((committee) => {
-          renderSubTitle(committee);
-          const rows = groupedTeachers[committee]
-            .slice()
-            .sort((a, b) => {
-              if (!!a.incharge !== !!b.incharge) return a.incharge ? -1 : 1;
-              return (a.name || "").localeCompare(b.name || "");
-            })
-            .map((teacher, index) => [
-              index + 1,
-              `${teacher.name || "-"}${teacher.incharge ? " [Incharge]" : ""}`,
-              teacher.designation || "-",
-              teacher.department || "-",
-            ]);
-
-          renderGridTable(["S.No", "Name", "Designation", "Department"], rows);
+        const orderedCommittees = Object.keys(groupedTeachers).sort((a, b) => {
+          const pDiff = committeePriority(a) - committeePriority(b);
+          if (pDiff !== 0) return pDiff;
+          return a.localeCompare(b);
         });
+
+        if (orderedCommittees.length === 0) {
+          renderGridTable(
+            ["S.No", "Name", "Designation", "Department"],
+            [["-", "No records found", "-", "-"]],
+          );
+        } else {
+          orderedCommittees.forEach((committee) => {
+            renderSubTitle(committee);
+            const rows = groupedTeachers[committee]
+              .slice()
+              .sort((a, b) => {
+                if (!!a.incharge !== !!b.incharge) return a.incharge ? -1 : 1;
+                return (a.name || "").localeCompare(b.name || "");
+              })
+              .map((teacher, index) => [
+                index + 1,
+                `${teacher.name || "-"}${teacher.incharge ? " [Incharge]" : ""}`,
+                teacher.designation || "-",
+                teacher.department || "-",
+              ]);
+
+            renderGridTable(["S.No", "Name", "Designation", "Department"], rows);
+          });
+        }
       }
 
       // Teams
-      renderSectionTitle("Teams");
-      const renderStudentCoordinators = () => {
-        renderSubTitle("Student Coordinators");
-        const coordinatorRows = studentCoordinators
-          .slice()
-          .filter((member) => {
-            const designation = (member.designation || "")
-              .toString()
-              .trim()
-              .toLowerCase();
-            return (
-              designation === "student coordinator" ||
-              designation === "student coordinators"
-            );
-          })
-          .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
-          .map((member, index) => [
-            index + 1,
-            member.name || "-",
-            member.urn || "-",
-            member.branch || "-",
-            member.designation || "-",
-          ]);
+      if (isModuleEnabled(eventData, "teams")) {
+        renderSectionTitle("Teams");
+        const renderStudentCoordinators = () => {
+          renderSubTitle("Student Coordinators");
+          const coordinatorRows = studentCoordinators
+            .slice()
+            .filter((member) => {
+              const designation = (member.designation || "")
+                .toString()
+                .trim()
+                .toLowerCase();
+              return (
+                designation === "student coordinator" ||
+                designation === "student coordinators"
+              );
+            })
+            .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+            .map((member, index) => [
+              index + 1,
+              member.name || "-",
+              member.urn || "-",
+              member.branch || "-",
+              member.designation || "-",
+            ]);
 
-        renderGridTable(
-          ["S.No", "Name", "URN", "Branch", "Designation"],
-          coordinatorRows.length > 0
-            ? coordinatorRows
-            : [["-", "No records found", "-", "-", "-"]],
-        );
-      };
+          renderGridTable(
+            ["S.No", "Name", "URN", "Branch", "Designation"],
+            coordinatorRows.length > 0
+              ? coordinatorRows
+              : [["-", "No records found", "-", "-", "-"]],
+          );
+        };
 
-      if (teams.length === 0) {
-        renderStudentCoordinators();
-        renderGridTable(
-          ["S.No", "Member", "Designation", "Branch"],
-          [["-", "No records found", "-", "-"]],
-        );
-      } else {
-        const sortedTeams = teams
-          .slice()
-          .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+        if (teams.length === 0) {
+          renderStudentCoordinators();
+          renderGridTable(
+            ["S.No", "Member", "Designation", "Branch"],
+            [["-", "No records found", "-", "-"]],
+          );
+        } else {
+          const sortedTeams = teams
+            .slice()
+            .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
-        let coordinatorsInserted = false;
-        sortedTeams.forEach((team, idx) => {
-          const teamNameLower = (team.name || "").toLowerCase();
-          const isAnchoringTeam =
-            teamNameLower === "anchoring team" ||
-            teamNameLower.includes("anchoring team");
+          let coordinatorsInserted = false;
+          sortedTeams.forEach((team, idx) => {
+            const teamNameLower = (team.name || "").toLowerCase();
+            const isAnchoringTeam =
+              teamNameLower === "anchoring team" ||
+              teamNameLower.includes("anchoring team");
 
-          if (isAnchoringTeam && !coordinatorsInserted) {
-            renderStudentCoordinators();
-            coordinatorsInserted = true;
-          }
+            if (isAnchoringTeam && !coordinatorsInserted) {
+              renderStudentCoordinators();
+              coordinatorsInserted = true;
+            }
 
-          if (idx === 0 && !coordinatorsInserted && sortedTeams.length > 0) {
-            // Fallback: if Anchoring Team is not present, place coordinators before first team.
-            renderStudentCoordinators();
-            coordinatorsInserted = true;
-          }
+            if (idx === 0 && !coordinatorsInserted && sortedTeams.length > 0) {
+              // Fallback: if Anchoring Team is not present, place coordinators before first team.
+              renderStudentCoordinators();
+              coordinatorsInserted = true;
+            }
 
-          renderSubTitle(team.name || "Unnamed Team");
-          const members = Array.isArray(team.members) ? team.members : [];
-          const rows =
-            members.length > 0
-              ? members.map((member, index) => [
-                  index + 1,
-                  member.name || "-",
-                  member.designation || "-",
-                  member.branch || "-",
-                ])
-              : [["-", "No members", "-", "-"]];
+            renderSubTitle(team.name || "Unnamed Team");
+            const members = Array.isArray(team.members) ? team.members : [];
+            const rows =
+              members.length > 0
+                ? members.map((member, index) => [
+                    index + 1,
+                    member.name || "-",
+                    member.designation || "-",
+                    member.branch || "-",
+                  ])
+                : [["-", "No members", "-", "-"]];
 
-          renderGridTable(["S.No", "Member", "Designation", "Branch"], rows);
-        });
+            renderGridTable(["S.No", "Member", "Designation", "Branch"], rows);
+          });
+        }
       }
 
-      // Participants
-      renderSectionTitle("Participants");
-      if (items.length === 0) {
-        renderGridTable(
-          ["S.No", "Name", "URN", "CRN", "Branch", "Position"],
-          [["-", "No records found", "-", "-", "-", "-"]],
-          9,
-        );
-      } else {
-        items
-          .slice()
-          .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
-          .forEach((item) => {
-            const participants = Array.isArray(item.participants)
-              ? item.participants
-              : [];
+      // Participants (non-YF only and if enabled)
+      if (!eventData.isYouthFestival && isModuleEnabled(eventData, "participants")) {
+        renderSectionTitle("Participants");
+        if (items.length === 0) {
+          renderGridTable(
+            ["S.No", "Name", "URN", "CRN", "Branch", "Position"],
+            [["-", "No records found", "-", "-", "-", "-"]],
+            9,
+          );
+        } else {
+          items
+            .slice()
+            .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+            .forEach((item) => {
+              const participants = Array.isArray(item.participants)
+                ? item.participants
+                : [];
 
-            renderSubTitle(
-              `${item.name || "Unnamed Event"} (${item.category || "General"})`,
-            );
-
-            if (participants.length === 0) {
-              renderGridTable(
-                ["S.No", "Name", "URN", "CRN", "Branch", "Position"],
-                [["-", "No participants", "-", "-", "-", "-"]],
-                9,
+              renderSubTitle(
+                `${item.name || "Unnamed Event"} (${item.category || "General"})`,
               );
-              return;
-            }
 
-            if (item.isGroupEvent) {
-              const groupedByTeam = participants.reduce((acc, participant) => {
-                const teamName =
-                  (participant.teamName || "Unnamed Team").toString().trim() ||
-                  "Unnamed Team";
-                if (!acc[teamName]) acc[teamName] = [];
-                acc[teamName].push(participant);
-                return acc;
-              }, {});
+              if (participants.length === 0) {
+                renderGridTable(
+                  ["S.No", "Name", "URN", "CRN", "Branch", "Position"],
+                  [["-", "No participants", "-", "-", "-", "-"]],
+                  9,
+                );
+                return;
+              }
 
-              Object.keys(groupedByTeam)
-                .sort((a, b) => a.localeCompare(b))
-                .forEach((teamName) => {
-                  renderSubTitle(teamName);
-                  const rows = groupedByTeam[teamName].map(
-                    (participant, index) => [
-                      index + 1,
-                      participant.name || "-",
-                      participant.urn || "-",
-                      participant.crn || "-",
-                      participant.branch || "-",
-                      participant.position || "-",
-                    ],
-                  );
+              if (item.isGroupEvent) {
+                const groupedByTeam = participants.reduce((acc, participant) => {
+                  const teamName =
+                    (participant.teamName || "Unnamed Team").toString().trim() ||
+                    "Unnamed Team";
+                  if (!acc[teamName]) acc[teamName] = [];
+                  acc[teamName].push(participant);
+                  return acc;
+                }, {});
 
-                  renderGridTable(
-                    ["S.No", "Name", "URN", "CRN", "Branch", "Position"],
-                    rows,
-                    9,
-                  );
-                });
-            } else {
-              const rows = participants.map((participant, index) => [
-                index + 1,
-                participant.name || "-",
-                participant.urn || "-",
-                participant.crn || "-",
-                participant.branch || "-",
-                participant.position || "-",
-              ]);
+                Object.keys(groupedByTeam)
+                  .sort((a, b) => a.localeCompare(b))
+                  .forEach((teamName) => {
+                    renderSubTitle(teamName);
+                    const rows = groupedByTeam[teamName].map(
+                      (participant, index) => [
+                        index + 1,
+                        participant.name || "-",
+                        participant.urn || "-",
+                        participant.crn || "-",
+                        participant.branch || "-",
+                        participant.position || "-",
+                      ],
+                    );
 
-              renderGridTable(
-                ["S.No", "Name", "URN", "CRN", "Branch", "Position"],
-                rows,
-                9,
-              );
-            }
-          });
+                    renderGridTable(
+                      ["S.No", "Name", "URN", "CRN", "Branch", "Position"],
+                      rows,
+                      9,
+                    );
+                  });
+              } else {
+                const rows = participants.map((participant, index) => [
+                  index + 1,
+                  participant.name || "-",
+                  participant.urn || "-",
+                  participant.crn || "-",
+                  participant.branch || "-",
+                  participant.position || "-",
+                ]);
+
+                renderGridTable(
+                  ["S.No", "Name", "URN", "CRN", "Branch", "Position"],
+                  rows,
+                  9,
+                );
+              }
+            });
+        }
       }
 
       // Meetings
-      renderSectionTitle("Meetings");
-      const sortedMeetings = sessionsWithAttendance.slice().sort((a, b) => {
-        const aDate = a.date || "";
-        const bDate = b.date || "";
-        return aDate.localeCompare(bDate);
-      });
+      if (isModuleEnabled(eventData, "attendance_sessions")) {
+        renderSectionTitle("Meetings");
+        const sortedMeetings = sessionsWithAttendance.slice().sort((a, b) => {
+          const aDate = a.date || "";
+          const bDate = b.date || "";
+          return aDate.localeCompare(bDate);
+        });
 
-      if (sortedMeetings.length === 0) {
-        renderGridTable(
-          ["S.No", "Name", "URN", "Team"],
-          [["-", "No meetings found", "-", "-"]],
-        );
-      } else {
-        sortedMeetings.forEach((meeting, meetingIndex) => {
-          const meetingTitle =
-            `Meeting ${meetingIndex + 1} - ${meeting.date || "No Date"} ${meeting.time ? `(${meeting.time})` : ""}`.trim();
-          renderSubTitle(meetingTitle);
-
-          const detailsRows = [
-            [
-              meeting.venue || "-",
-              meeting.agenda || "-",
-              meeting.attendanceCount,
-            ],
-          ];
-
-          renderGridTable(["Venue", "Agenda", "Attendance"], detailsRows, 9);
-
-          const studentRows = (meeting.students || []).map((student, index) => [
-            index + 1,
-            student.name || "-",
-            student.urn || "-",
-            student.team || "-",
-          ]);
-
+        if (sortedMeetings.length === 0) {
           renderGridTable(
             ["S.No", "Name", "URN", "Team"],
-            studentRows.length > 0
-              ? studentRows
-              : [["-", "No students", "-", "-"]],
+            [["-", "No meetings found", "-", "-"]],
           );
-        });
+        } else {
+          sortedMeetings.forEach((meeting, meetingIndex) => {
+            const meetingTitle =
+              `Meeting ${meetingIndex + 1} - ${meeting.date || "No Date"} ${meeting.time ? `(${meeting.time})` : ""}`.trim();
+            renderSubTitle(meetingTitle);
+
+            const detailsRows = [
+              [
+                meeting.venue || "-",
+                meeting.agenda || "-",
+                meeting.attendanceCount,
+              ],
+            ];
+
+            renderGridTable(["Venue", "Agenda", "Attendance"], detailsRows, 9);
+
+            const studentRows = (meeting.students || []).map((student, index) => [
+              index + 1,
+              student.name || "-",
+              student.urn || "-",
+              student.team || "-",
+            ]);
+
+            renderGridTable(
+              ["S.No", "Name", "URN", "Team"],
+              studentRows.length > 0
+                ? studentRows
+                : [["-", "No students", "-", "-"]],
+            );
+          });
+        }
       }
 
       // Youth Festival Additional Sections
       if (eventData.isYouthFestival) {
         // Fetch YF Colleges
-        const colSnap = await getDocs(collection(db, "events", id, "yf_colleges"));
-        const yfColleges = colSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        if (isModuleEnabled(eventData, "yf_host")) {
+          const colSnap = await getDocs(collection(db, "events", id, "yf_colleges"));
+          const yfColleges = colSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-        renderSectionTitle("Youth Festival — Participating Colleges");
-        const colRows = yfColleges.map((c, i) => [
-          i + 1,
-          c.name || "-",
-          (c.incharges || []).filter((ic) => ic.name).map((ic) => ic.name).join(", ") || "-",
-          c.selectedEvents?.length || 0,
-          c.needsAccommodation ? "Yes" : "No",
-        ]);
-        renderGridTable(
-          ["S.No", "College Name", "Incharges", "Events Selected", "Accommodation"],
-          colRows.length > 0 ? colRows : [["-", "No colleges registered", "-", "-", "-"]]
-        );
-
-        // Fetch Venue Mapping
-        const vmSnap = await getDoc(doc(db, "events", id, "meta", "yf_venue_mapping"));
-        if (vmSnap.exists()) {
-          const mapping = vmSnap.data().mapping || {};
-          renderSectionTitle("Youth Festival — Venue Mapping");
-          const vmRows = Object.entries(mapping)
-            .filter(([, m]) => m.venueName)
-            .map(([evId, m], i) => [
-              i + 1,
-              evId,
-              m.venueName || "-",
-              m.day || "-",
-              m.time || "-",
-              m.notes || "-",
-            ]);
+          renderSectionTitle("Youth Festival — Participating Colleges");
+          const colRows = yfColleges.map((c, i) => [
+            i + 1,
+            c.name || "-",
+            (c.incharges || []).filter((ic) => ic.name).map((ic) => ic.name).join(", ") || "-",
+            c.selectedEvents?.length || 0,
+            c.needsAccommodation ? "Yes" : "No",
+          ]);
           renderGridTable(
-            ["S.No", "Event ID", "Venue", "Day", "Time", "Notes"],
-            vmRows.length > 0 ? vmRows : [["-", "No venue mapping", "-", "-", "-", "-"]]
+            ["S.No", "College Name", "Incharges", "Events Selected", "Accommodation"],
+            colRows.length > 0 ? colRows : [["-", "No colleges registered", "-", "-", "-"]]
           );
         }
 
+        // Fetch Venue Mapping
+        if (isModuleEnabled(eventData, "yf_venues")) {
+          const vmSnap = await getDoc(doc(db, "events", id, "meta", "yf_venue_mapping"));
+          if (vmSnap.exists()) {
+            const mapping = vmSnap.data().mapping || {};
+            renderSectionTitle("Youth Festival — Venue Mapping");
+            const vmRows = Object.entries(mapping)
+              .filter(([, m]) => m.venueName)
+              .map(([evId, m], i) => [
+                i + 1,
+                evId,
+                m.venueName || "-",
+                m.day || "-",
+                m.time || "-",
+                m.notes || "-",
+              ]);
+            renderGridTable(
+              ["S.No", "Event ID", "Venue", "Day", "Time", "Notes"],
+              vmRows.length > 0 ? vmRows : [["-", "No venue mapping", "-", "-", "-", "-"]]
+            );
+          }
+        }
+
         // Fetch Accommodation Allotments
-        const accSnap = await getDocs(collection(db, "events", id, "yf_accommodation_allotments"));
-        const yfAllotments = accSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        if (yfAllotments.length > 0) {
-          renderSectionTitle("Youth Festival — Accommodation Allotments");
-          const accRows = yfAllotments.map((a, i) => [
-            i + 1,
-            a.personName || "-",
-            a.collegeName || "-",
-            a.facility || "-",
-            a.room || "-",
-            a.checkInStatus || "Expected",
-            a.checkInTime || "-",
-          ]);
-          renderGridTable(
-            ["S.No", "Person", "College", "Facility", "Room", "Status", "Check-in Time"],
-            accRows
-          );
+        if (isModuleEnabled(eventData, "yf_accommodation")) {
+          const accSnap = await getDocs(collection(db, "events", id, "yf_accommodation_allotments"));
+          const yfAllotments = accSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          if (yfAllotments.length > 0) {
+            renderSectionTitle("Youth Festival — Accommodation Allotments");
+            const accRows = yfAllotments.map((a, i) => [
+              i + 1,
+              a.personName || "-",
+              a.collegeName || "-",
+              a.facility || "-",
+              a.room || "-",
+              a.checkInStatus || "Expected",
+              a.checkInTime || "-",
+            ]);
+            renderGridTable(
+              ["S.No", "Person", "College", "Facility", "Room", "Status", "Check-in Time"],
+              accRows
+            );
+          }
         }
       }
 
@@ -950,6 +976,7 @@ export default function EventDetails() {
             onExportReport={handleExportEventReport}
             exportingReport={exportingReport}
             highlightedModule={highlightedModule}
+            onManageModules={() => setShowManageModulesModal(true)}
           />
         );
     }
@@ -1191,6 +1218,41 @@ export default function EventDetails() {
                   />
                 </Form.Group>
               )}
+
+              {/* Module Configuration Section */}
+              <div
+                className="p-3 rounded mt-3 border"
+                style={{
+                  backgroundColor: "var(--bg-main)",
+                  borderColor: "var(--border-color)",
+                }}
+              >
+                <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                  <div>
+                    <div className="fw-semibold small d-flex align-items-center gap-2">
+                      <i className="bi bi-toggles2 text-primary" />
+                      Active Event Modules
+                    </div>
+                    <small className="text-muted">
+                      {eventData?.disabledModules?.length
+                        ? `${eventData.disabledModules.length} module(s) currently hidden`
+                        : "All modules currently enabled"}
+                    </small>
+                  </div>
+                  <Button
+                    variant="outline-primary"
+                    size="sm"
+                    className="rounded-pill px-3 py-1 small"
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setShowManageModulesModal(true);
+                    }}
+                  >
+                    <i className="bi bi-sliders me-1" />
+                    Configure Modules
+                  </Button>
+                </div>
+              </div>
             </Form>
           </Modal.Body>
           <Modal.Footer className="border-0">
@@ -1218,6 +1280,22 @@ export default function EventDetails() {
           </Modal.Footer>
         </div>
       </Modal>
+
+      {/* MANAGE MODULES MODAL */}
+      <ManageModulesModal
+        show={showManageModulesModal}
+        onHide={() => setShowManageModulesModal(false)}
+        eventId={id}
+        eventData={eventData}
+        onModulesUpdated={(newDisabled) => {
+          setEventData((prev) =>
+            prev ? { ...prev, disabledModules: newDisabled } : prev
+          );
+        }}
+        user={user}
+        showSuccess={showSuccess}
+        showError={showError}
+      />
     </Layout>
   );
 }
