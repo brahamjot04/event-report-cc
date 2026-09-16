@@ -165,60 +165,89 @@ export default function Layout({ children }) {
           xs="auto"
           className={`sidebar-nav ${isMobileOpen ? "mobile-sidebar-open" : ""} ${sidebarAnimatingOut ? "mobile-sidebar-closing" : ""} d-md-block ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}
         >
-          <div className="sidebar-header px-4 mb-5 d-flex justify-content-between align-items-center">
+          <div
+            className={`sidebar-header mb-4 d-flex ${
+              sidebarCollapsed
+                ? "flex-column align-items-center px-0 gap-3"
+                : "justify-content-between align-items-center px-4 mb-5"
+            }`}
+          >
             {!sidebarCollapsed ? (
-              <div
-                className="d-flex align-items-center gap-2 cursor-pointer flex-grow-1 overflow-hidden"
-                onClick={() => handleNavClick("/")}
-                title="Event Management Portal - CCGNDEC"
-              >
-                <img
-                  src="/cc.svg"
-                  alt="CCGNDEC Logo"
+              <>
+                <div
+                  className="d-flex align-items-center gap-2 cursor-pointer flex-grow-1 overflow-hidden"
+                  onClick={() => handleNavClick("/")}
+                  title="Event Management Portal - CCGNDEC"
+                >
+                  <img
+                    src="/cc.svg"
+                    alt="CCGNDEC Logo"
+                    style={{
+                      width: "30px",
+                      height: "30px",
+                      objectFit: "contain",
+                      borderRadius: "6px",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <h6
+                    className="fw-bold text-primary mb-0 text-truncate"
+                    style={{ fontSize: "0.95rem" }}
+                  >
+                    CC GNDEC
+                  </h6>
+                </div>
+                <button
+                  className="btn btn-link d-none d-md-inline p-0 sidebar-toggle-btn"
+                  onClick={() => setSidebarCollapsed(true)}
+                  title="Collapse sidebar"
                   style={{
-                    width: "30px",
-                    height: "30px",
-                    objectFit: "contain",
-                    borderRadius: "6px",
-                    flexShrink: 0,
+                    fontSize: "1.2rem",
+                    border: "none",
+                    cursor: "pointer",
                   }}
-                />
-                <h6 className="fw-bold text-primary mb-0 text-truncate" style={{ fontSize: "0.95rem" }}>
-                  CC GNDEC
-                </h6>
-              </div>
+                >
+                  <i className="bi bi-layout-sidebar-inset"></i>
+                </button>
+              </>
             ) : (
-              <div
-                className="cursor-pointer d-flex justify-content-center"
-                onClick={() => handleNavClick("/")}
-                title="Event Management Portal - CCGNDEC"
-              >
-                <img
-                  src="/cc.svg"
-                  alt="CCGNDEC Logo"
+              <>
+                <div
+                  className="cursor-pointer d-flex justify-content-center align-items-center"
+                  onClick={() => handleNavClick("/")}
+                  title="Event Management Portal - CCGNDEC"
+                  style={{ width: "40px", height: "40px" }}
+                >
+                  <img
+                    src="/cc.svg"
+                    alt="CCGNDEC Logo"
+                    style={{
+                      width: "34px",
+                      height: "34px",
+                      objectFit: "contain",
+                      borderRadius: "6px",
+                    }}
+                  />
+                </div>
+                <button
+                  className="btn btn-link d-none d-md-inline p-0 sidebar-toggle-btn"
+                  onClick={() => setSidebarCollapsed(false)}
+                  title="Expand sidebar"
                   style={{
-                    width: "28px",
-                    height: "28px",
-                    objectFit: "contain",
-                    borderRadius: "6px",
+                    width: "36px",
+                    height: "36px",
+                    fontSize: "1.2rem",
+                    border: "none",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                   }}
-                />
-              </div>
+                >
+                  <i className="bi bi-layout-sidebar"></i>
+                </button>
+              </>
             )}
-            <button
-              className="btn btn-link d-none d-md-inline p-0 sidebar-toggle-btn"
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-              style={{
-                fontSize: "1.1rem",
-                border: "none",
-                cursor: "pointer",
-              }}
-            >
-              <i
-                className={`bi ${sidebarCollapsed ? "bi-chevron-right" : "bi-chevron-left"}`}
-              ></i>
-            </button>
             <button
               className="btn btn-link d-md-none p-0 sidebar-close-btn ms-auto"
               onClick={closeSidebar}

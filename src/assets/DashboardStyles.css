@@ -224,9 +224,9 @@ body {
         flex-shrink: 0;
     }
 
-    .sidebar-header {
+    .sidebar-nav:not(.sidebar-collapsed) .sidebar-header {
         position: relative;
-        justify-content: center !important;
+        justify-content: space-between !important;
     }
 
     .sidebar-header h5 {
@@ -235,6 +235,7 @@ body {
 
     .sidebar-collapsed .sidebar-header {
         justify-content: center !important;
+        align-items: center !important;
         padding-left: 0 !important;
         padding-right: 0 !important;
     }
@@ -400,7 +401,7 @@ body {
         min-width: 80px;
         width: 80px;
         flex-shrink: 0;
-        padding-top: 2rem;
+        padding-top: 1.5rem;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -418,52 +419,68 @@ body {
     }
 
     .sidebar-collapsed .sidebar-header {
+        width: 100%;
         justify-content: center !important;
+        align-items: center !important;
         padding-left: 0 !important;
         padding-right: 0 !important;
         margin-bottom: 1.5rem !important;
     }
 
     .sidebar-collapsed .nav-item-custom {
-        padding: 12px 8px;
+        padding: 0;
         justify-content: center;
         align-items: center;
         gap: 0;
-        min-height: 44px;
+        width: 48px;
+        height: 48px;
+        min-height: 48px;
+        border-radius: 12px;
+        margin: 0 auto 8px auto;
         position: relative;
-        width: calc(100% - 16px);
-        margin-left: 0;
-        margin-right: 0;
         overflow: visible;
+        display: flex;
     }
 
-    .sidebar-collapsed .nav-item-custom span {
+    .sidebar-collapsed .nav-item-custom span:not(.badge) {
         position: absolute;
-        bottom: 100%;
-        left: 50%;
-        transform: translateX(-50%) translateY(-8px);
+        left: calc(100% + 14px);
+        top: 50%;
+        transform: translateY(-50%) translateX(-4px);
         white-space: nowrap;
         background-color: var(--bg-card);
         color: var(--text-primary);
         border: 1px solid var(--border-color);
-        padding: 6px 10px;
-        border-radius: 4px;
+        padding: 6px 12px;
+        border-radius: 6px;
         font-size: 0.8rem;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        font-weight: 500;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.2s ease, transform 0.2s ease;
         z-index: 2000;
     }
 
-    .sidebar-collapsed .nav-item-custom:hover span {
+    .sidebar-collapsed .nav-item-custom:hover span:not(.badge) {
         opacity: 1;
-        display: inline;
-        transform: translateX(-50%) translateY(-12px);
+        transform: translateY(-50%) translateX(0);
+        pointer-events: auto;
     }
 
     .sidebar-collapsed .nav-item-custom i {
+        font-size: 1.25rem;
         margin: 0;
+    }
+
+    .sidebar-collapsed .nav-item-custom .badge {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        font-size: 0.6rem !important;
+        padding: 2px 5px !important;
+        opacity: 1 !important;
+        display: inline-block !important;
     }
 
     /* Hide management section header when collapsed */
